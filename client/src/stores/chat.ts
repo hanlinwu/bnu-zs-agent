@@ -35,6 +35,13 @@ export const useChatStore = defineStore('chat', () => {
 
     // Reference the reactive proxy in the array (not a plain local object)
     const assistantIdx = messages.value.length - 1
+    const getAssistantMessage = () => {
+      const msg = messages.value[assistantIdx]
+      if (!msg) {
+        throw new Error('assistant message missing')
+      }
+      return msg
+    }
 
     try {
       const token = localStorage.getItem('token') || ''
@@ -58,7 +65,7 @@ export const useChatStore = defineStore('chat', () => {
       const decoder = new TextDecoder()
 
       if (reader) {
-        messages.value[assistantIdx].loading = false
+        getAssistantMessage().loading = false
         let buffer = ''
         while (true) {
           const { done, value } = await reader.read()
@@ -75,21 +82,23 @@ export const useChatStore = defineStore('chat', () => {
             try {
               const event = JSON.parse(payload)
               if (event.type === 'token') {
-                messages.value[assistantIdx].content += event.content
+                getAssistantMessage().content += event.content
               } else if (event.type === 'sensitive_block' || event.type === 'high_risk') {
-                messages.value[assistantIdx].content = event.content
+                getAssistantMessage().content = event.content
               } else if (event.type === 'done' && event.sources?.length) {
-                messages.value[assistantIdx].sources = event.sources
+                getAssistantMessage().sources = event.sources
               }
             } catch {
               // skip malformed JSON
             }
           }
         }
+      } else {
+        getAssistantMessage().loading = false
       }
     } catch (error) {
-      messages.value[assistantIdx].content = '抱歉，请求出现异常，请稍后重试。'
-      messages.value[assistantIdx].loading = false
+      getAssistantMessage().content = '抱歉，请求出现异常，请稍后重试。'
+      getAssistantMessage().loading = false
     } finally {
       isStreaming.value = false
     }
