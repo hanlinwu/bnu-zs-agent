@@ -3,7 +3,7 @@ import type { LoginParams, LoginResult, User, UpdateProfileParams } from '@/type
 
 /** 发送短信验证码 */
 export const sendSmsCode = (phone: string) =>
-  request.post('/auth/sms-code', { phone })
+  request.post('/auth/sms/send', { phone })
 
 /** 登录 */
 export const login = (params: LoginParams) =>
@@ -15,8 +15,8 @@ export const logout = () =>
 
 /** 获取当前用户资料 */
 export const getProfile = () =>
-  request.get<User>('/auth/profile')
+  request.get<User>('/auth/me')
 
 /** 更新用户资料 */
 export const updateProfile = (data: UpdateProfileParams) =>
-  request.put<User>('/auth/profile', data)
+  request.put<User>('/auth/me', data)

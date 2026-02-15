@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Plus, Delete, Search, Upload, Picture, VideoCamera, Document } from '@element-plus/icons-vue'
+import { Plus, Delete, Upload, Picture, VideoCamera, Document } from '@element-plus/icons-vue'
 import type { UploadProps } from 'element-plus'
 import * as mediaApi from '@/api/admin/media'
 import type { MediaResource } from '@/types/admin'

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
-import { Connection, Check, Close, Loading as LoadingIcon } from '@element-plus/icons-vue'
+import { Connection, Check, Close } from '@element-plus/icons-vue'
 import * as modelApi from '@/api/admin/model'
 import type { ModelConfig } from '@/types/admin'
 
@@ -74,7 +74,7 @@ async function handleTest(model: ModelConfig) {
 
 async function handleToggle(model: ModelConfig) {
   try {
-    await modelApi.updateModel(model.id, { enabled: !model.enabled })
+    await modelApi.updateModels({ id: model.id, enabled: !model.enabled } as any)
     model.enabled = !model.enabled
     ElMessage.success(model.enabled ? '已启用' : '已停用')
   } catch {

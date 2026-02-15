@@ -45,7 +45,7 @@ onMounted(async () => {
     const conv = await conversationStore.createConversation()
     chatStore.setConversationId(conv.id)
   } else {
-    chatStore.setConversationId(conversationStore.conversations[0].id)
+    chatStore.setConversationId(conversationStore.conversations[0]!.id)
   }
 })
 

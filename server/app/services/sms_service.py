@@ -48,7 +48,16 @@ async def send_sms_code(phone: str) -> dict:
 
 
 async def verify_sms_code(phone: str, code: str) -> bool:
-    """Verify SMS code against stored value."""
+    """Verify SMS code against stored value.
+
+    In mock mode, accept MOCK_CODE directly without requiring send first.
+    """
+    # Mock mode: accept fixed code without needing to send first
+    if settings.SMS_MOCK and code == MOCK_CODE:
+        # Clean up any stored code if exists
+        await redis_client.delete(f"sms:{phone}")
+        return True
+
     stored_code = await redis_client.get(f"sms:{phone}")
     if not stored_code:
         return False

@@ -171,7 +171,7 @@ onMounted(() => {
                   <el-tag v-if="isCurrentPeriod(period)" type="success" size="small" effect="dark">
                     当前阶段
                   </el-tag>
-                  <el-tag :type="styleTagType(period.style)" size="small">
+                  <el-tag :type="(styleTagType(period.style) as any)" size="small">
                     {{ styleLabel(period.style) }}
                   </el-tag>
                 </div>

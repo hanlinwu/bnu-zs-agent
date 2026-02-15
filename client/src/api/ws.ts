@@ -47,7 +47,7 @@ export class ChatWebSocket {
 
   private _connect(): void {
     const protocol = location.protocol === 'https:' ? 'wss' : 'ws'
-    const url = `${protocol}://${location.host}/api/v1/ws/chat/${this.conversationId}?token=${this.token}`
+    const url = `${protocol}://${location.host}/api/v1/chat/ws/${this.conversationId}?token=${this.token}`
 
     this.ws = new WebSocket(url)
 

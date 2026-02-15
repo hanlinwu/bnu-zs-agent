@@ -18,7 +18,7 @@ export const useUserStore = defineStore('user', () => {
   const isLoggedIn = computed(() => !!token.value)
 
   async function login(phone: string, code: string, nickname?: string, role?: string) {
-    const res = await axios.post('/api/auth/login', { phone, code, nickname, role })
+    const res = await axios.post('/api/v1/auth/login', { phone, code, nickname, user_role: role })
     const data = res.data
     token.value = data.token
     userInfo.value = data.user
@@ -33,15 +33,15 @@ export const useUserStore = defineStore('user', () => {
   }
 
   async function fetchProfile() {
-    const res = await axios.get('/api/user/profile', {
+    const res = await axios.get('/api/v1/auth/me', {
       headers: { Authorization: `Bearer ${token.value}` },
     })
     userInfo.value = res.data
     return res.data
   }
 
-  async function updateProfile(updates: Partial<Pick<UserInfo, 'nickname' | 'avatar_url'>>) {
-    const res = await axios.put('/api/user/profile', updates, {
+  async function updateProfile(updates: Partial<Pick<UserInfo, 'nickname' | 'avatar_url' | 'role'>>) {
+    const res = await axios.put('/api/v1/auth/me', updates, {
       headers: { Authorization: `Bearer ${token.value}` },
     })
     userInfo.value = { ...userInfo.value!, ...res.data }

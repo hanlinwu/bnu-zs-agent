@@ -79,7 +79,7 @@ async function toggleStatus(user: AdminUser) {
         type: 'warning',
       }
     )
-    await userApi.toggleUserStatus(user.id, !user.enabled)
+    await userApi.toggleUserBan(user.id)
     ElMessage.success(`${action}成功`)
     fetchUsers()
   } catch {

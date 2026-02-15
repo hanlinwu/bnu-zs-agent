@@ -49,7 +49,7 @@ const fontSizeOptions = [
         <el-radio-group
           :model-value="themeStore.fontSize"
           size="small"
-          @change="(val: number) => themeStore.setFontSize(val as 14 | 16 | 18 | 20)"
+          @change="(val: string | number | boolean | undefined) => themeStore.setFontSize(val as 14 | 16 | 18 | 20)"
         >
           <el-radio-button
             v-for="opt in fontSizeOptions"

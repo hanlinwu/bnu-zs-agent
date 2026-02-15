@@ -68,7 +68,7 @@ function handleInput(index: number, event: Event) {
 
   // Only allow digits
   if (value && !/^\d$/.test(value)) {
-    target.value = digits.value[index]
+    target.value = digits.value[index] ?? ''
     return
   }
 
@@ -111,7 +111,7 @@ function handlePaste(event: ClipboardEvent) {
   if (cleanDigits.length === 0) return
 
   for (let i = 0; i < CODE_LENGTH; i++) {
-    digits.value[i] = i < cleanDigits.length ? cleanDigits[i] : ''
+    digits.value[i] = i < cleanDigits.length ? (cleanDigits[i] ?? '') : ''
   }
 
   updateModelValue()

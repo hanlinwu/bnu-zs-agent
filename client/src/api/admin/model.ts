@@ -4,23 +4,14 @@ import type { ModelConfig } from '@/types/admin'
 export const getModels = () =>
   request.get<ModelConfig[]>('/admin/models')
 
-export const getModel = (id: string) =>
-  request.get<ModelConfig>(`/admin/models/${id}`)
+export const updateModels = (data: Partial<ModelConfig>) =>
+  request.put('/admin/models', data)
 
-export const createModel = (data: Partial<ModelConfig>) =>
-  request.post<ModelConfig>('/admin/models', data)
-
-export const updateModel = (id: string, data: Partial<ModelConfig>) =>
-  request.put<ModelConfig>(`/admin/models/${id}`, data)
-
-export const deleteModel = (id: string) =>
-  request.delete(`/admin/models/${id}`)
+export const testModel = (_id?: string) =>
+  request.post('/admin/models/test')
 
 export const setPrimaryModel = (id: string) =>
-  request.post(`/admin/models/${id}/set-primary`)
+  request.put('/admin/models', { primary_model_id: id })
 
 export const setReviewerModel = (id: string) =>
-  request.post(`/admin/models/${id}/set-reviewer`)
-
-export const testModel = (id: string) =>
-  request.post(`/admin/models/${id}/test`)
+  request.put('/admin/models', { review_model_id: id })

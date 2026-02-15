@@ -11,7 +11,7 @@ const router = createRouter({
 })
 
 // Global guards: check token, check admin RBAC for /admin/* routes
-router.beforeEach(async (to, from, next) => {
+router.beforeEach(async (to, _from, next) => {
   const whiteList = ['/login', '/admin/login']
   if (whiteList.includes(to.path)) return next()
 

@@ -2,7 +2,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Plus, Search, Upload } from '@element-plus/icons-vue'
+import { Plus, Upload } from '@element-plus/icons-vue'
 import type { UploadProps } from 'element-plus'
 import * as knowledgeApi from '@/api/admin/knowledge'
 import type { KnowledgeDocument, DocumentStatus } from '@/types/knowledge'
@@ -195,7 +195,7 @@ onMounted(() => {
         </el-table-column>
         <el-table-column prop="status" label="状态" width="100" align="center">
           <template #default="{ row }">
-            <el-tag size="small" :type="statusTagType(row.status)">
+            <el-tag size="small" :type="(statusTagType(row.status) as any)">
               {{ statusLabel(row.status) }}
             </el-tag>
           </template>

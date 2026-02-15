@@ -153,7 +153,7 @@ onMounted(() => {
           </div>
           <div class="info-item">
             <span class="info-label">当前状态</span>
-            <el-tag size="small" :type="statusTagType(doc.status)">
+            <el-tag size="small" :type="(statusTagType(doc.status) as any)">
               {{ statusLabel(doc.status) }}
             </el-tag>
           </div>

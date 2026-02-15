@@ -31,6 +31,7 @@ class Settings(BaseSettings):
     LLM_PRIMARY_MODEL: str = ""
     LLM_REVIEW_PROVIDER: str = "qwen"
     LLM_REVIEW_MODEL: str = ""
+    LLM_REVIEW_BASE_URL: str = ""
 
     # File storage
     UPLOAD_DIR: str = "/data/uploads"

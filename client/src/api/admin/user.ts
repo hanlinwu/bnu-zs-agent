@@ -17,5 +17,9 @@ export const updateUser = (id: string, data: Partial<AdminUser>) =>
 export const deleteUser = (id: string) =>
   request.delete(`/admin/users/${id}`)
 
-export const toggleUserStatus = (id: string, enabled: boolean) =>
-  request.patch(`/admin/users/${id}/status`, { enabled })
+export const toggleUserBan = (id: string) =>
+  request.put(`/admin/users/${id}/ban`)
+
+/** @deprecated Use toggleUserBan instead */
+export const toggleUserStatus = (_id: string, _enabled: boolean) =>
+  request.put(`/admin/users/${_id}/ban`)

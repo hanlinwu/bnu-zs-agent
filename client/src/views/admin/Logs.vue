@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
-import { Download, Search } from '@element-plus/icons-vue'
+import { Download } from '@element-plus/icons-vue'
 import * as logApi from '@/api/admin/log'
 import type { AuditLog } from '@/types/admin'
 
@@ -75,7 +75,14 @@ function formatDateTime(date: string) {
 async function fetchLogs() {
   loading.value = true
   try {
-    const params: Record<string, any> = {
+    const params: {
+      page: number
+      pageSize: number
+      action?: string
+      module?: string
+      startDate?: string
+      endDate?: string
+    } = {
       page: currentPage.value,
       pageSize: pageSize.value,
     }
@@ -209,7 +216,7 @@ onMounted(() => {
         <el-table-column prop="userName" label="操作人" width="120" show-overflow-tooltip />
         <el-table-column prop="action" label="操作" width="90" align="center">
           <template #default="{ row }">
-            <el-tag size="small" :type="actionTagType(row.action)">
+            <el-tag size="small" :type="(actionTagType(row.action) as any)">
               {{ actionLabel(row.action) }}
             </el-tag>
           </template>

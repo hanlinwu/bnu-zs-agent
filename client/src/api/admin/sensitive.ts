@@ -17,4 +17,10 @@ export const deleteGroup = (id: string) =>
   request.delete(`/admin/sensitive/groups/${id}`)
 
 export const toggleGroup = (id: string, enabled: boolean) =>
-  request.patch(`/admin/sensitive/groups/${id}/status`, { enabled })
+  request.patch(`/admin/sensitive/groups/${id}`, { is_active: enabled })
+
+export const addWord = (data: { group_id: string; word: string; level: string }) =>
+  request.post('/admin/sensitive/words', data)
+
+export const deleteWord = (wordId: string) =>
+  request.delete(`/admin/sensitive/words/${wordId}`)

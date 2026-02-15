@@ -219,7 +219,7 @@ async function handleRoleSubmit() {
 
   roleLoading.value = true
   try {
-    await userStore.updateProfile({ role: selectedRole.value as any })
+    await userStore.updateProfile({ role: selectedRole.value })
     ElMessage.success('欢迎使用京师小智！')
     router.push('/')
   } catch (error: any) {

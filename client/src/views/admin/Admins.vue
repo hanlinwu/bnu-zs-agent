@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Plus, Search } from '@element-plus/icons-vue'
+import { Plus } from '@element-plus/icons-vue'
 import * as userApi from '@/api/admin/user'
 import * as roleApi from '@/api/admin/role'
 import type { AdminUser } from '@/types/user'
@@ -224,7 +224,7 @@ onMounted(() => {
         <el-table-column prop="phone" label="手机号" width="140" />
         <el-table-column prop="adminRole" label="角色" width="120" align="center">
           <template #default="{ row }">
-            <el-tag size="small" :type="adminRoleType(row.adminRole)">
+            <el-tag size="small" :type="(adminRoleType(row.adminRole) as any)">
               {{ adminRoleLabel(row.adminRole) }}
             </el-tag>
           </template>

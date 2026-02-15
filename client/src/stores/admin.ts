@@ -18,7 +18,7 @@ export const useAdminStore = defineStore('admin', () => {
   const isLoggedIn = computed(() => !!adminToken.value)
 
   async function login(username: string, password: string, mfaCode: string) {
-    const res = await axios.post('/api/admin/auth/login', {
+    const res = await axios.post('/api/v1/admin/auth/login', {
       username,
       password,
       mfa_code: mfaCode,
@@ -39,7 +39,7 @@ export const useAdminStore = defineStore('admin', () => {
   }
 
   async function fetchProfile() {
-    const res = await axios.get('/api/admin/profile', {
+    const res = await axios.get('/api/v1/admin/auth/me', {
       headers: { Authorization: `Bearer ${adminToken.value}` },
     })
     adminInfo.value = res.data.admin

@@ -23,7 +23,7 @@ export const useConversationStore = defineStore('conversation', () => {
   async function fetchConversations(page = 1, pageSize = 20) {
     loading.value = true
     try {
-      const res = await axios.get('/api/conversations', {
+      const res = await axios.get('/api/v1/conversations', {
         params: { page, page_size: pageSize },
         headers: getAuthHeaders(),
       })
@@ -35,7 +35,7 @@ export const useConversationStore = defineStore('conversation', () => {
   }
 
   async function createConversation() {
-    const res = await axios.post('/api/conversations', {}, {
+    const res = await axios.post('/api/v1/conversations', {}, {
       headers: getAuthHeaders(),
     })
     const conv: Conversation = res.data

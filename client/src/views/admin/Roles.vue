@@ -38,10 +38,10 @@ interface PermissionGroup {
 function groupedPermissions(): PermissionGroup[] {
   const groups: Record<string, Permission[]> = {}
   allPermissions.value.forEach(p => {
-    if (!groups[p.group]) groups[p.group] = []
-    groups[p.group].push(p)
+    const group = groups[p.group] ?? (groups[p.group] = [])
+    group.push(p)
   })
-  return Object.entries(groups).map(([group, items]) => ({ group, items }))
+  return Object.entries(groups).map(([group, items]) => ({ group, items: items! }))
 }
 
 function groupLabel(group: string) {
@@ -217,7 +217,7 @@ onMounted(() => {
         </el-table-column>
         <el-table-column label="类型" width="100" align="center">
           <template #default="{ row }">
-            <el-tag size="small" :type="row.builtIn ? 'warning' : ''">
+            <el-tag size="small" :type="(row.builtIn ? 'warning' : '') as any">
               {{ row.builtIn ? '内置' : '自定义' }}
             </el-tag>
           </template>
@@ -260,7 +260,7 @@ onMounted(() => {
             <el-checkbox
               :model-value="isGroupAllChecked(group)"
               :indeterminate="isGroupIndeterminate(group)"
-              @change="(val: boolean) => toggleGroup(group, val)"
+              @change="(val: any) => toggleGroup(group, val as boolean)"
             >
               {{ groupLabel(group.group) }}
             </el-checkbox>

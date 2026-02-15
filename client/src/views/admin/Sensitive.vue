@@ -11,7 +11,6 @@ const groups = ref<SensitiveWordGroup[]>([])
 const selectedGroup = ref<SensitiveWordGroup | null>(null)
 
 const groupDialogVisible = ref(false)
-const wordDialogVisible = ref(false)
 const groupFormRef = ref<FormInstance>()
 const submitting = ref(false)
 const isEditGroup = ref(false)
@@ -38,9 +37,9 @@ const wordsList = computed<SensitiveWord[]>(() => {
   return selectedGroup.value.words.map(w => {
     const parts = w.split(':')
     if (parts.length === 2) {
-      return { text: parts[0], level: parts[1] as SensitiveWord['level'] }
+      return { text: parts[0] ?? '', level: parts[1] as SensitiveWord['level'] }
     }
-    return { text: w, level: 'block' as const }
+    return { text: w ?? '', level: 'block' as const }
   })
 })
 
@@ -252,7 +251,7 @@ onMounted(() => {
                 class="word-item"
               >
                 <span class="word-text">{{ word.text }}</span>
-                <el-tag size="small" :type="levelTagType(word.level)">
+                <el-tag size="small" :type="(levelTagType(word.level) as any)">
                   {{ levelLabel(word.level) }}
                 </el-tag>
                 <el-button
