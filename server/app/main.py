@@ -31,6 +31,10 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
 
+    from app.core.middleware import AuditLogMiddleware, RateLimitMiddleware
+    app.add_middleware(AuditLogMiddleware)
+    app.add_middleware(RateLimitMiddleware)
+
     @app.get("/health")
     async def health_check():
         return {"status": "ok"}
