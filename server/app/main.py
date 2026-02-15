@@ -39,6 +39,10 @@ def create_app() -> FastAPI:
     async def health_check():
         return {"status": "ok"}
 
+    # Register all API routes
+    from app.api.router import api_router
+    app.include_router(api_router)
+
     return app
 
 

@@ -109,7 +109,7 @@ async def process_message(
     role_hint = ROLE_PROMPTS.get(user_role or "", "")
     citation_hint = ""
     if risk_level == "medium":
-        citation_hint = "\n重要：本次回答必须引用知识库来源，使用"根据《xxx》…"格式。"
+        citation_hint = '\n重要：本次回答必须引用知识库来源，使用"根据《xxx》…"格式。'
 
     system_prompt = f"{BASE_SYSTEM_PROMPT}\n\n{role_hint}\n{tone_hint}\n{emotion_hint}\n{citation_hint}"
 
