@@ -1,12 +1,24 @@
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
 
 
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup
+    from app.core.seed import seed_roles_and_permissions
+    await seed_roles_and_permissions()
+    yield
+    # Shutdown
+
+
 def create_app() -> FastAPI:
     app = FastAPI(
         title=settings.APP_NAME,
+        lifespan=lifespan,
         docs_url="/api/docs" if settings.DEBUG else None,
         redoc_url="/api/redoc" if settings.DEBUG else None,
     )
