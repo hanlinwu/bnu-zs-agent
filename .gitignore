@@ -22,6 +22,10 @@ node_modules/
 # Frontend build
 client/dist/
 
+# Auto-generated type declarations
+client/src/auto-imports.d.ts
+client/src/components.d.ts
+
 # Data volumes
 data/
 
