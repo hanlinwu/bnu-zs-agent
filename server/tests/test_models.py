@@ -23,3 +23,13 @@ def test_admin_user_model_has_required_fields():
         "created_by", "created_at", "updated_at",
     }
     assert required.issubset(columns)
+
+
+def test_rbac_tables_exist():
+    """验证 RBAC 5 表模型存在且表名正确"""
+    from app.models.role import Role, Permission, RolePermission, UserRole, AdminRole
+    assert Role.__tablename__ == "roles"
+    assert Permission.__tablename__ == "permissions"
+    assert RolePermission.__tablename__ == "role_permissions"
+    assert UserRole.__tablename__ == "user_roles"
+    assert AdminRole.__tablename__ == "admin_roles"
