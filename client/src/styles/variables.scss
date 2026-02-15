@@ -1,0 +1,80 @@
+// ============================================================
+// BNU Admission Chatbot — Design Tokens
+// 北京师范大学招生智能体视觉规范
+// ============================================================
+
+// ------------------------------------------------------------------
+// 主色调 — 师大蓝 (Pantone 293C)
+// ------------------------------------------------------------------
+$color-primary: #003DA5;
+$color-primary-light: #1A5FBF;
+$color-primary-lighter: #E8F0FE;
+$color-primary-dark: #002D7A;
+
+// ------------------------------------------------------------------
+// 辅助色
+// ------------------------------------------------------------------
+$color-secondary: #4A6FA5;
+$color-tertiary: #6B7B8D;
+
+// ------------------------------------------------------------------
+// 语义色
+// ------------------------------------------------------------------
+$color-success: #2E7D32;
+$color-warning: #F57C00;
+$color-danger: #C62828;
+$color-info: #1565C0;
+
+// ------------------------------------------------------------------
+// Light mode neutrals
+// ------------------------------------------------------------------
+$color-text-primary: #1A1A2E;
+$color-text-secondary: #5A5A72;
+$color-text-placeholder: #9E9EB3;
+$color-bg-primary: #FFFFFF;
+$color-bg-secondary: #F4F6FA;
+$color-bg-chat: #FAFBFD;
+$color-border: #E2E6ED;
+
+// ------------------------------------------------------------------
+// Dark mode neutrals
+// ------------------------------------------------------------------
+$dark-bg-primary: #0F1117;
+$dark-bg-secondary: #1A1D27;
+$dark-bg-chat: #141720;
+$dark-text-primary: #E4E4EC;
+$dark-text-secondary: #9CA3B4;
+$dark-border: #2A2D3A;
+
+// ------------------------------------------------------------------
+// Chat bubbles
+// ------------------------------------------------------------------
+$bubble-user-bg: #003DA5;
+$bubble-user-text: #FFFFFF;
+$bubble-assistant-bg: #F4F6FA;
+$bubble-assistant-text: #1A1A2E;
+$dark-bubble-user-bg: #1A5FBF;
+$dark-bubble-user-text: #FFFFFF;
+$dark-bubble-assistant-bg: #1E2130;
+$dark-bubble-assistant-text: #E4E4EC;
+
+// ------------------------------------------------------------------
+// Typography
+// ------------------------------------------------------------------
+$font-family: 'Source Han Sans SC', 'Noto Sans SC', -apple-system, sans-serif;
+$font-size-base: 16px;
+
+// ------------------------------------------------------------------
+// Borders
+// ------------------------------------------------------------------
+$radius-sm: 4px;
+$radius-md: 8px;
+$radius-lg: 16px;
+$radius-bubble: 18px;
+
+// ------------------------------------------------------------------
+// Breakpoints
+// ------------------------------------------------------------------
+$breakpoint-mobile: 768px;
+$breakpoint-tablet: 1024px;
+$breakpoint-desktop: 1440px;

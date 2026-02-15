@@ -1,0 +1,192 @@
+// ============================================================
+// Global Reset & CSS Custom Properties for Theme Switching
+// 北京师范大学招生智能体 — 全局样式
+// ============================================================
+
+@use 'variables' as *;
+
+// ------------------------------------------------------------------
+// CSS Custom Properties — Light theme (default)
+// ------------------------------------------------------------------
+:root,
+[data-theme='light'] {
+  // Brand
+  --color-primary: #{$color-primary};
+  --color-primary-light: #{$color-primary-light};
+  --color-primary-lighter: #{$color-primary-lighter};
+  --color-primary-dark: #{$color-primary-dark};
+
+  // Auxiliary
+  --color-secondary: #{$color-secondary};
+  --color-tertiary: #{$color-tertiary};
+
+  // Semantic
+  --color-success: #{$color-success};
+  --color-warning: #{$color-warning};
+  --color-danger: #{$color-danger};
+  --color-info: #{$color-info};
+
+  // Text
+  --color-text-primary: #{$color-text-primary};
+  --color-text-secondary: #{$color-text-secondary};
+  --color-text-placeholder: #{$color-text-placeholder};
+
+  // Backgrounds
+  --color-bg-primary: #{$color-bg-primary};
+  --color-bg-secondary: #{$color-bg-secondary};
+  --color-bg-chat: #{$color-bg-chat};
+
+  // Borders
+  --color-border: #{$color-border};
+
+  // Chat bubbles
+  --bubble-user-bg: #{$bubble-user-bg};
+  --bubble-user-text: #{$bubble-user-text};
+  --bubble-assistant-bg: #{$bubble-assistant-bg};
+  --bubble-assistant-text: #{$bubble-assistant-text};
+
+  // Typography
+  --font-family: #{$font-family};
+  --font-size-base: #{$font-size-base};
+
+  // Radii
+  --radius-sm: #{$radius-sm};
+  --radius-md: #{$radius-md};
+  --radius-lg: #{$radius-lg};
+  --radius-bubble: #{$radius-bubble};
+}
+
+// ------------------------------------------------------------------
+// CSS Custom Properties — Dark theme
+// ------------------------------------------------------------------
+[data-theme='dark'] {
+  --color-primary: #{$color-primary-light};
+  --color-primary-light: #{$color-primary};
+  --color-primary-lighter: #{$dark-bg-secondary};
+  --color-primary-dark: #{$color-primary-dark};
+
+  --color-text-primary: #{$dark-text-primary};
+  --color-text-secondary: #{$dark-text-secondary};
+  --color-text-placeholder: #{$dark-text-secondary};
+
+  --color-bg-primary: #{$dark-bg-primary};
+  --color-bg-secondary: #{$dark-bg-secondary};
+  --color-bg-chat: #{$dark-bg-chat};
+
+  --color-border: #{$dark-border};
+
+  --bubble-user-bg: #{$dark-bubble-user-bg};
+  --bubble-user-text: #{$dark-bubble-user-text};
+  --bubble-assistant-bg: #{$dark-bubble-assistant-bg};
+  --bubble-assistant-text: #{$dark-bubble-assistant-text};
+}
+
+// ------------------------------------------------------------------
+// CSS Reset
+// ------------------------------------------------------------------
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  font-size: var(--font-size-base);
+  scroll-behavior: smooth;
+  -webkit-text-size-adjust: 100%;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  font-family: var(--font-family);
+  font-size: 1rem;
+  line-height: 1.6;
+  color: var(--color-text-primary);
+  background-color: var(--color-bg-primary);
+  min-height: 100vh;
+  transition: color 0.3s ease, background-color 0.3s ease;
+}
+
+// ------------------------------------------------------------------
+// Sensible element defaults
+// ------------------------------------------------------------------
+img,
+svg,
+video {
+  display: block;
+  max-width: 100%;
+  height: auto;
+}
+
+a {
+  color: var(--color-primary);
+  text-decoration: none;
+
+  &:hover {
+    text-decoration: underline;
+  }
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+
+button {
+  cursor: pointer;
+  border: none;
+  background: none;
+}
+
+ul,
+ol {
+  list-style: none;
+}
+
+table {
+  border-collapse: collapse;
+  border-spacing: 0;
+}
+
+// ------------------------------------------------------------------
+// Scrollbar styling (Webkit)
+// ------------------------------------------------------------------
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background-color: var(--color-border);
+  border-radius: 3px;
+
+  &:hover {
+    background-color: var(--color-text-placeholder);
+  }
+}
+
+// ------------------------------------------------------------------
+// Selection highlight
+// ------------------------------------------------------------------
+::selection {
+  background-color: var(--color-primary);
+  color: #ffffff;
+}
+
+// ------------------------------------------------------------------
+// Focus-visible outline for accessibility (WCAG 2.1)
+// ------------------------------------------------------------------
+:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
