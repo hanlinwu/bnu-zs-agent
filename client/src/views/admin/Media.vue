@@ -220,7 +220,7 @@ onMounted(() => {
     >
       <el-upload
         drag
-        action="/api/admin/media"
+        action="/api/v1/admin/media/upload"
         :before-upload="beforeUpload"
         :on-success="handleUploadSuccess"
         :on-error="handleUploadError"

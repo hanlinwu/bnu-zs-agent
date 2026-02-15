@@ -35,7 +35,7 @@ class MessageResponse(BaseModel):
     model_version: str | None = None
     risk_level: str | None = None
     review_passed: bool | None = None
-    sources: dict | None = None
+    sources: list | None = None
     created_at: str
 
 

@@ -24,27 +24,31 @@ export const useChatStore = defineStore('chat', () => {
     }
     messages.value.push(userMsg)
 
-    const assistantMsg: ChatMessage = {
+    messages.value.push({
       id: `msg-${Date.now()}-reply`,
       role: 'assistant',
       content: '',
       timestamp: Date.now(),
       loading: true,
-    }
-    messages.value.push(assistantMsg)
+    })
     isStreaming.value = true
+
+    // Reference the reactive proxy in the array (not a plain local object)
+    const assistantIdx = messages.value.length - 1
 
     try {
       const token = localStorage.getItem('token') || ''
-      const response = await fetch('/api/chat/send', {
+      const url = currentConversationId.value
+        ? `/api/v1/chat/send?conversation_id=${encodeURIComponent(currentConversationId.value)}`
+        : '/api/v1/chat/send'
+      const response = await fetch(url, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
-          conversation_id: currentConversationId.value,
-          message: content,
+          content,
         }),
       })
 
@@ -54,17 +58,38 @@ export const useChatStore = defineStore('chat', () => {
       const decoder = new TextDecoder()
 
       if (reader) {
-        assistantMsg.loading = false
+        messages.value[assistantIdx].loading = false
+        let buffer = ''
         while (true) {
           const { done, value } = await reader.read()
           if (done) break
-          const chunk = decoder.decode(value, { stream: true })
-          assistantMsg.content += chunk
+          buffer += decoder.decode(value, { stream: true })
+
+          // Parse SSE lines from buffer
+          const lines = buffer.split('\n')
+          buffer = lines.pop() || '' // keep incomplete line in buffer
+          for (const line of lines) {
+            if (!line.startsWith('data: ')) continue
+            const payload = line.slice(6)
+            if (payload === '[DONE]') continue
+            try {
+              const event = JSON.parse(payload)
+              if (event.type === 'token') {
+                messages.value[assistantIdx].content += event.content
+              } else if (event.type === 'sensitive_block' || event.type === 'high_risk') {
+                messages.value[assistantIdx].content = event.content
+              } else if (event.type === 'done' && event.sources?.length) {
+                messages.value[assistantIdx].sources = event.sources
+              }
+            } catch {
+              // skip malformed JSON
+            }
+          }
         }
       }
     } catch (error) {
-      assistantMsg.content = '抱歉，请求出现异常，请稍后重试。'
-      assistantMsg.loading = false
+      messages.value[assistantIdx].content = '抱歉，请求出现异常，请稍后重试。'
+      messages.value[assistantIdx].loading = false
     } finally {
       isStreaming.value = false
     }

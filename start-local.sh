@@ -92,12 +92,12 @@ start_postgres() {
 start_redis() {
     info "启动 Redis..."
 
-    if redis-cli ping 2>/dev/null | grep -q PONG; then
+    if timeout 2 redis-cli ping 2>/dev/null | grep -q PONG; then
         info "Redis 已在运行"
     else
         redis-server --daemonize yes --appendonly yes --dir /tmp 2>/dev/null
         sleep 1
-        redis-cli ping 2>/dev/null | grep -q PONG || error "无法启动 Redis"
+        timeout 2 redis-cli ping 2>/dev/null | grep -q PONG || error "无法启动 Redis"
     fi
 
     info "Redis 就绪 ✓"
@@ -133,6 +133,8 @@ setup_backend() {
     info "初始化数据库表..."
     .venv/bin/alembic upgrade head 2>/dev/null || {
         warn "Alembic 迁移无可用版本，使用 create_all 建表..."
+        # 确保 pgvector 扩展已启用
+        PGPASSWORD=postgres psql -h localhost -U postgres -d bnu_admission -c "CREATE EXTENSION IF NOT EXISTS vector;" 2>/dev/null || true
         .venv/bin/python3 -c "
 import asyncio
 from app.core.database import get_engine, Base
@@ -144,6 +146,9 @@ async def create_tables():
     await engine.dispose()
 asyncio.run(create_tables())
 "
+        # 确保 embedding 列存在
+        PGPASSWORD=postgres psql -h localhost -U postgres -d bnu_admission -c \
+            "ALTER TABLE knowledge_chunks ADD COLUMN IF NOT EXISTS embedding vector(1536);" 2>/dev/null || true
     }
 
     # 确保上传目录存在

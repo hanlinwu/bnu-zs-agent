@@ -43,17 +43,20 @@ async def search(query: str, db: AsyncSession, top_k: int = 5) -> list[SearchRes
             kc.document_id,
             kd.title as document_title,
             kc.content,
-            1 - (kc.embedding <=> :query_vec::vector) as score
+            1 - (kc.embedding <=> CAST(:query_vec AS vector)) as score
         FROM knowledge_chunks kc
         JOIN knowledge_documents kd ON kd.id = kc.document_id
         WHERE kd.status = 'approved'
-        ORDER BY kc.embedding <=> :query_vec::vector
+          AND kc.embedding IS NOT NULL
+        ORDER BY kc.embedding <=> CAST(:query_vec AS vector)
         LIMIT :top_k
     """)
 
     try:
-        result = await db.execute(stmt, {"query_vec": vector_str, "top_k": top_k})
-        rows = result.fetchall()
+        # Use a savepoint so failures don't taint the outer transaction
+        async with db.begin_nested():
+            result = await db.execute(stmt, {"query_vec": vector_str, "top_k": top_k})
+            rows = result.fetchall()
         return [
             SearchResult(
                 chunk_id=str(row[0]),

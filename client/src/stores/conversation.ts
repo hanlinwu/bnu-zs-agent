@@ -45,7 +45,7 @@ export const useConversationStore = defineStore('conversation', () => {
   }
 
   async function deleteConversation(id: string) {
-    await axios.delete(`/api/conversations/${id}`, {
+    await axios.delete(`/api/v1/conversations/${id}`, {
       headers: getAuthHeaders(),
     })
     conversations.value = conversations.value.filter((c) => c.id !== id)
@@ -53,7 +53,7 @@ export const useConversationStore = defineStore('conversation', () => {
   }
 
   async function updateTitle(id: string, title: string) {
-    await axios.put(`/api/conversations/${id}`, { title }, {
+    await axios.put(`/api/v1/conversations/${id}`, { title }, {
       headers: getAuthHeaders(),
     })
     const conv = conversations.value.find((c) => c.id === id)
@@ -64,7 +64,7 @@ export const useConversationStore = defineStore('conversation', () => {
     const conv = conversations.value.find((c) => c.id === id)
     if (!conv) return
     const pinned = !conv.pinned
-    await axios.put(`/api/conversations/${id}`, { pinned }, {
+    await axios.put(`/api/v1/conversations/${id}`, { pinned }, {
       headers: getAuthHeaders(),
     })
     conv.pinned = pinned

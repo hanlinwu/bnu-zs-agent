@@ -33,6 +33,11 @@ class Settings(BaseSettings):
     LLM_REVIEW_MODEL: str = ""
     LLM_REVIEW_BASE_URL: str = ""
 
+    # Embedding
+    EMBEDDING_MODEL: str = "text-embedding-v1"
+    EMBEDDING_BASE_URL: str = ""
+    EMBEDDING_API_KEY: str = ""
+
     # File storage
     UPLOAD_DIR: str = "/data/uploads"
     MAX_UPLOAD_SIZE_MB: int = 50

@@ -256,7 +256,7 @@ onMounted(() => {
     >
       <el-upload
         drag
-        action="/api/admin/knowledge/documents"
+        action="/api/v1/admin/knowledge/upload"
         accept=".pdf,.docx,.txt,.md"
         :before-upload="beforeUpload"
         :on-success="handleUploadSuccess"

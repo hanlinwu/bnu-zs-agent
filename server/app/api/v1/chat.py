@@ -4,8 +4,10 @@ import json
 import logging
 
 from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect
+from fastapi.responses import StreamingResponse
 from sqlalchemy import select, and_
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.core.database import get_db, get_session_factory
 from app.core.security import verify_token
@@ -98,19 +100,25 @@ async def ws_chat(websocket: WebSocket, conversation_id: str):
             pass
 
 
-@router.post("/send", response_model=MessageResponse)
+@router.post("/send")
 async def send_message(
     body: ChatSendRequest,
     conversation_id: str | None = None,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Synchronous chat endpoint (fallback for non-WebSocket clients)."""
+    """SSE streaming chat endpoint."""
     # Create conversation if not specified
     if not conversation_id:
         conv = Conversation(user_id=current_user.id)
         db.add(conv)
         await db.flush()
+        # Re-fetch with messages eagerly loaded
+        result = await db.execute(
+            select(Conversation).where(Conversation.id == conv.id)
+            .options(selectinload(Conversation.messages))
+        )
+        conv = result.scalar_one()
     else:
         result = await db.execute(
             select(Conversation).where(
@@ -119,7 +127,7 @@ async def send_message(
                     Conversation.user_id == current_user.id,
                     Conversation.is_deleted == False,
                 )
-            )
+            ).options(selectinload(Conversation.messages))
         )
         conv = result.scalar_one_or_none()
         if not conv:
@@ -135,25 +143,16 @@ async def send_message(
     )
     user_role = role_result.scalar_one_or_none()
 
-    # Collect full response
-    full_response = ""
-    sources = None
-    risk_level = "low"
+    async def event_generator():
+        async for event in process_message(current_user, conv, body.content, user_role, db):
+            yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
+        yield "data: [DONE]\n\n"
 
-    async for event in process_message(current_user, conv, body.content, user_role, db):
-        if event["type"] == "token":
-            full_response += event["content"]
-        elif event["type"] in ("sensitive_block", "high_risk"):
-            full_response = event["content"]
-        elif event["type"] == "done":
-            sources = event.get("sources")
-            risk_level = event.get("risk_level", "low")
-
-    return MessageResponse(
-        id="",  # Would be set from DB
-        role="assistant",
-        content=full_response,
-        risk_level=risk_level,
-        sources=sources,
-        created_at="",
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+        },
     )
