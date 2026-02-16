@@ -49,7 +49,11 @@ const grouped = computed<GroupedConversations[]>(() => {
 
 const isEmpty = computed(() => conversationStore.conversations.length === 0)
 
-function handleSelect(conv: Conversation) {
+async function handleSelect(conv: Conversation) {
+  if (chatStore.currentConversationId === conv.id) return
+  if (chatStore.isStreaming) {
+    await chatStore.stopGeneration()
+  }
   chatStore.setConversationId(conv.id)
   chatStore.clearMessages()
   chatStore.loadMessages(conv.id)

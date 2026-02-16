@@ -1,19 +1,16 @@
 import request from '../request'
 import type { MediaResource, PaginatedResult } from '@/types/admin'
 
-export const getMediaList = (params: { page: number; pageSize: number; type?: string }) =>
+export const getMediaList = (params: { page: number; page_size: number; media_type?: string; status?: string }) =>
   request.get<PaginatedResult<MediaResource>>('/admin/media', { params })
 
-export const getMedia = (id: string) =>
-  request.get<MediaResource>(`/admin/media/${id}`)
-
 export const uploadMedia = (formData: FormData) =>
-  request.post<MediaResource>('/admin/media', formData, {
+  request.post<MediaResource>('/admin/media/upload', formData, {
     headers: { 'Content-Type': 'multipart/form-data' },
   })
 
-export const updateMedia = (id: string, data: { name?: string; tags?: string[] }) =>
-  request.put<MediaResource>(`/admin/media/${id}`, data)
+export const reviewMedia = (id: string, data: { action: 'approve' | 'reject'; note?: string }) =>
+  request.post<MediaResource>(`/admin/media/${id}/review`, data)
 
 export const deleteMedia = (id: string) =>
   request.delete(`/admin/media/${id}`)

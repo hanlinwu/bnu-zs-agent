@@ -1,14 +1,33 @@
 <script setup lang="ts">
-import { ref, reactive, onMounted, computed } from 'vue'
+import { ref, reactive, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus, Delete } from '@element-plus/icons-vue'
 import * as sensitiveApi from '@/api/admin/sensitive'
-import type { SensitiveWordGroup } from '@/types/admin'
 import type { FormInstance, FormRules } from 'element-plus'
 
+interface GroupItem {
+  id: string
+  name: string
+  description: string | null
+  is_active: boolean
+  word_count: number
+}
+
+interface WordItem {
+  id: string
+  word: string
+  level: string
+  created_at: string
+}
+
 const loading = ref(false)
-const groups = ref<SensitiveWordGroup[]>([])
-const selectedGroup = ref<SensitiveWordGroup | null>(null)
+const groups = ref<GroupItem[]>([])
+const selectedGroup = ref<GroupItem | null>(null)
+
+const words = ref<WordItem[]>([])
+const wordsTotal = ref(0)
+const wordsPage = ref(1)
+const wordsLoading = ref(false)
 
 const groupDialogVisible = ref(false)
 const groupFormRef = ref<FormInstance>()
@@ -26,22 +45,6 @@ const groupRules: FormRules = {
 
 const newWord = ref('')
 const newWordLevel = ref<string>('block')
-
-interface SensitiveWord {
-  text: string
-  level: 'block' | 'warn' | 'review'
-}
-
-const wordsList = computed<SensitiveWord[]>(() => {
-  if (!selectedGroup.value) return []
-  return selectedGroup.value.words.map(w => {
-    const parts = w.split(':')
-    if (parts.length === 2) {
-      return { text: parts[0] ?? '', level: parts[1] as SensitiveWord['level'] }
-    }
-    return { text: w ?? '', level: 'block' as const }
-  })
-})
 
 function levelTagType(level: string) {
   const map: Record<string, string> = {
@@ -65,7 +68,8 @@ async function fetchGroups() {
   loading.value = true
   try {
     const res = await sensitiveApi.getGroups()
-    groups.value = res.data.items || res.data
+    const data = res.data as any
+    groups.value = data.items || data || []
   } catch {
     ElMessage.error('加载敏感词库失败')
   } finally {
@@ -73,17 +77,24 @@ async function fetchGroups() {
   }
 }
 
-function selectGroup(group: SensitiveWordGroup) {
+async function selectGroup(group: GroupItem) {
   selectedGroup.value = group
+  wordsPage.value = 1
+  await fetchWords()
 }
 
-async function toggleGroupStatus(group: SensitiveWordGroup) {
+async function fetchWords() {
+  if (!selectedGroup.value) return
+  wordsLoading.value = true
   try {
-    await sensitiveApi.toggleGroup(group.id, !group.enabled)
-    group.enabled = !group.enabled
-    ElMessage.success(group.enabled ? '已启用' : '已停用')
+    const res = await sensitiveApi.getGroup(selectedGroup.value.id)
+    const data = res.data as any
+    words.value = data.words?.items || []
+    wordsTotal.value = data.words?.total || 0
   } catch {
-    ElMessage.error('操作失败')
+    ElMessage.error('加载敏感词失败')
+  } finally {
+    wordsLoading.value = false
   }
 }
 
@@ -94,25 +105,13 @@ function openCreateGroup() {
   groupDialogVisible.value = true
 }
 
-function openEditGroup(group: SensitiveWordGroup) {
-  isEditGroup.value = true
-  groupForm.id = group.id
-  groupForm.name = group.name
-  groupDialogVisible.value = true
-}
-
 async function handleSaveGroup() {
   const valid = await groupFormRef.value?.validate().catch(() => false)
   if (!valid) return
   submitting.value = true
   try {
-    if (isEditGroup.value) {
-      await sensitiveApi.updateGroup(groupForm.id, { name: groupForm.name })
-      ElMessage.success('修改成功')
-    } else {
-      await sensitiveApi.createGroup({ name: groupForm.name, words: [], enabled: true })
-      ElMessage.success('创建成功')
-    }
+    await sensitiveApi.createGroup({ name: groupForm.name })
+    ElMessage.success('创建成功')
     groupDialogVisible.value = false
     fetchGroups()
   } catch {
@@ -122,7 +121,7 @@ async function handleSaveGroup() {
   }
 }
 
-async function handleDeleteGroup(group: SensitiveWordGroup) {
+async function handleDeleteGroup(group: GroupItem) {
   try {
     await ElMessageBox.confirm(
       `确定要删除词库「${group.name}」吗？包含的所有敏感词将被移除。`,
@@ -132,6 +131,7 @@ async function handleDeleteGroup(group: SensitiveWordGroup) {
     await sensitiveApi.deleteGroup(group.id)
     if (selectedGroup.value?.id === group.id) {
       selectedGroup.value = null
+      words.value = []
     }
     ElMessage.success('删除成功')
     fetchGroups()
@@ -140,32 +140,44 @@ async function handleDeleteGroup(group: SensitiveWordGroup) {
   }
 }
 
-function addWord() {
-  if (!newWord.value.trim() || !selectedGroup.value) return
-  const wordEntry = `${newWord.value.trim()}:${newWordLevel.value}`
-  if (selectedGroup.value.words.includes(wordEntry)) {
-    ElMessage.warning('该词已存在')
-    return
-  }
-  selectedGroup.value.words.push(wordEntry)
-  saveGroupWords()
-  newWord.value = ''
-}
-
-function removeWord(index: number) {
-  if (!selectedGroup.value) return
-  selectedGroup.value.words.splice(index, 1)
-  saveGroupWords()
-}
-
-async function saveGroupWords() {
-  if (!selectedGroup.value) return
+async function handleToggleGroup(group: GroupItem) {
   try {
-    await sensitiveApi.updateGroup(selectedGroup.value.id, {
-      words: selectedGroup.value.words,
-    })
+    await sensitiveApi.toggleGroup(group.id, !group.is_active)
+    group.is_active = !group.is_active
+    ElMessage.success(group.is_active ? '已启用' : '已停用')
   } catch {
-    ElMessage.error('保存失败')
+    ElMessage.error('操作失败')
+  }
+}
+
+async function addWord() {
+  if (!newWord.value.trim() || !selectedGroup.value) return
+  try {
+    await sensitiveApi.addWord({
+      group_id: selectedGroup.value.id,
+      word: newWord.value.trim(),
+      level: newWordLevel.value,
+    })
+    newWord.value = ''
+    fetchWords()
+    // Update word count in group list
+    if (selectedGroup.value) {
+      selectedGroup.value.word_count++
+    }
+  } catch {
+    ElMessage.error('添加失败')
+  }
+}
+
+async function removeWord(word: WordItem) {
+  try {
+    await sensitiveApi.deleteWord(word.id)
+    fetchWords()
+    if (selectedGroup.value) {
+      selectedGroup.value.word_count = Math.max(0, selectedGroup.value.word_count - 1)
+    }
+  } catch {
+    ElMessage.error('删除失败')
   }
 }
 
@@ -199,22 +211,19 @@ onMounted(() => {
           >
             <el-table-column prop="name" label="词库名称" min-width="120" />
             <el-table-column label="词数" width="70" align="center">
-              <template #default="{ row }">{{ row.words.length }}</template>
+              <template #default="{ row }">{{ row.word_count }}</template>
             </el-table-column>
             <el-table-column label="状态" width="70" align="center">
               <template #default="{ row }">
                 <el-switch
-                  :model-value="row.enabled"
+                  :model-value="row.is_active"
                   size="small"
-                  @click.stop="toggleGroupStatus(row)"
+                  @click.stop="handleToggleGroup(row)"
                 />
               </template>
             </el-table-column>
-            <el-table-column label="操作" width="100">
+            <el-table-column label="操作" width="80">
               <template #default="{ row }">
-                <el-button type="primary" link size="small" @click.stop="openEditGroup(row)">
-                  编辑
-                </el-button>
                 <el-button type="danger" link size="small" @click.stop="handleDeleteGroup(row)">
                   删除
                 </el-button>
@@ -244,13 +253,13 @@ onMounted(() => {
               </el-select>
               <el-button type="primary" @click="addWord">添加</el-button>
             </div>
-            <div class="words-list">
+            <div v-loading="wordsLoading" class="words-list">
               <div
-                v-for="(word, index) in wordsList"
-                :key="index"
+                v-for="word in words"
+                :key="word.id"
                 class="word-item"
               >
-                <span class="word-text">{{ word.text }}</span>
+                <span class="word-text">{{ word.word }}</span>
                 <el-tag size="small" :type="(levelTagType(word.level) as any)">
                   {{ levelLabel(word.level) }}
                 </el-tag>
@@ -259,10 +268,10 @@ onMounted(() => {
                   link
                   size="small"
                   :icon="Delete"
-                  @click="removeWord(index)"
+                  @click="removeWord(word)"
                 />
               </div>
-              <div v-if="wordsList.length === 0" class="words-empty">
+              <div v-if="words.length === 0 && !wordsLoading" class="words-empty">
                 暂无敏感词，请添加
               </div>
             </div>

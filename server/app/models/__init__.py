@@ -8,6 +8,8 @@ from app.models.sensitive_word import SensitiveWordGroup, SensitiveWord
 from app.models.media import MediaResource
 from app.models.audit_log import AuditLog, FileUploadLog
 from app.models.calendar import AdmissionCalendar
+from app.models.model_config import ModelEndpoint, ModelGroup, ModelInstance
+from app.models.review_workflow import ReviewWorkflow, ResourceWorkflowBinding, ReviewRecord
 
 __all__ = [
     "User",
@@ -27,4 +29,10 @@ __all__ = [
     "AuditLog",
     "FileUploadLog",
     "AdmissionCalendar",
+    "ModelEndpoint",
+    "ModelGroup",
+    "ModelInstance",
+    "ReviewWorkflow",
+    "ResourceWorkflowBinding",
+    "ReviewRecord",
 ]

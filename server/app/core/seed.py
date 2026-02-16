@@ -17,6 +17,7 @@ from app.core.database import get_session_factory
 from app.models.role import Role, Permission, RolePermission, AdminRole
 from app.models.admin import AdminUser
 from app.models.calendar import AdmissionCalendar
+from app.models.review_workflow import ReviewWorkflow, ResourceWorkflowBinding
 
 # 8 preset roles
 ROLES = [
@@ -44,6 +45,7 @@ RESOURCES = [
     "calendar",
     "role",
     "dashboard",
+    "conversation",
 ]
 ACTIONS = ["create", "read", "update", "delete", "approve", "export", "ban"]
 
@@ -56,6 +58,7 @@ ROLE_PERMISSIONS = {
         "media": ["read", "approve"],
         "sensitive": ["read"],
         "log": ["read"],
+        "conversation": ["read"],
     },
     "admin": {
         "knowledge": ["read", "create"],
@@ -66,12 +69,14 @@ ROLE_PERMISSIONS = {
         "sensitive": ["read"],
         "calendar": ["read"],
         "dashboard": ["read"],
+        "conversation": ["read"],
     },
     "teacher": {
         "knowledge": ["read"],
         "user": ["read"],
         "media": ["read"],
         "calendar": ["read"],
+        "conversation": ["read"],
     },
 }
 
@@ -179,5 +184,142 @@ async def seed_calendar_periods() -> None:
 
         for period in CALENDAR_PERIODS:
             session.add(AdmissionCalendar(**period))
+
+        await session.commit()
+
+
+async def seed_model_config() -> None:
+    """Seed model config from env vars if DB tables are empty (first-boot migration)."""
+    from app.models.model_config import ModelEndpoint, ModelGroup, ModelInstance
+
+    session_factory = get_session_factory()
+    async with session_factory() as session:
+        ep_count = await session.execute(select(func.count()).select_from(ModelEndpoint))
+        if (ep_count.scalar() or 0) > 0:
+            return
+
+        from app.config import settings
+
+        if not settings.LLM_PRIMARY_API_KEY and not settings.LLM_PRIMARY_BASE_URL:
+            return
+
+        primary_ep = ModelEndpoint(
+            name="主接入点",
+            provider=settings.LLM_PRIMARY_PROVIDER or "qwen",
+            base_url=settings.LLM_PRIMARY_BASE_URL,
+            api_key=settings.LLM_PRIMARY_API_KEY,
+        )
+        session.add(primary_ep)
+        await session.flush()
+
+        if settings.LLM_PRIMARY_MODEL:
+            llm_group = ModelGroup(name="默认LLM", type="llm", strategy="failover", enabled=True, priority=0)
+            session.add(llm_group)
+            await session.flush()
+            session.add(ModelInstance(
+                group_id=llm_group.id, endpoint_id=primary_ep.id,
+                model_name=settings.LLM_PRIMARY_MODEL,
+                enabled=True, weight=1, max_tokens=4096, temperature=0.7, priority=0,
+            ))
+
+        if settings.LLM_REVIEW_MODEL:
+            review_ep = primary_ep
+            if settings.LLM_REVIEW_BASE_URL and settings.LLM_REVIEW_BASE_URL != settings.LLM_PRIMARY_BASE_URL:
+                review_ep = ModelEndpoint(
+                    name="审核接入点",
+                    provider=settings.LLM_REVIEW_PROVIDER or settings.LLM_PRIMARY_PROVIDER or "qwen",
+                    base_url=settings.LLM_REVIEW_BASE_URL,
+                    api_key=settings.LLM_PRIMARY_API_KEY,
+                )
+                session.add(review_ep)
+                await session.flush()
+
+            review_group = ModelGroup(name="默认审核", type="review", strategy="failover", enabled=True, priority=0)
+            session.add(review_group)
+            await session.flush()
+            session.add(ModelInstance(
+                group_id=review_group.id, endpoint_id=review_ep.id,
+                model_name=settings.LLM_REVIEW_MODEL,
+                enabled=True, weight=1, max_tokens=2048, temperature=0.3, priority=0,
+            ))
+
+        emb_base = settings.EMBEDDING_BASE_URL or settings.LLM_PRIMARY_BASE_URL
+        emb_key = settings.EMBEDDING_API_KEY or settings.LLM_PRIMARY_API_KEY
+        if settings.EMBEDDING_MODEL and emb_base:
+            if emb_base == settings.LLM_PRIMARY_BASE_URL and emb_key == settings.LLM_PRIMARY_API_KEY:
+                emb_ep = primary_ep
+            else:
+                emb_ep = ModelEndpoint(
+                    name="Embedding接入点", provider="openai_compatible",
+                    base_url=emb_base, api_key=emb_key,
+                )
+                session.add(emb_ep)
+                await session.flush()
+
+            emb_group = ModelGroup(name="默认Embedding", type="embedding", strategy="failover", enabled=True, priority=0)
+            session.add(emb_group)
+            await session.flush()
+            session.add(ModelInstance(
+                group_id=emb_group.id, endpoint_id=emb_ep.id,
+                model_name=settings.EMBEDDING_MODEL,
+                enabled=True, weight=1, max_tokens=8192, temperature=0.0, priority=0,
+            ))
+
+        await session.commit()
+
+
+# Default review workflow templates
+DEFAULT_WORKFLOWS = [
+    {
+        "name": "单级审核",
+        "code": "single",
+        "steps": [{"step": 1, "name": "审核", "role_code": "reviewer"}],
+        "is_system": True,
+    },
+    {
+        "name": "双级审核",
+        "code": "double",
+        "steps": [
+            {"step": 1, "name": "初审", "role_code": "reviewer"},
+            {"step": 2, "name": "终审", "role_code": "admin"},
+        ],
+        "is_system": True,
+    },
+]
+
+DEFAULT_BINDINGS = [
+    {"resource_type": "knowledge", "workflow_code": "single"},
+    {"resource_type": "media", "workflow_code": "single"},
+]
+
+
+async def seed_review_workflows() -> None:
+    """Seed default review workflow templates and bindings."""
+    session_factory = get_session_factory()
+    async with session_factory() as session:
+        wf_result = await session.execute(select(ReviewWorkflow))
+        existing_wf = {w.code: w for w in wf_result.scalars().all()}
+
+        for wf_data in DEFAULT_WORKFLOWS:
+            if wf_data["code"] not in existing_wf:
+                wf = ReviewWorkflow(**wf_data)
+                session.add(wf)
+                existing_wf[wf_data["code"]] = wf
+
+        await session.flush()
+
+        bind_result = await session.execute(select(ResourceWorkflowBinding))
+        existing_bindings = {b.resource_type: b for b in bind_result.scalars().all()}
+
+        for bind_data in DEFAULT_BINDINGS:
+            if bind_data["resource_type"] not in existing_bindings:
+                wf = existing_wf.get(bind_data["workflow_code"])
+                if wf:
+                    binding = ResourceWorkflowBinding(
+                        resource_type=bind_data["resource_type"],
+                        workflow_id=wf.id,
+                        enabled=True,
+                    )
+                    session.add(binding)
 
         await session.commit()

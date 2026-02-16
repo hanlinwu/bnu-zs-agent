@@ -13,6 +13,8 @@ import {
   Calendar as CalendarIcon,
   Picture,
   Document,
+  ChatLineRound,
+  SetUp,
 } from '@element-plus/icons-vue'
 import { markRaw, type Component } from 'vue'
 
@@ -30,26 +32,65 @@ interface MenuItem {
   permission?: string
 }
 
-const menuItems: MenuItem[] = [
-  { index: '/admin/dashboard', title: '仪表盘', icon: markRaw(Odometer) },
-  { index: '/admin/knowledge', title: '知识库管理', icon: markRaw(Collection), permission: 'knowledge:read' },
-  { index: '/admin/users', title: '用户管理', icon: markRaw(User), permission: 'user:read' },
-  { index: '/admin/admins', title: '管理员管理', icon: markRaw(UserFilled), permission: 'admin:read' },
-  { index: '/admin/roles', title: '角色权限', icon: markRaw(Key), permission: 'role:read' },
-  { index: '/admin/sensitive', title: '敏感词库', icon: markRaw(Warning), permission: 'sensitive:read' },
-  { index: '/admin/model', title: '模型配置', icon: markRaw(Cpu), permission: 'model:read' },
-  { index: '/admin/calendar', title: '招生日历', icon: markRaw(CalendarIcon), permission: 'calendar:read' },
-  { index: '/admin/media', title: '多媒体资源', icon: markRaw(Picture), permission: 'media:read' },
-  { index: '/admin/logs', title: '审计日志', icon: markRaw(Document), permission: 'log:read' },
+interface MenuGroup {
+  label: string
+  items: MenuItem[]
+}
+
+const menuGroups: MenuGroup[] = [
+  {
+    label: '概览',
+    items: [
+      { index: '/admin/dashboard', title: '仪表盘', icon: markRaw(Odometer) },
+    ],
+  },
+  {
+    label: '业务管理',
+    items: [
+      { index: '/admin/knowledge', title: '知识库管理', icon: markRaw(Collection), permission: 'knowledge:read' },
+      { index: '/admin/media', title: '多媒体资源', icon: markRaw(Picture), permission: 'media:read' },
+      { index: '/admin/calendar', title: '招生日历', icon: markRaw(CalendarIcon), permission: 'calendar:read' },
+    ],
+  },
+  {
+    label: '用户与权限',
+    items: [
+      { index: '/admin/users', title: '用户管理', icon: markRaw(User), permission: 'user:read' },
+      { index: '/admin/admins', title: '管理员管理', icon: markRaw(UserFilled), permission: 'admin:read' },
+      { index: '/admin/roles', title: '角色权限', icon: markRaw(Key), permission: 'role:read' },
+      { index: '/admin/workflows', title: '审核流程', icon: markRaw(SetUp), permission: 'role:read' },
+    ],
+  },
+  {
+    label: '系统配置',
+    items: [
+      { index: '/admin/model', title: '模型配置', icon: markRaw(Cpu), permission: 'model:read' },
+      { index: '/admin/sensitive', title: '敏感词库', icon: markRaw(Warning), permission: 'sensitive:read' },
+    ],
+  },
+  {
+    label: '系统监控',
+    items: [
+      { index: '/admin/conversations', title: '对话日志', icon: markRaw(ChatLineRound), permission: 'conversation:read' },
+      { index: '/admin/logs', title: '审计日志', icon: markRaw(Document), permission: 'log:read' },
+    ],
+  },
 ]
 
-const visibleItems = computed(() =>
-  menuItems.filter(item => !item.permission || adminStore.hasPermission(item.permission))
+const visibleGroups = computed(() =>
+  menuGroups
+    .map(group => ({
+      ...group,
+      items: group.items.filter(item => !item.permission || adminStore.hasPermission(item.permission)),
+    }))
+    .filter(group => group.items.length > 0)
 )
+
+const allVisibleItems = computed(() => visibleGroups.value.flatMap(g => g.items))
 
 const activeIndex = computed(() => {
   const path = route.path
-  const match = visibleItems.value.find(item => path.startsWith(item.index))
+  const match = allVisibleItems.value.find(item => path.startsWith(item.index))
   return match?.index || '/admin/dashboard'
 })
 </script>
@@ -75,14 +116,18 @@ const activeIndex = computed(() => {
       text-color="rgba(255, 255, 255, 0.7)"
       active-text-color="#ffffff"
     >
-      <el-menu-item
-        v-for="item in visibleItems"
-        :key="item.index"
-        :index="item.index"
-      >
-        <el-icon><component :is="item.icon" /></el-icon>
-        <template #title>{{ item.title }}</template>
-      </el-menu-item>
+      <template v-for="group in visibleGroups" :key="group.label">
+        <div v-if="!props.collapsed" class="menu-group-label">{{ group.label }}</div>
+        <div v-else class="menu-group-divider" />
+        <el-menu-item
+          v-for="item in group.items"
+          :key="item.index"
+          :index="item.index"
+        >
+          <el-icon><component :is="item.icon" /></el-icon>
+          <template #title>{{ item.title }}</template>
+        </el-menu-item>
+      </template>
     </el-menu>
   </div>
 </template>
@@ -136,11 +181,36 @@ const activeIndex = computed(() => {
   white-space: nowrap;
 }
 
+.menu-group-label {
+  padding: 16px 20px 4px;
+  font-size: 11px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.35);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  white-space: nowrap;
+  overflow: hidden;
+
+  &:first-child {
+    padding-top: 8px;
+  }
+}
+
+.menu-group-divider {
+  height: 1px;
+  margin: 8px 12px;
+  background: rgba(255, 255, 255, 0.06);
+
+  &:first-child {
+    display: none;
+  }
+}
+
 .sidebar-menu {
   flex: 1;
   overflow-y: auto;
   border-right: none;
-  padding: 8px 0;
+  padding: 0 0 8px;
 
   &::-webkit-scrollbar {
     width: 0;

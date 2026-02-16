@@ -32,6 +32,19 @@ router.beforeEach(async (to, _from, next) => {
   const token = localStorage.getItem('token')
   if (!token) return next('/login')
 
+  // Ensure user profile is loaded (survives page refresh)
+  const { useUserStore } = await import('@/stores/user')
+  const userStore = useUserStore()
+  if (!userStore.userInfo) {
+    try {
+      await userStore.fetchProfile()
+    } catch {
+      // Token expired or invalid — redirect to login
+      userStore.logout()
+      return next('/login')
+    }
+  }
+
   next()
 })
 

@@ -50,6 +50,12 @@ export const adminRoutes: RouteRecordRaw[] = [
         meta: { title: '用户管理' },
       },
       {
+        path: 'conversations',
+        name: 'AdminConversations',
+        component: () => import('@/views/admin/Conversations.vue'),
+        meta: { title: '对话日志' },
+      },
+      {
         path: 'admins',
         name: 'AdminAdmins',
         component: () => import('@/views/admin/Admins.vue'),
@@ -60,6 +66,12 @@ export const adminRoutes: RouteRecordRaw[] = [
         name: 'AdminRoles',
         component: () => import('@/views/admin/Roles.vue'),
         meta: { title: '角色管理' },
+      },
+      {
+        path: 'workflows',
+        name: 'AdminWorkflows',
+        component: () => import('@/views/admin/Workflows.vue'),
+        meta: { title: '审核流程' },
       },
       {
         path: 'media',

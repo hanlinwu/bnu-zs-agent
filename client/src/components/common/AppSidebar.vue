@@ -27,7 +27,10 @@ const router = useRouter()
 const userNickname = computed(() => userStore.userInfo?.nickname || '用户')
 const userAvatar = computed(() => userStore.userInfo?.avatar_url || generateAvatar(userNickname.value))
 
-function handleNewConversation() {
+async function handleNewConversation() {
+  if (chatStore.isStreaming) {
+    await chatStore.stopGeneration()
+  }
   chatStore.setConversationId(null)
   chatStore.clearMessages()
 }
@@ -36,7 +39,10 @@ function toggleCollapse() {
   emit('update:collapsed', !props.collapsed)
 }
 
-function handleLogout() {
+async function handleLogout() {
+  if (chatStore.isStreaming) {
+    await chatStore.stopGeneration()
+  }
   chatStore.clearMessages()
   chatStore.setConversationId(null)
   conversationStore.conversations = []

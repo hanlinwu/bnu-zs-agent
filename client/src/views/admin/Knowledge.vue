@@ -17,6 +17,11 @@ const activeTab = ref<string>('all')
 const uploadDialogVisible = ref(false)
 const uploading = ref(false)
 
+const uploadHeaders = computed(() => {
+  const token = localStorage.getItem('admin_token')
+  return token ? { Authorization: `Bearer ${token}` } : {}
+})
+
 const statusTabs = [
   { label: '全部', value: 'all' },
   { label: '待审核', value: 'pending' },
@@ -49,7 +54,7 @@ function statusLabel(status: DocumentStatus) {
     approved: '已通过',
     active: '已生效',
     rejected: '已拒绝',
-    processing: '处理中',
+    processing: '正在切片...',
     archived: '已归档',
   }
   return map[status] || status
@@ -205,8 +210,16 @@ onMounted(() => {
         <el-table-column prop="createdAt" label="上传时间" width="120">
           <template #default="{ row }">{{ formatDate(row.createdAt) }}</template>
         </el-table-column>
-        <el-table-column label="操作" width="200" fixed="right">
+        <el-table-column label="操作" width="240" fixed="right">
           <template #default="{ row }">
+            <el-button
+              type="primary"
+              link
+              size="small"
+              @click="knowledgeApi.downloadDocument(row.id)"
+            >
+              下载
+            </el-button>
             <el-button
               v-if="row.status === 'pending' || row.status === 'reviewing'"
               type="primary"
@@ -257,6 +270,7 @@ onMounted(() => {
       <el-upload
         drag
         action="/api/v1/admin/knowledge/upload"
+        :headers="uploadHeaders"
         accept=".pdf,.docx,.txt,.md"
         :before-upload="beforeUpload"
         :on-success="handleUploadSuccess"

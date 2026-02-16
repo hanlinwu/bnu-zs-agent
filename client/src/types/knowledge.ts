@@ -28,11 +28,7 @@ export interface KnowledgeDocument {
 /** 知识库切片 */
 export interface KnowledgeChunk {
   id: string
-  documentId: string
+  chunkIndex: number
   content: string
-  embedding?: number[]
   tokenCount: number
-  index: number
-  metadata: Record<string, unknown>
-  createdAt: string
 }

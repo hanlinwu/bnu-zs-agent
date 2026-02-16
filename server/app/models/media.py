@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import String, Boolean, ForeignKey, DateTime, text
+from sqlalchemy import String, Boolean, Integer, Text, ForeignKey, DateTime, text
 from sqlalchemy.dialects.postgresql import UUID, ARRAY
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -15,9 +15,14 @@ class MediaResource(Base):
     title: Mapped[str] = mapped_column(String(300), nullable=False)
     media_type: Mapped[str] = mapped_column(String(20), nullable=False)
     file_path: Mapped[str] = mapped_column(String(500), nullable=False)
+    file_size: Mapped[int | None] = mapped_column(Integer)
     thumbnail_url: Mapped[str | None] = mapped_column(String(500))
     tags: Mapped[list[str] | None] = mapped_column(ARRAY(String(200)))
     source: Mapped[str | None] = mapped_column(String(200))
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="pending", server_default=text("'pending'"))
+    current_step: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default=text("0"))
     is_approved: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     uploaded_by: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("admin_users.id"))
+    reviewed_by: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("admin_users.id"))
+    review_note: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=text("NOW()"))

@@ -11,12 +11,14 @@ from app.api.v1 import (
     admin_auth,
     admin_admin,
     admin_user,
+    admin_conversation,
     admin_role,
     admin_sensitive,
     admin_model,
     admin_calendar,
     admin_log,
     admin_dashboard,
+    admin_workflow,
 )
 
 api_router = APIRouter(prefix="/api/v1")
@@ -38,3 +40,5 @@ api_router.include_router(admin_model.router, prefix="/admin/models", tags=["模
 api_router.include_router(admin_calendar.router, prefix="/admin/calendar", tags=["招生日历"])
 api_router.include_router(admin_log.router, prefix="/admin/logs", tags=["审计日志"])
 api_router.include_router(admin_dashboard.router, prefix="/admin/dashboard", tags=["仪表盘"])
+api_router.include_router(admin_conversation.router, prefix="/admin/conversations", tags=["对话审核"])
+api_router.include_router(admin_workflow.router, prefix="/admin", tags=["审核流程"])

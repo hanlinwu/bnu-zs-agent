@@ -1,12 +1,11 @@
 """LLM service with strategy pattern and router for multi-model support."""
 
 import logging
+import random
 from abc import ABC, abstractmethod
 from typing import AsyncGenerator
 
 import httpx
-
-from app.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -33,6 +32,7 @@ class OpenAICompatibleProvider(LLMProvider):
         self.base_url = base_url.rstrip("/")
         self.model = model
         self.name = name
+        self.weight: int = 1
         self.client = httpx.AsyncClient(timeout=60.0)
 
     async def chat(self, messages: list[dict], stream: bool = False) -> AsyncGenerator[str, None] | str:
@@ -95,7 +95,7 @@ class LocalProvider(OpenAICompatibleProvider):
 
 
 class LLMRouter:
-    """Model router with failover and load balancing support."""
+    """Model router with failover, round-robin, and weighted load balancing."""
 
     def __init__(self):
         self.providers: list[LLMProvider] = []
@@ -116,6 +116,10 @@ class LLMRouter:
             provider = self.providers[self._current_index % len(self.providers)]
             self._current_index += 1
             return provider
+        if self.strategy == "weighted":
+            weights = [getattr(p, "weight", 1) for p in self.providers]
+            return random.choices(self.providers, weights=weights, k=1)[0]
+        # Default: failover — return first provider
         return self.providers[0]
 
     async def chat(self, messages: list[dict], stream: bool = False) -> AsyncGenerator[str, None] | str:
@@ -140,26 +144,5 @@ class LLMRouter:
         return await provider.embed(texts)
 
 
-def create_llm_router() -> LLMRouter:
-    """Create and configure the LLM router from settings."""
-    router = LLMRouter()
-
-    if settings.LLM_PRIMARY_API_KEY:
-        provider_class = {
-            "qwen": QwenProvider,
-            "glm": GLMProvider,
-            "local": LocalProvider,
-        }.get(settings.LLM_PRIMARY_PROVIDER, OpenAICompatibleProvider)
-
-        primary = provider_class(
-            api_key=settings.LLM_PRIMARY_API_KEY,
-            base_url=settings.LLM_PRIMARY_BASE_URL,
-            model=settings.LLM_PRIMARY_MODEL,
-        )
-        router.add_provider(primary)
-
-    return router
-
-
-# Singleton instance
-llm_router = create_llm_router()
+# Singleton instance — initialized empty, populated by model_config_service.reload_router()
+llm_router = LLMRouter()

@@ -6,20 +6,25 @@ from pydantic import BaseModel, Field
 class KnowledgeDocResponse(BaseModel):
     id: str
     title: str
-    file_type: str
+    fileType: str
+    fileHash: str = ""
+    fileSize: int = 0
     status: str
-    uploaded_by: str
-    reviewed_by: str | None = None
-    review_note: str | None = None
-    created_at: str
-    updated_at: str
+    uploaderId: str
+    uploaderName: str = ""
+    reviewerId: str | None = None
+    reviewerName: str | None = None
+    reviewNote: str | None = None
+    chunkCount: int = 0
+    createdAt: str
+    updatedAt: str
 
 
 class KnowledgeDocListResponse(BaseModel):
     items: list[KnowledgeDocResponse]
     total: int
     page: int
-    page_size: int
+    pageSize: int
 
 
 class KnowledgeReviewRequest(BaseModel):
@@ -29,6 +34,13 @@ class KnowledgeReviewRequest(BaseModel):
 
 class ChunkPreviewResponse(BaseModel):
     id: str
-    chunk_index: int
+    chunkIndex: int
     content: str
-    token_count: int | None
+    tokenCount: int | None
+
+
+class ChunkListResponse(BaseModel):
+    items: list[ChunkPreviewResponse]
+    total: int
+    page: int
+    pageSize: int

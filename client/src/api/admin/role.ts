@@ -18,3 +18,6 @@ export const deleteRole = (id: string) =>
 
 export const getPermissions = () =>
   request.get<Permission[]>('/admin/permissions')
+
+export const updatePermissions = (roleId: string, permissionIds: string[]) =>
+  request.put(`/admin/roles/${roleId}/permissions`, { permission_ids: permissionIds })

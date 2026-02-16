@@ -4,8 +4,8 @@
  */
 
 const AVATAR_COLORS = [
-  '#003DA5', '#1A5FBF', '#2E7D32', '#C4972F', '#C62828',
-  '#6A1B9A', '#00838F', '#AD1457', '#4E342E', '#37474F',
+  '#3B82F6', '#8B5CF6', '#EC4899', '#F97316', '#10B981',
+  '#06B6D4', '#F43F5E', '#A855F7', '#14B8A6', '#F59E0B',
 ]
 
 function hashCode(str: string): number {

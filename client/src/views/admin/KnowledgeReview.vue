@@ -1,10 +1,12 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { ArrowLeft, Check, Close } from '@element-plus/icons-vue'
+import { ArrowLeft, Check, Close, Download, Loading } from '@element-plus/icons-vue'
 import * as knowledgeApi from '@/api/admin/knowledge'
+import * as wfApi from '@/api/admin/workflow'
 import type { KnowledgeDocument, KnowledgeChunk } from '@/types/knowledge'
+import ReviewHistory from '@/components/admin/ReviewHistory.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -18,6 +20,10 @@ const chunkPage = ref(1)
 const chunkPageSize = ref(20)
 const reviewNote = ref('')
 const submitting = ref(false)
+const reviewHistory = ref<any[]>([])
+let pollTimer: ReturnType<typeof setInterval> | null = null
+
+const isProcessing = computed(() => doc.value?.status === 'processing')
 
 function statusLabel(status: string) {
   const map: Record<string, string> = {
@@ -26,7 +32,7 @@ function statusLabel(status: string) {
     approved: '已通过',
     active: '已生效',
     rejected: '已拒绝',
-    processing: '处理中',
+    processing: '正在切片...',
     archived: '已归档',
   }
   return map[status] || status
@@ -39,7 +45,7 @@ function statusTagType(status: string) {
     approved: 'success',
     active: 'success',
     rejected: 'danger',
-    processing: 'info',
+    processing: '',
     archived: 'info',
   }
   return map[status] || 'info'
@@ -81,10 +87,11 @@ async function fetchChunks() {
       page: chunkPage.value,
       pageSize: chunkPageSize.value,
     })
-    chunks.value = res.data.items
-    chunkTotal.value = res.data.total
+    const data = res.data as any
+    chunks.value = data.items || []
+    chunkTotal.value = data.total || 0
   } catch {
-    ElMessage.error('加载切片失败')
+    // Silently fail during polling; only show error on initial load
   }
 }
 
@@ -93,20 +100,59 @@ function handleChunkPageChange(page: number) {
   fetchChunks()
 }
 
+async function fetchReviewHistory() {
+  if (!documentId.value) return
+  try {
+    const res = await wfApi.getReviewHistory('knowledge', documentId.value)
+    reviewHistory.value = res.data.items
+  } catch {
+    // silently fail
+  }
+}
+
 async function handleReview(approved: boolean) {
   if (!doc.value) return
   submitting.value = true
   try {
-    await knowledgeApi.reviewDocument(doc.value.id, {
-      approved,
+    const res = await knowledgeApi.reviewDocument(doc.value.id, {
+      action: approved ? 'approve' : 'reject',
       note: reviewNote.value || undefined,
     })
-    ElMessage.success(approved ? '已通过审核' : '已拒绝')
-    router.push('/admin/knowledge')
+    if (approved) {
+      doc.value = res.data as any
+      ElMessage.success('已通过审核，正在切片...')
+      startPolling()
+      fetchReviewHistory()
+    } else {
+      ElMessage.success('已拒绝')
+      fetchReviewHistory()
+      router.push('/admin/knowledge')
+    }
   } catch {
     ElMessage.error('审核操作失败')
   } finally {
     submitting.value = false
+  }
+}
+
+function startPolling() {
+  stopPolling()
+  pollTimer = setInterval(async () => {
+    await fetchDocument()
+    await fetchChunks()
+    if (doc.value && doc.value.status !== 'processing') {
+      stopPolling()
+      if (doc.value.status === 'approved') {
+        ElMessage.success(`切片完成，共 ${doc.value.chunkCount} 个切片`)
+      }
+    }
+  }, 1500)
+}
+
+function stopPolling() {
+  if (pollTimer) {
+    clearInterval(pollTimer)
+    pollTimer = null
   }
 }
 
@@ -115,8 +161,17 @@ function goBack() {
 }
 
 onMounted(() => {
-  fetchDocument()
-  fetchChunks()
+  fetchDocument().then(() => {
+    fetchChunks()
+    fetchReviewHistory()
+    if (doc.value?.status === 'processing') {
+      startPolling()
+    }
+  })
+})
+
+onUnmounted(() => {
+  stopPolling()
 })
 </script>
 
@@ -129,7 +184,12 @@ onMounted(() => {
 
     <div v-if="doc" class="review-content">
       <div class="doc-info-panel">
-        <h3 class="panel-title">文档信息</h3>
+        <div class="panel-header">
+          <h3 class="panel-title">文档信息</h3>
+          <el-button type="primary" :icon="Download" size="small" @click="knowledgeApi.downloadDocument(doc.id)">
+            下载原文
+          </el-button>
+        </div>
         <div class="info-grid">
           <div class="info-item">
             <span class="info-label">文档标题</span>
@@ -169,8 +229,18 @@ onMounted(() => {
       </div>
 
       <div class="chunks-panel">
-        <h3 class="panel-title">文档切片预览 ({{ chunkTotal }} 条)</h3>
-        <div v-if="chunks.length === 0" class="chunks-empty">
+        <div class="chunks-panel-header">
+          <h3 class="panel-title">文档切片预览 ({{ chunkTotal }} 条)</h3>
+          <el-tag v-if="isProcessing" type="primary" effect="dark" class="processing-tag">
+            <el-icon class="is-loading"><Loading /></el-icon>
+            正在切片中...已完成 {{ chunkTotal }} 条
+          </el-tag>
+        </div>
+        <div v-if="isProcessing && chunks.length === 0" class="chunks-processing">
+          <el-icon class="is-loading processing-icon"><Loading /></el-icon>
+          <p>正在解析文档并生成切片，请稍候...</p>
+        </div>
+        <div v-else-if="chunks.length === 0" class="chunks-empty">
           暂无切片数据
         </div>
         <div v-else class="chunks-list">
@@ -180,7 +250,7 @@ onMounted(() => {
             class="chunk-card"
           >
             <div class="chunk-header">
-              <span class="chunk-index">#{{ chunk.index + 1 }}</span>
+              <span class="chunk-index">#{{ chunk.chunkIndex + 1 }}</span>
               <span class="chunk-tokens">{{ chunk.tokenCount }} tokens</span>
             </div>
             <div class="chunk-content">{{ chunk.content }}</div>
@@ -230,7 +300,12 @@ onMounted(() => {
         </div>
       </div>
 
-      <div v-if="doc.reviewNote" class="review-note-panel">
+      <div v-if="reviewHistory.length > 0" class="review-note-panel">
+        <h3 class="panel-title">审核记录</h3>
+        <ReviewHistory :records="reviewHistory" />
+      </div>
+
+      <div v-else-if="doc.reviewNote" class="review-note-panel">
         <h3 class="panel-title">审核记录</h3>
         <div class="review-note-content">
           <p class="review-note-reviewer">
@@ -284,6 +359,17 @@ onMounted(() => {
   margin: 0 0 16px;
 }
 
+.panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+
+  .panel-title {
+    margin-bottom: 0;
+  }
+}
+
 .info-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
@@ -317,6 +403,40 @@ onMounted(() => {
   text-align: center;
   padding: 32px;
   color: var(--text-secondary, #9E9EB3);
+}
+
+.chunks-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+
+  .panel-title {
+    margin-bottom: 0;
+  }
+}
+
+.processing-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.chunks-processing {
+  text-align: center;
+  padding: 48px 32px;
+  color: var(--text-secondary, #5A5A72);
+
+  .processing-icon {
+    font-size: 32px;
+    color: var(--bnu-blue, #003DA5);
+    margin-bottom: 12px;
+  }
+
+  p {
+    margin: 0;
+    font-size: 14px;
+  }
 }
 
 .chunks-list {

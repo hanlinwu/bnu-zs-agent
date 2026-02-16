@@ -1,81 +1,112 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
-import { ElMessage } from 'element-plus'
-import { Connection, Check, Close } from '@element-plus/icons-vue'
+import { ref, reactive, onMounted } from 'vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import { Plus, Delete, Connection } from '@element-plus/icons-vue'
 import * as modelApi from '@/api/admin/model'
-import type { ModelConfig } from '@/types/admin'
+import type { ModelEndpoint, ModelGroup, ModelInstance } from '@/types/admin'
+import type { FormInstance, FormRules } from 'element-plus'
 
 const loading = ref(false)
-const models = ref<ModelConfig[]>([])
-const loadBalanceStrategy = ref<'failover' | 'round_robin'>('failover')
-const testingId = ref<string>('')
+const endpoints = ref<ModelEndpoint[]>([])
+const groups = ref<ModelGroup[]>([])
+
+// Endpoint dialog
+const epDialogVisible = ref(false)
+const epFormRef = ref<FormInstance>()
+const epSubmitting = ref(false)
+const isEditEp = ref(false)
+const epForm = reactive({
+  id: '',
+  name: '',
+  provider: 'openai_compatible',
+  baseUrl: '',
+  apiKey: '',
+})
+const epRules: FormRules = {
+  name: [{ required: true, message: '请输入名称', trigger: 'blur' }],
+  baseUrl: [{ required: true, message: '请输入接口地址', trigger: 'blur' }],
+}
+
+// Instance dialog
+const instDialogVisible = ref(false)
+const instFormRef = ref<FormInstance>()
+const instSubmitting = ref(false)
+const isEditInst = ref(false)
+const instGroupId = ref('')
+const instForm = reactive({
+  id: '',
+  endpointId: '',
+  modelName: '',
+  enabled: true,
+  weight: 1,
+  maxTokens: 4096,
+  temperature: 0.7,
+  priority: 0,
+})
+const instRules: FormRules = {
+  endpointId: [{ required: true, message: '请选择接入点', trigger: 'change' }],
+  modelName: [{ required: true, message: '请输入模型名称', trigger: 'blur' }],
+}
+
+// Group dialog
+const grpDialogVisible = ref(false)
+const grpFormRef = ref<FormInstance>()
+const grpSubmitting = ref(false)
+const grpForm = reactive({
+  name: '',
+  type: 'llm' as string,
+  strategy: 'failover',
+})
+const grpRules: FormRules = {
+  name: [{ required: true, message: '请输入组名', trigger: 'blur' }],
+}
+
+// Test connectivity
+const testingId = ref('')
+
+const providerOptions = [
+  { label: '通义千问', value: 'qwen' },
+  { label: '智谱 GLM', value: 'glm' },
+  { label: '本地部署', value: 'local' },
+  { label: 'OpenAI 兼容', value: 'openai_compatible' },
+]
+
+const groupTypeOptions = [
+  { label: 'LLM 对话', value: 'llm' },
+  { label: 'Embedding 向量', value: 'embedding' },
+  { label: '审核模型', value: 'review' },
+]
+
+const strategyOptions = [
+  { label: '故障转移', value: 'failover' },
+  { label: '轮询', value: 'round_robin' },
+  { label: '加权随机', value: 'weighted' },
+]
 
 function providerLabel(provider: string) {
-  const map: Record<string, string> = {
-    qwen: '通义千问',
-    glm: '智谱 GLM',
-    local: '本地部署',
-  }
-  return map[provider] || provider
+  return providerOptions.find(o => o.value === provider)?.label || provider
 }
 
-function providerColor(provider: string) {
-  const map: Record<string, string> = {
-    qwen: '#6366F1',
-    glm: '#10B981',
-    local: '#F59E0B',
-  }
-  return map[provider] || '#6B7280'
+function groupTypeLabel(type: string) {
+  return groupTypeOptions.find(o => o.value === type)?.label || type
 }
 
-async function fetchModels() {
+function groupTypeTag(type: string) {
+  const map: Record<string, string> = { llm: 'primary', embedding: 'success', review: 'warning' }
+  return map[type] || 'info'
+}
+
+function strategyLabel(strategy: string) {
+  return strategyOptions.find(o => o.value === strategy)?.label || strategy
+}
+
+async function fetchConfig() {
   loading.value = true
   try {
-    const res = await modelApi.getModels()
+    const res = await modelApi.getModelConfig()
     const data = res.data as any
-
-    // API returns flat config object, transform into model card array
-    if (data && !Array.isArray(data)) {
-      const items: ModelConfig[] = []
-      // Primary model
-      if (data.primary_provider || data.primary_model) {
-        items.push({
-          id: 'primary',
-          name: data.primary_model || 'unknown',
-          provider: data.primary_provider || 'unknown',
-          endpoint: data.primary_base_url || '',
-          apiKey: data.primary_api_key || '',
-          isPrimary: true,
-          isReviewer: false,
-          enabled: true,
-          weight: 1,
-          maxTokens: 4096,
-          temperature: 0.7,
-          createdAt: '',
-          updatedAt: '',
-        })
-      }
-      // Review model
-      if (data.review_provider || data.review_model) {
-        items.push({
-          id: 'review',
-          name: data.review_model || 'unknown',
-          provider: data.review_provider || data.primary_provider || 'unknown',
-          endpoint: data.review_base_url || data.primary_base_url || '',
-          isPrimary: false,
-          isReviewer: true,
-          enabled: true,
-          weight: 1,
-          maxTokens: 2048,
-          temperature: 0.3,
-          createdAt: '',
-          updatedAt: '',
-        })
-      }
-      models.value = items
-    } else {
-      models.value = data || []
-    }
+    endpoints.value = data.endpoints || []
+    groups.value = data.groups || []
   } catch {
     ElMessage.error('加载模型配置失败')
   } finally {
@@ -83,165 +114,479 @@ async function fetchModels() {
   }
 }
 
-async function handleSetPrimary(model: ModelConfig) {
+// ── Endpoint CRUD ──
+
+function openCreateEp() {
+  isEditEp.value = false
+  epForm.id = ''
+  epForm.name = ''
+  epForm.provider = 'openai_compatible'
+  epForm.baseUrl = ''
+  epForm.apiKey = ''
+  epDialogVisible.value = true
+}
+
+function openEditEp(ep: ModelEndpoint) {
+  isEditEp.value = true
+  epForm.id = ep.id
+  epForm.name = ep.name
+  epForm.provider = ep.provider
+  epForm.baseUrl = ep.baseUrl
+  epForm.apiKey = ''
+  epDialogVisible.value = true
+}
+
+async function handleSaveEp() {
+  const valid = await epFormRef.value?.validate().catch(() => false)
+  if (!valid) return
+  epSubmitting.value = true
   try {
-    await modelApi.setPrimaryModel(model.id)
-    ElMessage.success(`已设置「${model.name}」为主用模型`)
-    fetchModels()
+    if (isEditEp.value) {
+      const update: Record<string, string> = { name: epForm.name, provider: epForm.provider, baseUrl: epForm.baseUrl }
+      if (epForm.apiKey) update.apiKey = epForm.apiKey
+      await modelApi.updateEndpoint(epForm.id, update)
+      ElMessage.success('接入点已更新')
+    } else {
+      await modelApi.createEndpoint({
+        name: epForm.name, provider: epForm.provider,
+        baseUrl: epForm.baseUrl, apiKey: epForm.apiKey,
+      })
+      ElMessage.success('接入点已创建')
+    }
+    epDialogVisible.value = false
+    fetchConfig()
   } catch {
-    ElMessage.error('设置失败')
+    ElMessage.error('操作失败')
+  } finally {
+    epSubmitting.value = false
   }
 }
 
-async function handleSetReviewer(model: ModelConfig) {
+async function handleDeleteEp(ep: ModelEndpoint) {
   try {
-    await modelApi.setReviewerModel(model.id)
-    ElMessage.success(`已设置「${model.name}」为审查模型`)
-    fetchModels()
-  } catch {
-    ElMessage.error('设置失败')
-  }
+    await ElMessageBox.confirm(
+      `确定要删除接入点「${ep.name}」吗？`,
+      '删除确认',
+      { type: 'error', confirmButtonText: '删除', cancelButtonText: '取消' }
+    )
+    await modelApi.deleteEndpoint(ep.id)
+    ElMessage.success('删除成功')
+    fetchConfig()
+  } catch { /* cancelled */ }
 }
 
-async function handleTest(model: ModelConfig) {
-  testingId.value = model.id
+async function handleTestEp(ep: ModelEndpoint) {
+  testingId.value = ep.id
   try {
-    await modelApi.testModel(model.id)
-    ElMessage.success('连接测试成功')
+    const res = await modelApi.testModel({
+      provider: ep.provider,
+      api_key: '',  // will use stored key on backend
+      base_url: ep.baseUrl,
+      model: 'test',
+    })
+    ElMessage.success((res.data as any).message || '连接成功')
   } catch {
-    ElMessage.error('连接测试失败，请检查配置')
+    ElMessage.error('连接测试失败')
   } finally {
     testingId.value = ''
   }
 }
 
-async function handleToggle(model: ModelConfig) {
+// ── Group CRUD ──
+
+function openCreateGroup() {
+  grpForm.name = ''
+  grpForm.type = 'llm'
+  grpForm.strategy = 'failover'
+  grpDialogVisible.value = true
+}
+
+async function handleSaveGroup() {
+  const valid = await grpFormRef.value?.validate().catch(() => false)
+  if (!valid) return
+  grpSubmitting.value = true
   try {
-    await modelApi.updateModels({ id: model.id, enabled: !model.enabled } as any)
-    model.enabled = !model.enabled
-    ElMessage.success(model.enabled ? '已启用' : '已停用')
+    await modelApi.createGroup({
+      name: grpForm.name, type: grpForm.type, strategy: grpForm.strategy,
+    })
+    ElMessage.success('模型组已创建')
+    grpDialogVisible.value = false
+    fetchConfig()
+  } catch {
+    ElMessage.error('操作失败')
+  } finally {
+    grpSubmitting.value = false
+  }
+}
+
+async function handleDeleteGroup(grp: ModelGroup) {
+  try {
+    await ElMessageBox.confirm(
+      `确定要删除模型组「${grp.name}」及其所有实例吗？`,
+      '删除确认',
+      { type: 'error', confirmButtonText: '删除', cancelButtonText: '取消' }
+    )
+    await modelApi.deleteGroup(grp.id)
+    ElMessage.success('删除成功')
+    fetchConfig()
+  } catch { /* cancelled */ }
+}
+
+async function handleToggleGroup(grp: ModelGroup) {
+  try {
+    await modelApi.updateGroup(grp.id, { enabled: !grp.enabled })
+    grp.enabled = !grp.enabled
+    ElMessage.success(grp.enabled ? '已启用' : '已停用')
+  } catch {
+    ElMessage.error('操作失败')
+  }
+}
+
+async function handleStrategyChange(grp: ModelGroup, strategy: string) {
+  try {
+    await modelApi.updateGroup(grp.id, { strategy })
+    grp.strategy = strategy as any
+  } catch {
+    ElMessage.error('操作失败')
+    fetchConfig()
+  }
+}
+
+// ── Instance CRUD ──
+
+function openCreateInstance(groupId: string) {
+  isEditInst.value = false
+  instGroupId.value = groupId
+  instForm.id = ''
+  instForm.endpointId = ''
+  instForm.modelName = ''
+  instForm.enabled = true
+  instForm.weight = 1
+  instForm.maxTokens = 4096
+  instForm.temperature = 0.7
+  instForm.priority = 0
+  instDialogVisible.value = true
+}
+
+function openEditInstance(inst: ModelInstance) {
+  isEditInst.value = true
+  instGroupId.value = inst.groupId
+  instForm.id = inst.id
+  instForm.endpointId = inst.endpointId
+  instForm.modelName = inst.modelName
+  instForm.enabled = inst.enabled
+  instForm.weight = inst.weight
+  instForm.maxTokens = inst.maxTokens
+  instForm.temperature = inst.temperature
+  instForm.priority = inst.priority
+  instDialogVisible.value = true
+}
+
+async function handleSaveInstance() {
+  const valid = await instFormRef.value?.validate().catch(() => false)
+  if (!valid) return
+  instSubmitting.value = true
+  try {
+    if (isEditInst.value) {
+      await modelApi.updateInstance(instForm.id, {
+        endpointId: instForm.endpointId,
+        modelName: instForm.modelName,
+        enabled: instForm.enabled,
+        weight: instForm.weight,
+        maxTokens: instForm.maxTokens,
+        temperature: instForm.temperature,
+        priority: instForm.priority,
+      })
+      ElMessage.success('模型实例已更新')
+    } else {
+      await modelApi.createInstance(instGroupId.value, {
+        endpointId: instForm.endpointId,
+        modelName: instForm.modelName,
+        enabled: instForm.enabled,
+        weight: instForm.weight,
+        maxTokens: instForm.maxTokens,
+        temperature: instForm.temperature,
+        priority: instForm.priority,
+      })
+      ElMessage.success('模型实例已添加')
+    }
+    instDialogVisible.value = false
+    fetchConfig()
+  } catch {
+    ElMessage.error('操作失败')
+  } finally {
+    instSubmitting.value = false
+  }
+}
+
+async function handleDeleteInstance(inst: ModelInstance) {
+  try {
+    await ElMessageBox.confirm(
+      `确定要删除模型「${inst.modelName}」吗？`,
+      '删除确认',
+      { type: 'error', confirmButtonText: '删除', cancelButtonText: '取消' }
+    )
+    await modelApi.deleteInstance(inst.id)
+    ElMessage.success('删除成功')
+    fetchConfig()
+  } catch { /* cancelled */ }
+}
+
+async function handleToggleInstance(inst: ModelInstance) {
+  try {
+    await modelApi.updateInstance(inst.id, { enabled: !inst.enabled })
+    inst.enabled = !inst.enabled
+    ElMessage.success(inst.enabled ? '已启用' : '已停用')
   } catch {
     ElMessage.error('操作失败')
   }
 }
 
 onMounted(() => {
-  fetchModels()
+  fetchConfig()
 })
 </script>
 
 <template>
-  <div class="model-page">
+  <div v-loading="loading" class="model-page">
     <div class="page-header">
       <div class="header-left">
         <h2 class="page-title">模型配置</h2>
-        <p class="page-desc">配置与管理大语言模型接入</p>
+        <p class="page-desc">管理模型接入点、模型组与实例</p>
       </div>
     </div>
 
-    <div class="strategy-card">
-      <div class="strategy-header">
+    <!-- Section 1: Endpoints -->
+    <div class="section-card">
+      <div class="section-header">
         <h3 class="card-title">
           <el-icon><Connection /></el-icon>
-          负载均衡策略
+          接入点管理
         </h3>
+        <el-button type="primary" :icon="Plus" size="small" @click="openCreateEp">
+          新建接入点
+        </el-button>
       </div>
-      <div class="strategy-options">
-        <el-radio-group v-model="loadBalanceStrategy" size="large">
-          <el-radio-button value="failover">
-            故障转移 (Failover)
-          </el-radio-button>
-          <el-radio-button value="round_robin">
-            轮询 (Round Robin)
-          </el-radio-button>
-        </el-radio-group>
-        <p class="strategy-desc">
-          {{ loadBalanceStrategy === 'failover'
-            ? '主模型不可用时自动切换到备用模型'
-            : '请求按权重在多个模型间轮询分发' }}
-        </p>
+      <el-table :data="endpoints" stripe>
+        <el-table-column prop="name" label="名称" width="150" />
+        <el-table-column label="类型" width="120">
+          <template #default="{ row }">
+            <el-tag size="small">{{ providerLabel(row.provider) }}</el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column prop="baseUrl" label="接口地址" min-width="260" show-overflow-tooltip>
+          <template #default="{ row }">
+            <span class="mono-text">{{ row.baseUrl }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column label="API Key" width="140">
+          <template #default="{ row }">
+            <span class="mono-text muted">{{ row.apiKey }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column label="操作" width="200" fixed="right">
+          <template #default="{ row }">
+            <el-button type="primary" link size="small" @click="openEditEp(row)">编辑</el-button>
+            <el-button type="danger" link size="small" @click="handleDeleteEp(row)">删除</el-button>
+          </template>
+        </el-table-column>
+      </el-table>
+    </div>
+
+    <!-- Section 2: Groups + Instances -->
+    <div class="section-card">
+      <div class="section-header">
+        <h3 class="card-title">
+          <el-icon><Connection /></el-icon>
+          模型组
+        </h3>
+        <el-button type="primary" :icon="Plus" size="small" @click="openCreateGroup">
+          新建模型组
+        </el-button>
+      </div>
+
+      <div v-if="groups.length === 0" class="empty-state">
+        暂无模型组，请创建
+      </div>
+
+      <div v-for="grp in groups" :key="grp.id" class="group-card" :class="{ 'group-card--disabled': !grp.enabled }">
+        <div class="group-header">
+          <div class="group-title-row">
+            <el-tag :type="(groupTypeTag(grp.type) as any)" size="small" effect="dark">
+              {{ groupTypeLabel(grp.type) }}
+            </el-tag>
+            <h4 class="group-name">{{ grp.name }}</h4>
+          </div>
+          <div class="group-controls">
+            <el-select
+              :model-value="grp.strategy"
+              size="small"
+              style="width: 120px"
+              @change="(val: any) => handleStrategyChange(grp, val)"
+            >
+              <el-option
+                v-for="opt in strategyOptions"
+                :key="opt.value"
+                :label="opt.label"
+                :value="opt.value"
+              />
+            </el-select>
+            <el-switch
+              :model-value="grp.enabled"
+              size="small"
+              active-text="启用"
+              @change="handleToggleGroup(grp)"
+            />
+            <el-button type="danger" link size="small" :icon="Delete" @click="handleDeleteGroup(grp)" />
+          </div>
+        </div>
+
+        <el-table :data="grp.instances" size="small" class="instance-table">
+          <el-table-column label="模型名称" min-width="180">
+            <template #default="{ row }">
+              <span class="mono-text">{{ row.modelName }}</span>
+            </template>
+          </el-table-column>
+          <el-table-column label="接入点" width="150">
+            <template #default="{ row }">
+              {{ row.endpoint?.name || '-' }}
+            </template>
+          </el-table-column>
+          <el-table-column label="权重" width="70" align="center">
+            <template #default="{ row }">{{ row.weight }}</template>
+          </el-table-column>
+          <el-table-column label="Max Tokens" width="100" align="center">
+            <template #default="{ row }">{{ row.maxTokens }}</template>
+          </el-table-column>
+          <el-table-column label="Temp" width="70" align="center">
+            <template #default="{ row }">{{ row.temperature }}</template>
+          </el-table-column>
+          <el-table-column label="状态" width="70" align="center">
+            <template #default="{ row }">
+              <el-switch :model-value="row.enabled" size="small" @click.stop="handleToggleInstance(row)" />
+            </template>
+          </el-table-column>
+          <el-table-column label="操作" width="120" fixed="right">
+            <template #default="{ row }">
+              <el-button type="primary" link size="small" @click="openEditInstance(row)">编辑</el-button>
+              <el-button type="danger" link size="small" @click="handleDeleteInstance(row)">删除</el-button>
+            </template>
+          </el-table-column>
+        </el-table>
+
+        <div class="group-footer">
+          <el-button size="small" :icon="Plus" @click="openCreateInstance(grp.id)">
+            添加模型实例
+          </el-button>
+        </div>
       </div>
     </div>
 
-    <div v-loading="loading" class="models-grid">
-      <div
-        v-for="model in models"
-        :key="model.id"
-        class="model-card"
-        :class="{
-          'model-card--primary': model.isPrimary,
-          'model-card--reviewer': model.isReviewer && !model.isPrimary,
-          'model-card--disabled': !model.enabled,
-        }"
-      >
-        <div class="model-card-header">
-          <div class="model-badges">
-            <el-tag v-if="model.isPrimary" type="success" size="small" effect="dark">主用模型</el-tag>
-            <el-tag v-if="model.isReviewer" type="warning" size="small" effect="dark">审查模型</el-tag>
-          </div>
-          <el-switch :model-value="model.enabled" size="small" @change="handleToggle(model)" />
-        </div>
+    <!-- Endpoint Dialog -->
+    <el-dialog
+      v-model="epDialogVisible"
+      :title="isEditEp ? '编辑接入点' : '新建接入点'"
+      width="520px"
+      destroy-on-close
+    >
+      <el-form ref="epFormRef" :model="epForm" :rules="epRules" label-width="100px">
+        <el-form-item label="名称" prop="name">
+          <el-input v-model="epForm.name" placeholder="如：通义千问" />
+        </el-form-item>
+        <el-form-item label="类型" prop="provider">
+          <el-select v-model="epForm.provider" style="width: 100%">
+            <el-option v-for="opt in providerOptions" :key="opt.value" :label="opt.label" :value="opt.value" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="接口地址" prop="baseUrl">
+          <el-input v-model="epForm.baseUrl" placeholder="如 https://dashscope.aliyuncs.com/compatible-mode/v1" />
+        </el-form-item>
+        <el-form-item label="API Key">
+          <el-input v-model="epForm.apiKey" type="password" show-password :placeholder="isEditEp ? '留空则不修改' : 'sk-...'" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="epDialogVisible = false">取消</el-button>
+        <el-button type="primary" :loading="epSubmitting" @click="handleSaveEp">保存</el-button>
+      </template>
+    </el-dialog>
 
-        <div class="model-info">
-          <div class="model-provider" :style="{ color: providerColor(model.provider) }">
-            {{ providerLabel(model.provider) }}
-          </div>
-          <h3 class="model-name">{{ model.name }}</h3>
-          <div class="model-endpoint">{{ model.endpoint }}</div>
-        </div>
+    <!-- Group Dialog -->
+    <el-dialog
+      v-model="grpDialogVisible"
+      title="新建模型组"
+      width="440px"
+      destroy-on-close
+    >
+      <el-form ref="grpFormRef" :model="grpForm" :rules="grpRules" label-width="80px">
+        <el-form-item label="组名" prop="name">
+          <el-input v-model="grpForm.name" placeholder="如：主力LLM" />
+        </el-form-item>
+        <el-form-item label="类型">
+          <el-select v-model="grpForm.type" style="width: 100%">
+            <el-option v-for="opt in groupTypeOptions" :key="opt.value" :label="opt.label" :value="opt.value" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="策略">
+          <el-select v-model="grpForm.strategy" style="width: 100%">
+            <el-option v-for="opt in strategyOptions" :key="opt.value" :label="opt.label" :value="opt.value" />
+          </el-select>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="grpDialogVisible = false">取消</el-button>
+        <el-button type="primary" :loading="grpSubmitting" @click="handleSaveGroup">保存</el-button>
+      </template>
+    </el-dialog>
 
-        <div class="model-stats">
-          <div class="stat-item">
-            <span class="stat-label">最大 Tokens</span>
-            <span class="stat-value">{{ model.maxTokens.toLocaleString() }}</span>
-          </div>
-          <div class="stat-item">
-            <span class="stat-label">Temperature</span>
-            <span class="stat-value">{{ model.temperature }}</span>
-          </div>
-          <div class="stat-item">
-            <span class="stat-label">权重</span>
-            <span class="stat-value">{{ model.weight }}</span>
-          </div>
-        </div>
-
-        <div class="model-status">
-          <div class="status-indicator" :class="model.enabled ? 'status--online' : 'status--offline'">
-            <el-icon v-if="model.enabled"><Check /></el-icon>
-            <el-icon v-else><Close /></el-icon>
-            {{ model.enabled ? '运行中' : '已停用' }}
-          </div>
-        </div>
-
-        <div class="model-actions">
-          <el-button
-            size="small"
-            :loading="testingId === model.id"
-            @click="handleTest(model)"
-          >
-            测试连接
-          </el-button>
-          <el-button
-            v-if="!model.isPrimary"
-            type="primary"
-            size="small"
-            plain
-            @click="handleSetPrimary(model)"
-          >
-            设为主用
-          </el-button>
-          <el-button
-            v-if="!model.isReviewer"
-            type="warning"
-            size="small"
-            plain
-            @click="handleSetReviewer(model)"
-          >
-            设为审查
-          </el-button>
-        </div>
-      </div>
-    </div>
+    <!-- Instance Dialog -->
+    <el-dialog
+      v-model="instDialogVisible"
+      :title="isEditInst ? '编辑模型实例' : '添加模型实例'"
+      width="520px"
+      destroy-on-close
+    >
+      <el-form ref="instFormRef" :model="instForm" :rules="instRules" label-width="100px">
+        <el-form-item label="接入点" prop="endpointId">
+          <el-select v-model="instForm.endpointId" style="width: 100%" placeholder="选择接入点">
+            <el-option
+              v-for="ep in endpoints"
+              :key="ep.id"
+              :label="`${ep.name} (${providerLabel(ep.provider)})`"
+              :value="ep.id"
+            />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="模型名称" prop="modelName">
+          <el-input v-model="instForm.modelName" placeholder="如 qwen-plus / glm-4-plus" />
+        </el-form-item>
+        <el-row :gutter="16">
+          <el-col :span="8">
+            <el-form-item label="权重">
+              <el-input-number v-model="instForm.weight" :min="1" :max="100" style="width: 100%" />
+            </el-form-item>
+          </el-col>
+          <el-col :span="8">
+            <el-form-item label="Max Tokens">
+              <el-input-number v-model="instForm.maxTokens" :min="256" :step="1024" style="width: 100%" />
+            </el-form-item>
+          </el-col>
+          <el-col :span="8">
+            <el-form-item label="Temperature">
+              <el-input-number v-model="instForm.temperature" :min="0" :max="2" :step="0.1" :precision="1" style="width: 100%" />
+            </el-form-item>
+          </el-col>
+        </el-row>
+        <el-form-item label="优先级">
+          <el-input-number v-model="instForm.priority" :min="0" style="width: 160px" />
+          <span class="form-hint">数字越小优先级越高</span>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="instDialogVisible = false">取消</el-button>
+        <el-button type="primary" :loading="instSubmitting" @click="handleSaveInstance">保存</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -266,7 +611,7 @@ onMounted(() => {
   margin: 0;
 }
 
-.strategy-card {
+.section-card {
   background: var(--bg-primary, #ffffff);
   border-radius: 12px;
   border: 1px solid var(--border-color, #E2E6ED);
@@ -274,8 +619,11 @@ onMounted(() => {
   margin-bottom: 20px;
 }
 
-.strategy-header {
-  margin-bottom: 12px;
+.section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
 }
 
 .card-title {
@@ -292,142 +640,82 @@ onMounted(() => {
   }
 }
 
-.strategy-options {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.strategy-desc {
+.mono-text {
+  font-family: monospace;
   font-size: 13px;
-  color: var(--text-secondary, #5A5A72);
-  margin: 0;
 }
 
-.models-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
-  gap: 16px;
+.muted {
+  color: var(--text-secondary, #9E9EB3);
 }
 
-.model-card {
-  background: var(--bg-primary, #ffffff);
-  border-radius: 12px;
-  border: 2px solid var(--border-color, #E2E6ED);
-  padding: 20px;
-  transition: all 0.2s;
+:deep(.el-table__header th) {
+  background: var(--bg-secondary, #F4F6FA) !important;
+  font-weight: 600;
+}
 
-  &--primary {
-    border-color: #2E7D32;
-    box-shadow: 0 0 0 1px rgba(46, 125, 50, 0.1);
-  }
+.empty-state {
+  text-align: center;
+  padding: 40px 24px;
+  color: var(--text-secondary, #9E9EB3);
+  font-size: 14px;
+}
 
-  &--reviewer {
-    border-color: #F57C00;
-    box-shadow: 0 0 0 1px rgba(245, 124, 0, 0.1);
+.group-card {
+  border: 1px solid var(--border-color, #E2E6ED);
+  border-radius: 10px;
+  padding: 16px;
+  margin-bottom: 16px;
+  transition: opacity 0.2s;
+
+  &:last-child {
+    margin-bottom: 0;
   }
 
   &--disabled {
-    opacity: 0.6;
-  }
-
-  &:hover {
-    box-shadow: var(--shadow-md, 0 4px 16px rgba(0, 0, 0, 0.08));
+    opacity: 0.55;
   }
 }
 
-.model-card-header {
+.group-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
   margin-bottom: 12px;
-}
-
-.model-badges {
-  display: flex;
-  gap: 6px;
-}
-
-.model-info {
-  margin-bottom: 16px;
-}
-
-.model-provider {
-  font-size: 12px;
-  font-weight: 600;
-  text-transform: uppercase;
-  margin-bottom: 4px;
-}
-
-.model-name {
-  font-size: 18px;
-  font-weight: 700;
-  color: var(--text-primary, #1A1A2E);
-  margin: 0 0 4px;
-}
-
-.model-endpoint {
-  font-size: 12px;
-  font-family: monospace;
-  color: var(--text-secondary, #5A5A72);
-  word-break: break-all;
-}
-
-.model-stats {
-  display: flex;
-  gap: 16px;
-  padding: 12px 0;
-  border-top: 1px solid var(--border-color, #E2E6ED);
-  border-bottom: 1px solid var(--border-color, #E2E6ED);
-  margin-bottom: 12px;
-}
-
-.stat-item {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.stat-label {
-  font-size: 11px;
-  color: var(--text-secondary, #5A5A72);
-}
-
-.stat-value {
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--text-primary, #1A1A2E);
-}
-
-.model-status {
-  margin-bottom: 12px;
-}
-
-.status-indicator {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 13px;
-  font-weight: 500;
-
-  &.status--online {
-    color: #2E7D32;
-  }
-
-  &.status--offline {
-    color: #9E9EB3;
-  }
-}
-
-.model-actions {
-  display: flex;
-  gap: 8px;
   flex-wrap: wrap;
+  gap: 8px;
 }
 
-@media (max-width: 768px) {
-  .models-grid {
-    grid-template-columns: 1fr;
-  }
+.group-title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.group-name {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-primary, #1A1A2E);
+  margin: 0;
+}
+
+.group-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.instance-table {
+  margin-bottom: 8px;
+}
+
+.group-footer {
+  padding-top: 8px;
+}
+
+.form-hint {
+  font-size: 12px;
+  color: var(--text-secondary, #9E9EB3);
+  margin-left: 8px;
 }
 </style>

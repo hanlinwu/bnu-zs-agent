@@ -156,9 +156,26 @@ export const useChatStore = defineStore('chat', () => {
     messages.value = []
   }
 
-  function stopGeneration() {
+  async function stopGeneration() {
     if (abortController) {
-      abortController.abort()
+      // Signal server to stop and save partial response
+      if (currentConversationId.value) {
+        const token = localStorage.getItem('token') || ''
+        try {
+          await fetch(`/api/v1/chat/stop?conversation_id=${encodeURIComponent(currentConversationId.value)}`, {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${token}` },
+          })
+        } catch {
+          // ignore network errors
+        }
+      }
+      // Delay abort to give server time to save partial response
+      const controller = abortController
+      await new Promise(resolve => setTimeout(resolve, 500))
+      controller.abort()
+      abortController = null
+      isStreaming.value = false
     }
   }
 

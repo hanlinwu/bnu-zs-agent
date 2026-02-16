@@ -2,16 +2,33 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 from app.config import settings
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup
-    from app.core.seed import seed_roles_and_permissions, seed_calendar_periods
+    # Startup: ensure all tables exist (handles new models added since last deploy)
+    from app.core.database import get_engine, Base
+    import app.models  # noqa: F401 — register all models on Base.metadata
+    engine = get_engine()
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+
+    from app.core.seed import seed_roles_and_permissions, seed_calendar_periods, seed_model_config, seed_review_workflows
     await seed_roles_and_permissions()
     await seed_calendar_periods()
+    await seed_model_config()
+    await seed_review_workflows()
+
+    # Initialize LLM router from DB config
+    from app.core.database import get_session_factory
+    from app.services import model_config_service
+    session_factory = get_session_factory()
+    async with session_factory() as db:
+        await model_config_service.reload_router(db)
+
     yield
     # Shutdown
 
@@ -43,6 +60,11 @@ def create_app() -> FastAPI:
     # Register all API routes
     from app.api.router import api_router
     app.include_router(api_router)
+
+    # Serve uploaded files
+    import os
+    os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
+    app.mount("/uploads", StaticFiles(directory=settings.UPLOAD_DIR), name="uploads")
 
     return app
 

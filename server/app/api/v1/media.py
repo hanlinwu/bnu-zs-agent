@@ -2,9 +2,9 @@
 
 import hashlib
 import os
-from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, Query, UploadFile, File, Form
+from pydantic import BaseModel
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -22,10 +22,35 @@ ALLOWED_MEDIA_TYPES = {"image/jpeg", "image/png", "image/webp", "image/gif", "vi
 ALLOWED_EXTENSIONS = {"jpg", "jpeg", "png", "webp", "gif", "mp4"}
 
 
+def _media_to_dict(m: MediaResource) -> dict:
+    """Build response dict for a media resource."""
+    file_url = ""
+    if m.file_path:
+        basename = os.path.basename(m.file_path)
+        file_url = f"/uploads/media/{basename}"
+    return {
+        "id": str(m.id),
+        "title": m.title,
+        "media_type": m.media_type,
+        "file_url": file_url,
+        "file_size": m.file_size,
+        "thumbnail_url": m.thumbnail_url,
+        "tags": m.tags or [],
+        "source": m.source,
+        "status": m.status,
+        "current_step": m.current_step,
+        "is_approved": m.is_approved,
+        "uploaded_by": str(m.uploaded_by) if m.uploaded_by else None,
+        "reviewed_by": str(m.reviewed_by) if m.reviewed_by else None,
+        "review_note": m.review_note,
+        "created_at": m.created_at.isoformat(),
+    }
+
+
 @router.get("", dependencies=[Depends(require_permission("media:read"))])
 async def list_media(
     media_type: str | None = None,
-    is_approved: bool | None = None,
+    status: str | None = None,
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
     admin: AdminUser = Depends(get_current_admin),
@@ -38,9 +63,9 @@ async def list_media(
     if media_type:
         stmt = stmt.where(MediaResource.media_type == media_type)
         count_stmt = count_stmt.where(MediaResource.media_type == media_type)
-    if is_approved is not None:
-        stmt = stmt.where(MediaResource.is_approved == is_approved)
-        count_stmt = count_stmt.where(MediaResource.is_approved == is_approved)
+    if status:
+        stmt = stmt.where(MediaResource.status == status)
+        count_stmt = count_stmt.where(MediaResource.status == status)
 
     total = (await db.execute(count_stmt)).scalar() or 0
     stmt = (
@@ -52,21 +77,7 @@ async def list_media(
     items = result.scalars().all()
 
     return {
-        "items": [
-            {
-                "id": str(m.id),
-                "title": m.title,
-                "media_type": m.media_type,
-                "file_path": m.file_path,
-                "thumbnail_url": m.thumbnail_url,
-                "tags": m.tags,
-                "source": m.source,
-                "is_approved": m.is_approved,
-                "uploaded_by": str(m.uploaded_by) if m.uploaded_by else None,
-                "created_at": m.created_at.isoformat(),
-            }
-            for m in items
-        ],
+        "items": [_media_to_dict(m) for m in items],
         "total": total,
         "page": page,
         "page_size": page_size,
@@ -83,12 +94,10 @@ async def upload_media(
     db: AsyncSession = Depends(get_db),
 ):
     """上传媒体资源（仅限官方素材）"""
-    # Validate file extension
     ext = file.filename.rsplit(".", 1)[-1].lower() if file.filename else ""
     if ext not in ALLOWED_EXTENSIONS:
         raise BizError(code=400, message=f"不支持的文件格式，仅支持: {', '.join(ALLOWED_EXTENSIONS)}")
 
-    # Validate content type
     if file.content_type and file.content_type not in ALLOWED_MEDIA_TYPES:
         raise BizError(code=400, message="不支持的媒体类型")
 
@@ -97,26 +106,24 @@ async def upload_media(
         raise BizError(code=400, message=f"文件大小超过 {settings.MAX_UPLOAD_SIZE_MB}MB 限制")
 
     file_hash = hashlib.sha256(content).hexdigest()
-
-    # Determine media type category
     media_type = "image" if ext in {"jpg", "jpeg", "png", "webp", "gif"} else "video"
 
-    # Save file
     media_dir = os.path.join(settings.UPLOAD_DIR, "media")
     os.makedirs(media_dir, exist_ok=True)
     file_path = os.path.join(media_dir, f"{file_hash}.{ext}")
     with open(file_path, "wb") as f:
         f.write(content)
 
-    # Parse tags
     tag_list = [t.strip() for t in tags.split(",") if t.strip()] if tags else None
 
     resource = MediaResource(
         title=title,
         media_type=media_type,
         file_path=file_path,
+        file_size=len(content),
         tags=tag_list,
         source=source,
+        status="pending",
         is_approved=False,
         uploaded_by=admin.id,
     )
@@ -124,37 +131,55 @@ async def upload_media(
     await db.commit()
     await db.refresh(resource)
 
-    return {
-        "id": str(resource.id),
-        "title": resource.title,
-        "media_type": resource.media_type,
-        "file_path": resource.file_path,
-        "tags": resource.tags,
-        "source": resource.source,
-        "is_approved": resource.is_approved,
-        "created_at": resource.created_at.isoformat(),
-    }
+    return _media_to_dict(resource)
 
 
-@router.put("/{media_id}/approve", dependencies=[Depends(require_permission("media:approve"))])
-async def approve_media(
+class MediaReviewRequest(BaseModel):
+    action: str  # "approve" | "reject"
+    note: str | None = None
+
+
+@router.post("/{media_id}/review", dependencies=[Depends(require_permission("media:approve"))])
+async def review_media(
     media_id: str,
+    body: MediaReviewRequest,
     admin: AdminUser = Depends(get_current_admin),
     db: AsyncSession = Depends(get_db),
 ):
-    """审批通过媒体资源"""
+    """审核媒体资源（通过/拒绝）"""
     result = await db.execute(select(MediaResource).where(MediaResource.id == media_id))
     resource = result.scalar_one_or_none()
     if not resource:
         raise NotFoundError("媒体资源不存在")
 
-    if resource.is_approved:
-        raise BizError(code=400, message="该资源已审批通过")
+    if resource.status not in ("pending", "reviewing"):
+        raise BizError(code=400, message=f"当前状态 '{resource.status}' 不允许审核操作")
 
-    resource.is_approved = True
+    if body.action not in ("approve", "reject"):
+        raise BizError(code=400, message="action 必须为 approve 或 reject")
+
+    # Use workflow service for multi-step review
+    from app.services import review_workflow_service as wf_svc
+    review_result = await wf_svc.submit_review(
+        resource_type="media",
+        resource_id=resource.id,
+        current_step=resource.current_step,
+        action=body.action,
+        reviewer_id=admin.id,
+        note=body.note,
+        db=db,
+    )
+
+    resource.status = review_result["new_status"]
+    resource.current_step = review_result["new_step"]
+    resource.reviewed_by = admin.id
+    resource.review_note = body.note
+    resource.is_approved = review_result["new_status"] == "approved"
+
     await db.commit()
+    await db.refresh(resource)
 
-    return {"success": True, "message": "媒体资源已审批通过"}
+    return _media_to_dict(resource)
 
 
 @router.delete("/{media_id}", dependencies=[Depends(require_permission("media:delete"))])
@@ -169,7 +194,6 @@ async def delete_media(
     if not resource:
         raise NotFoundError("媒体资源不存在")
 
-    # Remove file from disk
     if os.path.exists(resource.file_path):
         os.remove(resource.file_path)
 

@@ -32,16 +32,20 @@ export interface SensitiveWordGroup {
 /** 媒体资源 */
 export interface MediaResource {
   id: string
-  name: string
-  type: 'image' | 'video' | 'document'
-  url: string
-  fileSize: number
-  mimeType: string
-  uploaderId: string
-  uploaderName: string
+  title: string
+  media_type: 'image' | 'video'
+  file_url: string
+  file_size: number | null
+  thumbnail_url: string | null
   tags: string[]
-  createdAt: string
-  updatedAt: string
+  source: string | null
+  status: 'pending' | 'approved' | 'rejected' | 'reviewing'
+  current_step: number
+  is_approved: boolean
+  uploaded_by: string | null
+  reviewed_by: string | null
+  review_note: string | null
+  created_at: string
 }
 
 /** 审计日志 */
@@ -72,21 +76,47 @@ export interface CalendarPeriod {
   updatedAt: string
 }
 
-/** 模型配置 */
-export interface ModelConfig {
+/** 模型接入点 */
+export interface ModelEndpoint {
   id: string
   name: string
-  provider: 'qwen' | 'glm' | 'local' | string
-  endpoint: string
-  apiKey?: string
-  isPrimary: boolean
-  isReviewer: boolean
+  provider: string
+  baseUrl: string
+  apiKey: string  // masked
+  createdAt: string
+}
+
+/** 模型实例 */
+export interface ModelInstance {
+  id: string
+  groupId: string
+  endpointId: string
+  modelName: string
   enabled: boolean
   weight: number
   maxTokens: number
   temperature: number
+  priority: number
   createdAt: string
-  updatedAt: string
+  endpoint?: ModelEndpoint
+}
+
+/** 模型组 */
+export interface ModelGroup {
+  id: string
+  name: string
+  type: 'llm' | 'embedding' | 'review'
+  strategy: 'failover' | 'round_robin' | 'weighted'
+  enabled: boolean
+  priority: number
+  createdAt: string
+  instances: ModelInstance[]
+}
+
+/** 模型配置总览 */
+export interface ModelConfigOverview {
+  endpoints: ModelEndpoint[]
+  groups: ModelGroup[]
 }
 
 /** 分页参数 */
@@ -101,4 +131,38 @@ export interface PaginatedResult<T> {
   total: number
   page: number
   pageSize: number
+}
+
+/** 对话列表项 (admin) */
+export interface AdminConversation {
+  id: string
+  user_id: string
+  user_phone: string
+  user_nickname: string
+  title: string | null
+  message_count: number
+  user_char_count: number
+  assistant_char_count: number
+  max_risk_level: string | null
+  created_at: string
+  updated_at: string
+}
+
+/** 对话消息详情 (admin) */
+export interface AdminMessage {
+  id: string
+  role: 'user' | 'assistant' | 'system'
+  content: string
+  char_count: number
+  risk_level: string | null
+  review_passed: boolean | null
+  sources: Record<string, unknown> | null
+  created_at: string
+}
+
+/** 对话消息列表响应 */
+export interface ConversationDetail {
+  conversation_id: string
+  title: string | null
+  messages: AdminMessage[]
 }

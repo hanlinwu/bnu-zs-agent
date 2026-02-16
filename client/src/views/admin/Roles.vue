@@ -99,9 +99,7 @@ async function savePermissions() {
   if (!selectedRole.value) return
   submitting.value = true
   try {
-    await roleApi.updateRole(selectedRole.value.id, {
-      permissions: selectedPermissions.value,
-    })
+    await roleApi.updatePermissions(selectedRole.value.id, selectedPermissions.value)
     ElMessage.success('权限保存成功')
     permDialogVisible.value = false
     fetchRoles()

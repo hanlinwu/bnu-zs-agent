@@ -17,6 +17,7 @@ class KnowledgeDocument(Base):
     file_path: Mapped[str] = mapped_column(String(500), nullable=False)
     file_hash: Mapped[str] = mapped_column(String(64), nullable=False)
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="pending")
+    current_step: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default=text("0"))
     uploaded_by: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("admin_users.id"), nullable=False)
     reviewed_by: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("admin_users.id"))
     review_note: Mapped[str | None] = mapped_column(Text)

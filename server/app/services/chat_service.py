@@ -1,5 +1,6 @@
 """Core chat orchestration service — the 9-step pipeline."""
 
+import asyncio
 import logging
 from typing import AsyncGenerator
 
@@ -43,6 +44,7 @@ async def process_message(
     user_message: str,
     user_role: str | None,
     db: AsyncSession,
+    cancel_event: asyncio.Event | None = None,
 ) -> AsyncGenerator[dict, None]:
     """Process a user message through the full pipeline, yielding streaming events.
 
@@ -140,6 +142,11 @@ async def process_message(
     try:
         stream = await llm_router.chat(messages, stream=True)
         async for token in stream:
+            if cancel_event and cancel_event.is_set():
+                # Close the LLM stream
+                if hasattr(stream, 'aclose'):
+                    await stream.aclose()
+                break
             full_response.append(token)
             yield {"type": "token", "content": token}
     except Exception as e:
@@ -158,7 +165,7 @@ async def process_message(
     assistant_msg = Message(
         conversation_id=conversation.id,
         role="assistant",
-        content=response_text,
+        content=response_text if response_text else "（已停止生成）",
         risk_level=risk_level,
         review_passed=review_passed,
         sources=sources_citation if sources_citation else None,
