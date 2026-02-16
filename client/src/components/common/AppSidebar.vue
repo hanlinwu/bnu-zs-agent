@@ -3,6 +3,7 @@ import { computed } from 'vue'
 import { ChatLineSquare, Fold, Expand, Setting } from '@element-plus/icons-vue'
 import { useUserStore } from '@/stores/user'
 import { useConversationStore } from '@/stores/conversation'
+import { useChatStore } from '@/stores/chat'
 import ConversationList from '@/components/conversation/ConversationList.vue'
 
 const props = defineProps<{
@@ -15,12 +16,15 @@ const emit = defineEmits<{
 
 const userStore = useUserStore()
 const conversationStore = useConversationStore()
+const chatStore = useChatStore()
 
 const userNickname = computed(() => userStore.userInfo?.nickname || '用户')
 const userAvatar = computed(() => userStore.userInfo?.avatar_url || '')
 
 async function handleNewConversation() {
-  await conversationStore.createConversation()
+  const conv = await conversationStore.createConversation()
+  chatStore.setConversationId(conv.id)
+  chatStore.clearMessages()
 }
 
 function toggleCollapse() {

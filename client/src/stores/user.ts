@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import axios from 'axios'
+import request from '@/api/request'
 
 export interface UserInfo {
   id: string
@@ -33,17 +34,13 @@ export const useUserStore = defineStore('user', () => {
   }
 
   async function fetchProfile() {
-    const res = await axios.get('/api/v1/auth/me', {
-      headers: { Authorization: `Bearer ${token.value}` },
-    })
+    const res = await request.get('/auth/me')
     userInfo.value = res.data
     return res.data
   }
 
   async function updateProfile(updates: Partial<Pick<UserInfo, 'nickname' | 'avatar_url' | 'role'>>) {
-    const res = await axios.put('/api/v1/auth/me', updates, {
-      headers: { Authorization: `Bearer ${token.value}` },
-    })
+    const res = await request.put('/auth/me', updates)
     userInfo.value = { ...userInfo.value!, ...res.data }
     return res.data
   }

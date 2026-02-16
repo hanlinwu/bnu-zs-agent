@@ -45,7 +45,9 @@ onMounted(async () => {
     const conv = await conversationStore.createConversation()
     chatStore.setConversationId(conv.id)
   } else {
-    chatStore.setConversationId(conversationStore.conversations[0]!.id)
+    const firstConv = conversationStore.conversations[0]!
+    chatStore.setConversationId(firstConv.id)
+    await chatStore.loadMessages(firstConv.id)
   }
 })
 

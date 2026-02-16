@@ -1,20 +1,24 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
+import { useRouter } from 'vue-router'
 import { Sunny, Moon, ArrowDown, User, Setting, SwitchButton } from '@element-plus/icons-vue'
 import { useThemeStore } from '@/stores/theme'
 import { useUserStore } from '@/stores/user'
 import { useConversationStore } from '@/stores/conversation'
+import { useChatStore } from '@/stores/chat'
 
 const themeStore = useThemeStore()
 const userStore = useUserStore()
 const conversationStore = useConversationStore()
+const chatStore = useChatStore()
+const router = useRouter()
 
 const isEditingTitle = ref(false)
 const editTitleValue = ref('')
 
 const currentTitle = computed(() => {
   const conv = conversationStore.conversations.find(
-    (c) => c.id === (conversationStore as any).currentId
+    (c) => c.id === chatStore.currentConversationId
   )
   return conv?.title || '新对话'
 })
@@ -32,7 +36,7 @@ function startEditTitle() {
 }
 
 function saveTitle() {
-  const currentId = (conversationStore as any).currentId
+  const currentId = chatStore.currentConversationId
   if (currentId && editTitleValue.value.trim()) {
     conversationStore.updateTitle(currentId, editTitleValue.value.trim())
   }
@@ -49,6 +53,15 @@ function handleFontSize(size: number) {
 
 function handleLogout() {
   userStore.logout()
+  router.replace('/login')
+}
+
+function handleUserCommand(command: string) {
+  if (command === 'logout') {
+    handleLogout()
+  } else if (command === 'settings') {
+    router.push('/settings')
+  }
 }
 
 const isDark = computed(() => themeStore.mode === 'dark')
@@ -125,7 +138,7 @@ const userAvatar = computed(() => userStore.userInfo?.avatar_url || '')
         </template>
       </el-dropdown>
 
-      <el-dropdown trigger="click">
+      <el-dropdown trigger="click" @command="handleUserCommand">
         <div class="user-trigger">
           <el-avatar :size="32" :src="userAvatar">
             <el-icon :size="18"><User /></el-icon>
@@ -136,15 +149,15 @@ const userAvatar = computed(() => userStore.userInfo?.avatar_url || '')
             <el-dropdown-item disabled>
               <span class="dropdown-nickname">{{ userNickname }}</span>
             </el-dropdown-item>
-            <el-dropdown-item divided>
+            <el-dropdown-item command="settings" divided>
               <el-icon><User /></el-icon>
               <span>个人资料</span>
             </el-dropdown-item>
-            <el-dropdown-item>
+            <el-dropdown-item command="settings">
               <el-icon><Setting /></el-icon>
               <span>设置</span>
             </el-dropdown-item>
-            <el-dropdown-item divided @click="handleLogout">
+            <el-dropdown-item command="logout" divided>
               <el-icon><SwitchButton /></el-icon>
               <span>退出登录</span>
             </el-dropdown-item>

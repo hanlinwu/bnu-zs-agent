@@ -45,6 +45,7 @@ const isEmpty = computed(() => conversationStore.conversations.length === 0)
 function handleSelect(conv: Conversation) {
   chatStore.setConversationId(conv.id)
   chatStore.clearMessages()
+  chatStore.loadMessages(conv.id)
 }
 
 function handleDelete(conv: Conversation) {

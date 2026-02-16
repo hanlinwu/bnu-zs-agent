@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import axios from 'axios'
+import request from '@/api/request'
 
 export interface AdminInfo {
   id: string
@@ -21,13 +22,14 @@ export const useAdminStore = defineStore('admin', () => {
     const res = await axios.post('/api/v1/admin/auth/login', {
       username,
       password,
-      mfa_code: mfaCode,
+      mfa_code: mfaCode || undefined,
     })
     const data = res.data
     adminToken.value = data.token
     adminInfo.value = data.admin
-    permissions.value = data.permissions || []
     localStorage.setItem('admin_token', data.token)
+    // Fetch full profile with permissions
+    await fetchProfile()
     return data
   }
 
@@ -39,12 +41,17 @@ export const useAdminStore = defineStore('admin', () => {
   }
 
   async function fetchProfile() {
-    const res = await axios.get('/api/v1/admin/auth/me', {
-      headers: { Authorization: `Bearer ${adminToken.value}` },
-    })
-    adminInfo.value = res.data.admin
-    permissions.value = res.data.permissions || []
-    return res.data
+    const res = await request.get('/admin/auth/me')
+    const data = res.data
+    adminInfo.value = {
+      id: data.id,
+      username: data.username,
+      display_name: data.real_name || data.username,
+      role: 'admin',
+      status: data.status,
+    }
+    permissions.value = data.permissions || []
+    return data
   }
 
   function hasPermission(perm: string): boolean {

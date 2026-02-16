@@ -1,105 +1,74 @@
-# 招生智能体需求逐条验证测试计划
+# 招生智能体需求验证测试计划（2026-02-15）
 
-> **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
+## 1. 目标与范围
+- 基线文档：`docs/需求分析.md`
+- 测试对象：`client/`（Vue3）+ `server/`（FastAPI）
+- 目标：
+  - 验证核心业务可用性（用户端 + 管理端）
+  - 验证前后端联调链路（通过浏览器访问前端并走代理调用 API）
+  - 发现阻断性缺陷后立即修复并回归
 
-**Goal:** 按《docs/需求分析.md》逐条验证当前实现状态，执行自动化测试，发现并修复阻断性缺陷。
+## 2. 测试环境
+- 日期：2026-02-15
+- 前端：Vite dev server `http://127.0.0.1:5173`
+- 后端：Uvicorn `http://127.0.0.1:8000`
+- 数据库：PostgreSQL 15（本地）
+- 缓存：Redis 7（本地）
 
-**Architecture:** 采用“需求矩阵 + 多层测试”方法：先做静态实现核对（接口/服务/页面），再跑自动化命令（后端单测、前端构建），最后形成逐条结论（通过/部分通过/不通过）与缺口清单。
+## 3. 测试策略
+- 静态核对：需求条目映射到代码实现与路由。
+- 自动化基线：
+  - 后端：`cd server && . .venv/bin/activate && pytest -q`
+  - 前端：`cd client && npx vue-tsc --noEmit && npm run build`
+- 联调验证（模拟浏览器真实行为）：
+  - 访问前端入口 `GET /`
+  - 通过前端代理路径 `/api/v1/...` 完成用户与管理员关键流程
+  - 检查 HTTP 状态码、JSON 字段和关键业务副作用
+- 缺陷闭环：复现 -> 修复 -> 全量回归。
 
-**Tech Stack:** Vue 3 + Vite + TypeScript, FastAPI + SQLAlchemy + Redis + Celery, Pytest
+## 4. 需求覆盖测试清单
+1. 用户手机号短信登录
+- 用例：发送短信验证码、验证码登录、读取 `me`。
+- 预期：成功返回 token，用户资料可读取。
 
----
+2. 智能对话核心链路
+- 用例：创建会话、改名、发送高风险问题（SSE）。
+- 预期：返回 `high_risk` 事件并给出官方引导话术；消息入库可查。
 
-## 范围与准入
-- 文档基线：`docs/需求分析.md`
-- 代码基线：`client/` + `server/`
-- 测试目标：
-  - 功能正确性（核心流程可用）
-  - 需求覆盖度（逐条映射）
-  - 构建可交付性（后端测试、前端构建）
+3. 幻觉防控与风险机制
+- 用例：高风险关键词触发拦截；敏感词管理接口可访问。
+- 预期：高风险触发固定回复；管理员可维护敏感词组。
 
-## 测试策略
-1. 静态验证：用代码证据验证需求是否有对应实现。
-2. 自动化验证：运行现有后端单元测试与前端构建/类型检查。
-3. 缺陷处理：遇到失败先定位根因，再最小改动修复并回归。
-4. 结论分级：
-   - `PASS`：有实现且已有自动化验证通过。
-   - `PARTIAL`：有实现但验证不足/存在流程缺口。
-   - `FAIL`：未实现或明显不符合需求。
+4. 知识库管理流程
+- 用例：上传文档 -> 列表查询 -> 审核通过 -> 归档。
+- 预期：状态流转正确（`pending -> approved -> archived`）。
 
-## 需求逐条测试矩阵
-1. 用户注册登录（手机号+短信）
-- 检查点：`/api/v1/auth/sms/send`、`/api/v1/auth/login`、短信 mock、管理员登录链路。
-- 命令/证据：静态核对 `server/app/api/v1/auth.py`、`server/app/services/sms_service.py`、`server/app/api/v1/admin_auth.py`。
-- 通过标准：用户短信登录可用；管理员采用用户名密码(+可选MFA)登录。
+5. 多媒体管理流程
+- 用例：上传官方图片 -> 列表查询 -> 审批 -> 删除。
+- 预期：全流程成功。
 
-2. 智能对话主体功能
-- 检查点：聊天接口、风险兜底转人工、角色差异化提示词。
-- 命令/证据：`server/app/services/chat_service.py`、`server/app/api/v1/chat.py`。
-- 通过标准：对话链路具备敏感词/风险判断、角色提示、流式返回。
+6. 管理后台权限与运维接口
+- 用例：管理员登录后访问 dashboard/roles/permissions/users/logs/models/calendar。
+- 预期：超管均可访问，返回 200。
 
-3. AI 幻觉防控
-- 检查点：风险分级、双模型审查、敏感词过滤、引用溯源。
-- 命令/证据：`test_chat_services.py`、`chat_service.py`、`review_service.py`、`admin_sensitive.py`。
-- 通过标准：风险与敏感词有效；审查闭环可执行；来源引用可返回。
+7. 前端构建与类型稳定性
+- 用例：`vue-tsc`、`vite build`。
+- 预期：命令成功。
 
-4. 模糊意图识别与追问引导
-- 检查点：动态追问推荐2-3条、上下文记忆。
-- 命令/证据：`SuggestQuestions.vue`、`chat_service.py`。
-- 通过标准：推荐问题与上下文为动态生成而非静态模板。
+## 5. TodoList（执行与完成记录）
+- [x] 阅读需求与开发文档（`docs/需求分析.md`、`docs/quick-start.md`）
+- [x] 执行后端自动化测试（27/27 通过）
+- [x] 执行前端类型检查与构建（通过）
+- [x] 启动 PostgreSQL/Redis/Uvicorn/Vite 联调环境
+- [x] 执行用户端联调（短信登录、会话、聊天 SSE）
+- [x] 执行管理端联调（仪表盘、角色权限、用户、敏感词、模型、日历、日志）
+- [x] 执行知识库上传与审核链路联调
+- [x] 执行多媒体上传与审批链路联调
+- [x] 修复阻断缺陷（权限种子缺失导致多后台接口 403）
+- [x] 缺陷修复后全量回归（后端测试、前端构建、联调脚本全部通过）
 
-5. 知识库与内容管理
-- 检查点：多格式上传、审核流、切片+embedding、可追溯字段。
-- 命令/证据：`knowledge.py`、`file_parser_service.py`、`tasks/*.py`。
-- 通过标准：上传/审核/解析入库完整可运行。
-
-6. 多媒体内容集成
-- 检查点：官方素材上传、审批、检索并嵌入对话。
-- 命令/证据：`media.py`、`Media.vue`、聊天服务是否注入媒体检索。
-- 通过标准：媒体全流程可用，且对话中支持媒体结果融合。
-
-7. 时间感知与话术调整
-- 检查点：按月份切换策略。
-- 命令/证据：`calendar_service.py`、`test_chat_services.py::test_default_period_mapping`。
-- 通过标准：月份分段符合需求文档。
-
-8. 人文关怀与情绪支持
-- 检查点：情绪识别与安慰前缀。
-- 命令/证据：`emotion_service.py`、`test_chat_services.py`。
-- 通过标准：焦虑/迷茫/挫败识别命中并触发话术。
-
-9. 多模态输入支持
-- 检查点：用户侧上传图片/PDF/DOC并用于问答。
-- 命令/证据：用户聊天输入组件、后端用户上传接口。
-- 通过标准：用户端上传->解析->问答闭环可用。
-
-10. 系统管理与运维
-- 检查点：多模型接入、日志审计、RBAC。
-- 命令/证据：`admin_model.py`、`admin_log.py`、`core/seed.py`、`admin_role.py`。
-- 通过标准：配置/日志/权限链路完整。
-
-11. 前端体验与设计
-- 检查点：首页高频问题、对话历史、标题编辑与自动生成、响应式、无障碍、夜间模式字体调节。
-- 命令/证据：`HotQuestions.vue`、`AppHeader.vue`、`conversation.ts`、`theme.ts`、`useAccessibility.ts`。
-- 通过标准：交互与需求一致且类型/构建通过。
-
-12. 性能与非功能
-- 检查点：首屏<1.5s、响应<2s、离线缓存、HTTPS与合规。
-- 命令/证据：代码与配置静态核对；需补充压测与浏览器审计。
-- 通过标准：有可复现的性能/安全测试报告。
-
-## 执行命令（自动化）
-- `cd server && .venv/bin/pytest -q`
-- `cd client && npm run build`
-- `rg`/`sed` 静态证据扫描（需求映射）
-
-## 缺陷处理策略
-- 先复现：保存失败命令与报错。
-- 再定位：仅针对失败点相关文件分析。
-- 后修复：最小改动，避免连带回归。
-- 回归：至少重跑失败命令 + 全量基线命令。
-
-## 交付输出
-- 测试计划：`docs/plans/2026-02-15-requirements-validation-test-plan.md`
-- 执行报告：`docs/plans/2026-02-15-requirements-validation-report.md`
-- 缺陷修复清单：git diff + 回归结果
+## 6. 缺陷记录（本轮）
+- 缺陷：管理员多个路由依赖的权限码未在种子数据中创建，导致超管访问被错误拒绝（403）。
+- 影响：`/admin/dashboard/*`、`/admin/roles`、`/admin/permissions`、`/admin/sensitive/*`、`/admin/users/{id}/ban` 等功能可用性受阻。
+- 修复：更新 `server/app/core/seed.py`，改为幂等补齐模式并补充缺失资源/动作权限，保证默认超管权限完整。
+- 验证：修复后联调相关接口均返回 200，且全量回归通过。

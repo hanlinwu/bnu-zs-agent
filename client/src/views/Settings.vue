@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { ArrowLeft, Moon, Sunny } from '@element-plus/icons-vue'
+import { ArrowLeft, Moon, Sunny, Edit } from '@element-plus/icons-vue'
+import { ElMessage } from 'element-plus'
 import { useThemeStore } from '@/stores/theme'
 import { useUserStore } from '@/stores/user'
 
@@ -16,6 +17,36 @@ const fontSizeOptions = [
   { label: '大', value: 18 as const },
   { label: '特大', value: 20 as const },
 ]
+
+const isEditingNickname = ref(false)
+const nicknameInput = ref('')
+
+function startEditNickname() {
+  nicknameInput.value = userStore.userInfo?.nickname || ''
+  isEditingNickname.value = true
+}
+
+async function saveNickname() {
+  const name = nicknameInput.value.trim()
+  if (!name) return
+  try {
+    await userStore.updateProfile({ nickname: name })
+    ElMessage.success('昵称修改成功')
+  } catch {
+    ElMessage.error('昵称修改失败')
+  }
+  isEditingNickname.value = false
+}
+
+function cancelEditNickname() {
+  isEditingNickname.value = false
+}
+
+onMounted(() => {
+  if (!userStore.userInfo) {
+    userStore.fetchProfile()
+  }
+})
 </script>
 
 <template>
@@ -76,7 +107,22 @@ const fontSizeOptions = [
         <div class="setting-label">
           <span>昵称</span>
         </div>
-        <span class="setting-value">{{ userStore.userInfo?.nickname || '未设置' }}</span>
+        <div v-if="!isEditingNickname" class="setting-value-row">
+          <span class="setting-value">{{ userStore.userInfo?.nickname || '未设置' }}</span>
+          <el-button text size="small" :icon="Edit" @click="startEditNickname" />
+        </div>
+        <div v-else class="setting-edit-row">
+          <el-input
+            v-model="nicknameInput"
+            size="small"
+            maxlength="20"
+            style="width: 160px"
+            @keydown.enter="saveNickname"
+            @keydown.esc="cancelEditNickname"
+          />
+          <el-button type="primary" size="small" @click="saveNickname">保存</el-button>
+          <el-button size="small" @click="cancelEditNickname">取消</el-button>
+        </div>
       </div>
     </div>
 
@@ -163,6 +209,18 @@ const fontSizeOptions = [
 .setting-value {
   font-size: 14px;
   color: var(--color-text-secondary);
+}
+
+.setting-value-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.setting-edit-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .about-info {

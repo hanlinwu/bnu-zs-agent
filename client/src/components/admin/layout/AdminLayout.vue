@@ -32,9 +32,7 @@ function checkScreenSize() {
 onMounted(() => {
   checkScreenSize()
   window.addEventListener('resize', checkScreenSize)
-  if (!adminStore.adminInfo) {
-    adminStore.fetchProfile().catch(() => {})
-  }
+  adminStore.fetchProfile().catch(() => {})
 })
 
 onUnmounted(() => {

@@ -15,15 +15,16 @@ router.beforeEach(async (to, _from, next) => {
   const whiteList = ['/login', '/admin/login']
   if (whiteList.includes(to.path)) return next()
 
-  // Check user token from localStorage
-  const token = localStorage.getItem('token')
-  if (!token) return next('/login')
-
-  // Admin routes need admin token
+  // Admin routes use admin_token
   if (to.path.startsWith('/admin')) {
     const adminToken = localStorage.getItem('admin_token')
     if (!adminToken) return next('/admin/login')
+    return next()
   }
+
+  // User routes use token
+  const token = localStorage.getItem('token')
+  if (!token) return next('/login')
 
   next()
 })

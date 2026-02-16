@@ -1,5 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
+import { handleUnauthorized } from '@/api/request'
+import request from '@/api/request'
 
 export interface ChatMessage {
   id: string
@@ -14,6 +16,24 @@ export const useChatStore = defineStore('chat', () => {
   const messages = ref<ChatMessage[]>([])
   const isStreaming = ref(false)
   const currentConversationId = ref<string | null>(null)
+
+  async function loadMessages(conversationId: string) {
+    try {
+      const res = await request.get(`/conversations/${conversationId}/messages`, {
+        params: { page: 1, page_size: 200 },
+      })
+      const items = res.data.items || []
+      messages.value = items.map((m: any) => ({
+        id: m.id,
+        role: m.role,
+        content: m.content,
+        timestamp: new Date(m.created_at).getTime(),
+        sources: m.sources || undefined,
+      }))
+    } catch {
+      messages.value = []
+    }
+  }
 
   async function sendMessage(content: string) {
     const userMsg: ChatMessage = {
@@ -59,7 +79,13 @@ export const useChatStore = defineStore('chat', () => {
         }),
       })
 
-      if (!response.ok) throw new Error('请求失败')
+      if (!response.ok) {
+        if (response.status === 401) {
+          handleUnauthorized()
+          return
+        }
+        throw new Error('请求失败')
+      }
 
       const reader = response.body?.getReader()
       const decoder = new TextDecoder()
@@ -119,5 +145,6 @@ export const useChatStore = defineStore('chat', () => {
     sendMessage,
     clearMessages,
     setConversationId,
+    loadMessages,
   }
 })

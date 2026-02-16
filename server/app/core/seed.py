@@ -1,4 +1,10 @@
-"""Seed data for RBAC roles, permissions, and default super admin."""
+"""Seed data for RBAC roles, permissions, and default super admin.
+
+The seeding is idempotent:
+- Missing roles/permissions are added on every startup.
+- Missing role-permission bindings are补齐 without deleting existing custom bindings.
+- Default admin and super admin assignment are ensured.
+"""
 
 import uuid
 from datetime import datetime, timezone
@@ -22,9 +28,22 @@ ROLES = [
     {"code": "parent", "name": "家长", "role_type": "user", "is_system": True, "description": "考生家长"},
 ]
 
-# 7 resources × 6 actions
-RESOURCES = ["knowledge", "user", "model", "log", "media", "sensitive_word", "calendar"]
-ACTIONS = ["create", "read", "update", "delete", "approve", "export"]
+# Resource namespace used by route-level permission checks.
+# Keep both `sensitive` and `sensitive_word` for backward compatibility.
+RESOURCES = [
+    "knowledge",
+    "user",
+    "admin",
+    "model",
+    "log",
+    "media",
+    "sensitive",
+    "sensitive_word",
+    "calendar",
+    "role",
+    "dashboard",
+]
+ACTIONS = ["create", "read", "update", "delete", "approve", "export", "ban"]
 
 # Permission matrix per admin role
 ROLE_PERMISSIONS = {
@@ -33,7 +52,7 @@ ROLE_PERMISSIONS = {
         "knowledge": ["read", "approve"],
         "user": ["read"],
         "media": ["read", "approve"],
-        "sensitive_word": ["read"],
+        "sensitive": ["read"],
         "log": ["read"],
     },
     "admin": {
@@ -42,8 +61,9 @@ ROLE_PERMISSIONS = {
         "model": ["read"],
         "log": ["read"],
         "media": ["read", "create"],
-        "sensitive_word": ["read"],
+        "sensitive": ["read"],
         "calendar": ["read"],
+        "dashboard": ["read"],
     },
     "teacher": {
         "knowledge": ["read"],
@@ -55,26 +75,27 @@ ROLE_PERMISSIONS = {
 
 
 async def seed_roles_and_permissions() -> None:
-    """Insert preset roles, permissions, and default admin if not exists."""
+    """Upsert preset roles, permissions, and default admin."""
     session_factory = get_session_factory()
     async with session_factory() as session:
-        # Check if already seeded
-        result = await session.execute(select(Role).limit(1))
-        if result.scalar_one_or_none() is not None:
-            return
-
-        # Create roles
-        role_map: dict[str, Role] = {}
+        # Roles: fetch existing and create missing
+        role_result = await session.execute(select(Role))
+        role_map: dict[str, Role] = {r.code: r for r in role_result.scalars().all()}
         for role_data in ROLES:
+            if role_data["code"] in role_map:
+                continue
             role = Role(**role_data)
             session.add(role)
             role_map[role_data["code"]] = role
 
-        # Create permissions
-        perm_map: dict[str, Permission] = {}
+        # Permissions: fetch existing and create missing
+        perm_result = await session.execute(select(Permission))
+        perm_map: dict[str, Permission] = {p.code: p for p in perm_result.scalars().all()}
         for resource in RESOURCES:
             for action in ACTIONS:
                 code = f"{resource}:{action}"
+                if code in perm_map:
+                    continue
                 perm = Permission(
                     code=code,
                     name=f"{resource} {action}",
@@ -86,31 +107,51 @@ async def seed_roles_and_permissions() -> None:
 
         await session.flush()
 
-        # Create role-permission associations
+        # Existing bindings for idempotent insertion
+        rp_result = await session.execute(select(RolePermission.role_id, RolePermission.permission_id))
+        existing_bindings = {(row[0], row[1]) for row in rp_result.all()}
+
+        # Ensure role-permission associations
         for role_code, resource_actions in ROLE_PERMISSIONS.items():
-            role = role_map[role_code]
+            role = role_map.get(role_code)
+            if not role:
+                continue
             for resource, actions in resource_actions.items():
                 for action in actions:
                     perm_code = f"{resource}:{action}"
-                    rp = RolePermission(role_id=role.id, permission_id=perm_map[perm_code].id)
-                    session.add(rp)
+                    perm = perm_map.get(perm_code)
+                    if not perm:
+                        continue
+                    key = (role.id, perm.id)
+                    if key in existing_bindings:
+                        continue
+                    session.add(RolePermission(role_id=role.id, permission_id=perm.id))
+                    existing_bindings.add(key)
 
-        # Create default super admin (password: admin123, must change on first login)
+        # Create default super admin if missing (password: admin123)
         from app.core.security import hash_password
-        default_admin = AdminUser(
-            username="admin",
-            password_hash=hash_password("admin123"),
-            real_name="系统管理员",
-            status="active",
-        )
-        session.add(default_admin)
-        await session.flush()
+        admin_result = await session.execute(select(AdminUser).where(AdminUser.username == "admin"))
+        default_admin = admin_result.scalar_one_or_none()
+        if not default_admin:
+            default_admin = AdminUser(
+                username="admin",
+                password_hash=hash_password("admin123"),
+                real_name="系统管理员",
+                status="active",
+            )
+            session.add(default_admin)
+            await session.flush()
 
-        # Assign super_admin role to default admin
-        admin_role = AdminRole(
-            admin_id=default_admin.id,
-            role_id=role_map["super_admin"].id,
-        )
-        session.add(admin_role)
+        # Ensure super_admin role assignment for default admin
+        super_admin_role = role_map.get("super_admin")
+        if super_admin_role:
+            ar_result = await session.execute(
+                select(AdminRole).where(
+                    AdminRole.admin_id == default_admin.id,
+                    AdminRole.role_id == super_admin_role.id,
+                )
+            )
+            if ar_result.scalar_one_or_none() is None:
+                session.add(AdminRole(admin_id=default_admin.id, role_id=super_admin_role.id))
 
         await session.commit()

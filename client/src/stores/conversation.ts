@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
-import axios from 'axios'
+import request from '@/api/request'
 
 export interface Conversation {
   id: string
@@ -16,16 +16,11 @@ export const useConversationStore = defineStore('conversation', () => {
   const total = ref(0)
   const loading = ref(false)
 
-  function getAuthHeaders() {
-    return { Authorization: `Bearer ${localStorage.getItem('token') || ''}` }
-  }
-
   async function fetchConversations(page = 1, pageSize = 20) {
     loading.value = true
     try {
-      const res = await axios.get('/api/v1/conversations', {
+      const res = await request.get('/conversations', {
         params: { page, page_size: pageSize },
-        headers: getAuthHeaders(),
       })
       conversations.value = res.data.items
       total.value = res.data.total
@@ -35,9 +30,7 @@ export const useConversationStore = defineStore('conversation', () => {
   }
 
   async function createConversation() {
-    const res = await axios.post('/api/v1/conversations', {}, {
-      headers: getAuthHeaders(),
-    })
+    const res = await request.post('/conversations', {})
     const conv: Conversation = res.data
     conversations.value.unshift(conv)
     total.value++
@@ -45,17 +38,13 @@ export const useConversationStore = defineStore('conversation', () => {
   }
 
   async function deleteConversation(id: string) {
-    await axios.delete(`/api/v1/conversations/${id}`, {
-      headers: getAuthHeaders(),
-    })
+    await request.delete(`/conversations/${id}`)
     conversations.value = conversations.value.filter((c) => c.id !== id)
     total.value--
   }
 
   async function updateTitle(id: string, title: string) {
-    await axios.put(`/api/v1/conversations/${id}`, { title }, {
-      headers: getAuthHeaders(),
-    })
+    await request.put(`/conversations/${id}`, { title })
     const conv = conversations.value.find((c) => c.id === id)
     if (conv) conv.title = title
   }
@@ -64,9 +53,7 @@ export const useConversationStore = defineStore('conversation', () => {
     const conv = conversations.value.find((c) => c.id === id)
     if (!conv) return
     const pinned = !conv.pinned
-    await axios.put(`/api/v1/conversations/${id}`, { pinned }, {
-      headers: getAuthHeaders(),
-    })
+    await request.put(`/conversations/${id}`, { pinned })
     conv.pinned = pinned
   }
 

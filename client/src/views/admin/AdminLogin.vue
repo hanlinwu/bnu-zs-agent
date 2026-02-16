@@ -33,7 +33,10 @@ async function handleLogin() {
     ElMessage.success('登录成功')
     router.push('/admin/dashboard')
   } catch (err: any) {
-    const msg = err?.response?.data?.message || '登录失败，请检查用户名和密码'
+    const msg = err?.response?.data?.detail?.message
+      || err?.response?.data?.message
+      || (Array.isArray(err?.response?.data?.detail) ? '请检查输入格式' : '')
+      || '登录失败，请检查用户名和密码'
     if (msg.includes('MFA') || msg.includes('mfa') || msg.includes('验证码')) {
       showMfa.value = true
       ElMessage.warning('请输入多因素认证码')
