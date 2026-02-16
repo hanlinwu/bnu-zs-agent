@@ -191,8 +191,8 @@ start_services() {
 
     # 后端
     cd "$SERVER_DIR"
-    info "启动后端 (http://localhost:8000)..."
-    .venv/bin/uvicorn app.main:app --reload --host 0.0.0.0 --port 8000 &
+    info "启动后端 (http://localhost:8001)..."
+    .venv/bin/uvicorn app.main:app --reload --host 0.0.0.0 --port 8001 &
     BACKEND_PID=$!
 
     # Celery Worker
@@ -214,8 +214,8 @@ start_services() {
     info "  所有服务已启动"
     info ""
     info "  前端:         http://localhost:5173"
-    info "  后端 API:     http://localhost:8000"
-    info "  API 文档:     http://localhost:8000/api/docs"
+    info "  后端 API:     http://localhost:8001"
+    info "  API 文档:     http://localhost:8001/api/docs"
     info ""
     info "  默认管理员:   admin / admin123"
     info "  短信验证码:   123456 (Mock 模式)"

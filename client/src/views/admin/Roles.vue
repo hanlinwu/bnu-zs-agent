@@ -63,7 +63,12 @@ async function fetchRoles() {
   loading.value = true
   try {
     const res = await roleApi.getRoles()
-    roles.value = res.data
+    const items = res.data.items || res.data
+    roles.value = items.map((r: any) => ({
+      ...r,
+      builtIn: r.is_system ?? r.builtIn ?? false,
+      createdAt: r.created_at ?? r.createdAt,
+    }))
   } catch {
     ElMessage.error('加载角色列表失败')
   } finally {
@@ -74,7 +79,11 @@ async function fetchRoles() {
 async function fetchPermissions() {
   try {
     const res = await roleApi.getPermissions()
-    allPermissions.value = res.data
+    const items = res.data.items || res.data
+    allPermissions.value = items.map((p: any) => ({
+      ...p,
+      group: p.resource ?? p.group,
+    }))
   } catch {
     // silent
   }

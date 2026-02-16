@@ -65,7 +65,7 @@ async function fetchGroups() {
   loading.value = true
   try {
     const res = await sensitiveApi.getGroups()
-    groups.value = res.data
+    groups.value = res.data.items || res.data
   } catch {
     ElMessage.error('加载敏感词库失败')
   } finally {

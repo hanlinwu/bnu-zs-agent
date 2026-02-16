@@ -88,7 +88,7 @@ async function fetchPeriods() {
   loading.value = true
   try {
     const res = await calendarApi.getPeriods()
-    periods.value = res.data
+    periods.value = res.data.items || res.data
   } catch {
     ElMessage.error('加载招生日历失败')
   } finally {
