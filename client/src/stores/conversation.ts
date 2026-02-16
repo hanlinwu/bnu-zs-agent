@@ -11,6 +11,17 @@ export interface Conversation {
   updated_at: string
 }
 
+function mapConversation(item: any): Conversation {
+  return {
+    id: String(item.id),
+    title: item.title || '',
+    pinned: item.is_pinned ?? item.pinned ?? false,
+    message_count: item.message_count ?? 0,
+    created_at: item.created_at,
+    updated_at: item.updated_at,
+  }
+}
+
 export const useConversationStore = defineStore('conversation', () => {
   const conversations = ref<Conversation[]>([])
   const total = ref(0)
@@ -22,16 +33,16 @@ export const useConversationStore = defineStore('conversation', () => {
       const res = await request.get('/conversations', {
         params: { page, page_size: pageSize },
       })
-      conversations.value = res.data.items
+      conversations.value = (res.data.items || []).map(mapConversation)
       total.value = res.data.total
     } finally {
       loading.value = false
     }
   }
 
-  async function createConversation() {
-    const res = await request.post('/conversations', {})
-    const conv: Conversation = res.data
+  async function createConversation(title?: string) {
+    const res = await request.post('/conversations', { title: title || undefined })
+    const conv = mapConversation(res.data)
     conversations.value.unshift(conv)
     total.value++
     return conv
@@ -44,17 +55,27 @@ export const useConversationStore = defineStore('conversation', () => {
   }
 
   async function updateTitle(id: string, title: string) {
-    await request.put(`/conversations/${id}`, { title })
     const conv = conversations.value.find((c) => c.id === id)
-    if (conv) conv.title = title
+    if (!conv) return
+    const oldTitle = conv.title
+    conv.title = title
+    try {
+      await request.put(`/conversations/${id}`, { title })
+    } catch {
+      conv.title = oldTitle
+    }
   }
 
   async function togglePin(id: string) {
     const conv = conversations.value.find((c) => c.id === id)
     if (!conv) return
-    const pinned = !conv.pinned
-    await request.put(`/conversations/${id}`, { pinned })
-    conv.pinned = pinned
+    const newPinned = !conv.pinned
+    conv.pinned = newPinned
+    try {
+      await request.put(`/conversations/${id}`, { is_pinned: newPinned })
+    } catch {
+      conv.pinned = !newPinned
+    }
   }
 
   return {

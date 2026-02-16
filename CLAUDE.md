@@ -2,58 +2,110 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## 项目概述
+## Project Overview
 
-北京师范大学招生宣传智能体系统 — 面向本科及研究生招生的智能对话系统，以多样化、智能化、富有人文关怀的方式服务考生与家长。系统基于权威知识库，实现精准问答、情绪支持、内容引导，兼顾安全性、可维护性与用户体验。
+BNU (Beijing Normal University) Admission Chatbot — a full-stack AI-powered Q&A system for undergraduate and graduate admissions. Built with Vue 3 frontend + FastAPI backend, backed by PostgreSQL (with pgvector) and Redis.
 
-## 技术栈
+## Development Commands
 
-- **前端**: Vue 3 + Vite + TypeScript + Pinia + Element Plus / Naive UI
-- **大模型接入**: 多模型支持（通义千问、GLM、本地部署模型），管理员可切换主用模型或启用负载均衡
-- **知识库**: 结构化文档管理 + Embedding 流水线（支持 PDF、Word、TXT、Markdown）
+### One-command local setup
+```bash
+sudo bash start-local.sh
+# Installs PostgreSQL, Redis, Python deps, Node deps, runs migrations, starts all services
+```
 
-## 核心架构要点
+### Frontend (client/)
+```bash
+cd client
+npm install          # install dependencies
+npm run dev          # dev server at http://localhost:5173 (proxies /api to :8001)
+npm run build        # type-check + production build (vue-tsc -b && vite build)
+npm run preview      # preview production build
+```
 
-### AI 幻觉防控（关键机制）
-- 对用户提问进行风险分级（低/中/高），高风险问题仅返回审核通过的标准答案或引导联系招生办
-- 双模型审查：主模型生成回答后，轻量级审查模型校验事实一致性与合规性
-- 敏感词过滤：支持多个可配置敏感词库，管理员可快捷查看与编辑
-- 引用溯源：关键信息附带知识库来源标识（如"根据2025年招生简章…"）
+### Backend (server/)
+```bash
+cd server
+source .venv/bin/activate
+uvicorn app.main:app --reload --port 8001   # dev server with auto-reload
+celery -A app.tasks.celery_app worker --loglevel=info  # async task worker
+```
 
-### 知识库流水线
-- 内容工作流：管理员提交 → 部门负责人审核 → 自动切片与 Embedding → 生效上线
-- 所有知识条目标注更新时间、责任人、生效状态，确保可追溯
-- 多格式文件上传，加密存储，保留元数据（上传时间、用户ID、文件类型、解析结果）
+### Database migrations (Alembic)
+```bash
+cd server && source .venv/bin/activate
+alembic upgrade head     # apply all migrations
+alembic downgrade -1     # rollback one migration
+```
 
-### 时间感知对话
-- 内置招生日历，根据当前阶段自动切换话术风格与重点内容：
-  - 1–6月（备考期）：激励、备考建议、专业前景
-  - 6–7月（高考后/报名期）：志愿填报、分数线预测、报名指南
-  - 8–9月（录取查询期）：录取结果查询、入学准备清单
-  - 全年常态：校园文化、师资力量、国际交流
+### Tests
+```bash
+cd server && source .venv/bin/activate
+pytest -v                          # run all tests
+pytest -v -k test_name             # run specific test
+pytest --cov                       # with coverage
+```
+Tests are in `server/tests/` and use `pytest-asyncio` for async support.
 
-### 用户注册与登录
-- 用户必须注册后才能使用系统，流程须简便快捷
-- **必须使用中国手机号 + 短信验证码登录**
-- 管理员账号只能通过超级管理员手动添加才能登录，需要更强的身份验证保证系统的安全性。
+### Docker (production)
+```bash
+docker-compose up --build          # starts nginx, app, db (pgvector/pg16), redis, celery worker
+```
 
-### 用户角色差异化
-- 针对不同用户角色提供差异化回答：高考生、考研生、国际学生、家长
-- 管理员权限分级：超级管理员、内容审核员、普通管理员、招生老师
+## Architecture
 
-## 前端设计约束
+### Monorepo layout
+- `client/` — Vue 3 + TypeScript + Vite + Pinia + Element Plus
+- `server/` — FastAPI + SQLAlchemy (async) + Celery + pgvector
+- `nginx/` — Reverse proxy for production
 
-- 深度融合北京师范大学视觉识别系统（VIS）：主色调学术蓝，融入木铎、京师学堂、主楼剪影等文化元素
-- 字体优先使用思源黑体或学校官方字体
-- 符合 WCAG 2.1 无障碍标准，支持夜间模式、字体大小调节
-- 响应式设计：PC端（拖拽上传）、移动端（触控优化）、平板端
-- 对话界面参考主流大模型聊天界面，支持对话历史管理，标题自动生成与编辑
-- 性能指标：首屏加载 ≤1.5秒，对话响应 ≤2秒
-- **严禁 AI 生成图像或视频，所有视觉内容必须来自官方素材库**
+### Frontend structure (client/src/)
+- `api/` — Axios-based API client. `request.ts` sets up base instance with auth interceptors. User APIs and `admin/` sub-directory for admin endpoints.
+- `stores/` — Pinia stores: `user`, `chat`, `conversation`, `theme`, `admin`
+- `views/` — Page components. `admin/` sub-directory for admin panel pages.
+- `composables/` — `useTheme`, `useAccessibility`, `useResponsive`
+- `styles/variables.scss` — Global SCSS variables, auto-injected via Vite config
+- Path alias: `@` → `src/`
+- Auto-imports: Vue/Pinia/Router APIs and Element Plus components are auto-imported (unplugin)
 
-## 非功能性要求
+### Backend structure (server/app/)
+- `api/v1/` — FastAPI route handlers. `router.py` aggregates all routes under `/api/v1`.
+- `models/` — SQLAlchemy ORM models (10 models: user, admin, role, conversation, message, knowledge, media, sensitive_word, calendar, audit_log)
+- `schemas/` — Pydantic request/response models
+- `services/` — Business logic layer. Key services:
+  - `chat_service` — Orchestrates: risk assessment → LLM call → review → response
+  - `llm_service` — Multi-model routing (Qwen, GLM, local models) via OpenAI-compatible client
+  - `review_service` — Dual-model fact-checking (hallucination prevention)
+  - `risk_service` — Question risk classification (low/medium/high)
+  - `sensitive_service` — Configurable word filtering
+  - `embedding_service` — Vector embedding generation for knowledge retrieval
+  - `file_parser_service` — PDF/DOCX/TXT text extraction
+- `core/` — Infrastructure: database engine, Redis client, JWT/bcrypt security, RBAC permissions, middleware (audit logging, rate limiting, CORS)
+- `tasks/` — Celery async tasks for document parsing, embedding generation, response review, cleanup
+- `dependencies.py` — FastAPI `Depends()` providers: `current_user`, `current_admin`, `get_db`
+- `config.py` — Pydantic Settings loaded from `.env`
 
-- HTTPS 加密传输，敏感操作二次验证，防刷防爬机制
-- 完整审计日志：用户ID、IP、时间戳、提问内容、模型响应、所用模型版本、知识库命中记录
-- 文件上传日志：文件名、哈希值、解析状态、关联对话ID
-- 符合《个人信息保护法》《数据安全法》，不存储用户身份敏感信息
+### Chat pipeline flow
+User query → `risk_service` (risk level) → `sensitive_service` (filter) → `llm_service` (generate) → `review_service` (fact-check) → response with knowledge source citations
+
+### Auth model
+- **Users**: Phone number + SMS verification code (mock code: `123456` when `SMS_MOCK=true`)
+- **Admins**: Username + password (default: `admin` / `admin123`), managed by super admin only
+- JWT tokens for both, separate auth flows (`/api/v1/auth` vs `/api/v1/admin/auth`)
+
+### Database
+- PostgreSQL with `pgvector` extension for vector similarity search on knowledge embeddings
+- Async via `asyncpg` driver + SQLAlchemy AsyncSession
+- DB name: `bnu_admission`
+
+### Vite dev proxy
+`/api/*` → `http://127.0.0.1:8001`, `/ws/*` → WebSocket proxy to same backend
+
+## Domain Constraints
+
+- All UI must follow BNU visual identity: academic blue primary color, Source Han Sans font
+- WCAG 2.1 accessibility required, dark mode support
+- No AI-generated images/videos — all visual content from official media library only
+- Time-aware responses: system adjusts tone based on admission calendar phase (exam prep → application → enrollment)
+- User roles affect responses: high school students, grad students, international students, parents
+- High-risk questions return only verified answers or redirect to admissions office

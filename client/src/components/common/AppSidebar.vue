@@ -1,9 +1,14 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { ChatLineSquare, Fold, Expand, Setting } from '@element-plus/icons-vue'
+import { useRouter } from 'vue-router'
+import {
+  ChatLineSquare, Fold, Expand, Setting,
+  SwitchButton, User,
+} from '@element-plus/icons-vue'
 import { useUserStore } from '@/stores/user'
 import { useConversationStore } from '@/stores/conversation'
 import { useChatStore } from '@/stores/chat'
+import { generateAvatar } from '@/utils/avatar'
 import ConversationList from '@/components/conversation/ConversationList.vue'
 
 const props = defineProps<{
@@ -17,18 +22,34 @@ const emit = defineEmits<{
 const userStore = useUserStore()
 const conversationStore = useConversationStore()
 const chatStore = useChatStore()
+const router = useRouter()
 
 const userNickname = computed(() => userStore.userInfo?.nickname || '用户')
-const userAvatar = computed(() => userStore.userInfo?.avatar_url || '')
+const userAvatar = computed(() => userStore.userInfo?.avatar_url || generateAvatar(userNickname.value))
 
-async function handleNewConversation() {
-  const conv = await conversationStore.createConversation()
-  chatStore.setConversationId(conv.id)
+function handleNewConversation() {
+  chatStore.setConversationId(null)
   chatStore.clearMessages()
 }
 
 function toggleCollapse() {
   emit('update:collapsed', !props.collapsed)
+}
+
+function handleLogout() {
+  chatStore.clearMessages()
+  chatStore.setConversationId(null)
+  conversationStore.conversations = []
+  userStore.logout()
+  router.replace('/login')
+}
+
+function handleSettingsCommand(command: string) {
+  if (command === 'logout') {
+    handleLogout()
+  } else if (command === 'settings') {
+    router.push('/settings')
+  }
 }
 </script>
 
@@ -58,9 +79,24 @@ function toggleCollapse() {
           <div class="user-info">
             <span class="user-name">{{ userNickname }}</span>
           </div>
-          <el-button class="settings-btn" text>
-            <el-icon :size="16"><Setting /></el-icon>
-          </el-button>
+
+          <el-dropdown trigger="click" @command="handleSettingsCommand" placement="top-end">
+            <el-button class="settings-btn" text>
+              <el-icon :size="16"><Setting /></el-icon>
+            </el-button>
+            <template #dropdown>
+              <el-dropdown-menu>
+                <el-dropdown-item command="settings">
+                  <el-icon><User /></el-icon>
+                  <span>个人中心</span>
+                </el-dropdown-item>
+                <el-dropdown-item command="logout" divided>
+                  <el-icon><SwitchButton /></el-icon>
+                  <span>退出登录</span>
+                </el-dropdown-item>
+              </el-dropdown-menu>
+            </template>
+          </el-dropdown>
         </div>
 
         <el-button
@@ -210,5 +246,11 @@ function toggleCollapse() {
   &:hover {
     color: var(--bnu-blue, #003DA5);
   }
+}
+
+:deep(.el-dropdown-menu__item) {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 </style>

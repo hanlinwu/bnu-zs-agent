@@ -5,22 +5,11 @@
       <div class="login-page__brand-overlay">
         <div class="login-page__brand-content">
           <div class="login-page__logo-area">
-            <div class="login-page__logo-icon">
-              <svg
-                width="48"
-                height="48"
-                viewBox="0 0 48 48"
-                fill="none"
-                xmlns="http://www.w3.org/2000/svg"
-                aria-hidden="true"
-              >
-                <!-- Stylized wooden bell (木铎) silhouette -->
-                <circle cx="24" cy="20" r="14" stroke="currentColor" stroke-width="2.5" fill="none" />
-                <line x1="24" y1="34" x2="24" y2="46" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" />
-                <line x1="18" y1="46" x2="30" y2="46" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" />
-                <circle cx="24" cy="20" r="5" fill="currentColor" opacity="0.3" />
-              </svg>
-            </div>
+            <img
+              src="/images/bnu-logo.png"
+              alt="北京师范大学校徽"
+              class="login-page__logo-img"
+            />
             <h1 class="login-page__school-name">北京师范大学</h1>
             <p class="login-page__school-name-en">Beijing Normal University</p>
           </div>
@@ -76,7 +65,7 @@ import LoginForm from '@/components/auth/LoginForm.vue'
 <style lang="scss" scoped>
 .login-page {
   display: flex;
-  min-height: 100vh;
+  min-height: 100%;
   background-color: var(--color-bg-primary);
 
   // ---------------------------------------------------------------
@@ -169,15 +158,14 @@ import LoginForm from '@/components/auth/LoginForm.vue'
     gap: 12px;
   }
 
-  &__logo-icon {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 80px;
-    height: 80px;
-    border: 2px solid rgba(255, 255, 255, 0.3);
+  &__logo-img {
+    width: 110px;
+    height: 110px;
     border-radius: 50%;
-    color: #ffffff;
+    object-fit: contain;
+    background: #ffffff;
+    padding: 6px;
+    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.15);
     margin-bottom: 4px;
   }
 

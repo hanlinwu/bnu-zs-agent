@@ -15,6 +15,8 @@ export const useThemeStore = defineStore('theme', () => {
   function applyTheme() {
     document.documentElement.setAttribute('data-theme', mode.value)
     document.documentElement.style.fontSize = `${fontSize.value}px`
+    const scale = fontSize.value / 16
+    document.documentElement.style.setProperty('--font-scale', String(scale))
   }
 
   function toggleTheme() {
@@ -22,7 +24,7 @@ export const useThemeStore = defineStore('theme', () => {
   }
 
   function setFontSize(size: FontSize) {
-    fontSize.value = size
+    fontSize.value = Number(size) as FontSize
   }
 
   // Persist and apply on change

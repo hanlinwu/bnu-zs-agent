@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, nextTick } from 'vue'
-import { Edit, Delete } from '@element-plus/icons-vue'
+import { Edit, Delete, Star, StarFilled } from '@element-plus/icons-vue'
 import type { Conversation } from '@/stores/conversation'
 
 const props = defineProps<{
@@ -12,6 +12,7 @@ const emit = defineEmits<{
   select: []
   delete: []
   updateTitle: [title: string]
+  togglePin: []
 }>()
 
 const isEditing = ref(false)
@@ -75,7 +76,10 @@ function handleDelete(e: Event) {
     @mouseleave="isHovered = false"
   >
     <div v-if="!isEditing" class="item-content">
-      <div class="item-title">{{ conversation.title || '新对话' }}</div>
+      <div class="item-title">
+        <el-icon v-if="conversation.pinned" class="pin-icon" :size="12"><StarFilled /></el-icon>
+        <span>{{ conversation.title || '新对话' }}</span>
+      </div>
       <div class="item-time">{{ relativeTime }}</div>
     </div>
 
@@ -96,6 +100,12 @@ function handleDelete(e: Event) {
       class="item-actions"
       @click.stop
     >
+      <el-button class="action-btn" text size="small" @click.stop="emit('togglePin')">
+        <el-icon :size="14">
+          <StarFilled v-if="conversation.pinned" />
+          <Star v-else />
+        </el-icon>
+      </el-button>
       <el-button class="action-btn" text size="small" @click="startEdit">
         <el-icon :size="14"><Edit /></el-icon>
       </el-button>
@@ -113,9 +123,8 @@ function handleDelete(e: Event) {
   padding: 10px 12px;
   border-radius: 8px;
   cursor: pointer;
-  transition: background-color 0.2s, border-color 0.2s;
+  transition: background-color 0.2s;
   position: relative;
-  border-left: 3px solid transparent;
   margin-bottom: 2px;
 
   &:hover {
@@ -123,9 +132,8 @@ function handleDelete(e: Event) {
   }
 
   &.is-active {
-    background-color: var(--bg-primary, #fff);
-    border-left-color: var(--bnu-blue, #003DA5);
-    box-shadow: var(--shadow-sm, 0 1px 3px rgba(0, 0, 0, 0.06));
+    background-color: var(--color-primary-lighter, #e8f0fe);
+    color: var(--bnu-blue, #003DA5);
   }
 }
 
@@ -142,6 +150,24 @@ function handleDelete(e: Event) {
   text-overflow: ellipsis;
   white-space: nowrap;
   line-height: 1.4;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+
+  .is-active & {
+    color: var(--bnu-blue, #003DA5);
+    font-weight: 600;
+  }
+
+  .pin-icon {
+    color: var(--bnu-blue, #003DA5);
+    flex-shrink: 0;
+  }
+
+  span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
 }
 
 .item-time {

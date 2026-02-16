@@ -141,6 +141,8 @@ onMounted(() => {
   max-width: 640px;
   margin: 0 auto;
   padding: 24px 16px;
+  height: 100%;
+  overflow-y: auto;
 }
 
 .settings-header {

@@ -9,8 +9,9 @@ from app.config import settings
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup
-    from app.core.seed import seed_roles_and_permissions
+    from app.core.seed import seed_roles_and_permissions, seed_calendar_periods
     await seed_roles_and_permissions()
+    await seed_calendar_periods()
     yield
     # Shutdown
 

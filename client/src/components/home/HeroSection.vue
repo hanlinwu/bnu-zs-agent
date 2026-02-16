@@ -1,43 +1,93 @@
 <script setup lang="ts">
+import { ref } from 'vue'
 import { useRouter } from 'vue-router'
+import { Promotion } from '@element-plus/icons-vue'
 
 const router = useRouter()
+const inputContent = ref('')
 
-function startChat() {
-  router.push('/chat')
+function handleSend() {
+  const text = inputContent.value.trim()
+  if (!text) return
+  router.push({ path: '/chat', query: { q: text } })
+}
+
+function handleKeydown(e: KeyboardEvent) {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault()
+    handleSend()
+  }
 }
 </script>
 
 <template>
   <section class="hero-section">
+    <!-- Background image with overlay -->
     <div class="hero-bg">
-      <div class="hero-shape hero-shape--circle" />
-      <div class="hero-shape hero-shape--ring" />
-      <div class="hero-shape hero-shape--dots" />
+      <div class="hero-bg-image" />
+      <div class="hero-bg-overlay" />
     </div>
+
+    <!-- Floating decorative elements -->
+    <div class="hero-particles">
+      <div class="particle particle--1" />
+      <div class="particle particle--2" />
+      <div class="particle particle--3" />
+    </div>
+
     <div class="hero-content">
-      <h1 class="hero-title">欢迎来到京师小智</h1>
+      <!-- Badge -->
+      <div class="hero-badge">
+        <span class="badge-dot" />
+        北京师范大学官方招生智能助手
+      </div>
+
+      <h1 class="hero-title">
+        <span class="title-line">你好，我是</span>
+        <span class="title-highlight">京师小智</span>
+      </h1>
+
       <p class="hero-subtitle">
-        北京师范大学招生智能助手，为您提供最权威的招生咨询服务
+        有关招生政策、专业选择、录取分数等问题，随时向我提问
       </p>
-      <el-button
-        type="primary"
-        size="large"
-        round
-        class="hero-cta"
-        @click="startChat"
-      >
-        <el-icon class="cta-icon"><ChatDotRound /></el-icon>
-        开始对话
-      </el-button>
+
+      <!-- Chat input -->
+      <div class="hero-input-wrapper">
+        <div class="hero-input-box">
+          <textarea
+            v-model="inputContent"
+            class="hero-textarea"
+            placeholder="输入你想了解的招生问题，如：北师大的公费师范生政策是什么？"
+            rows="1"
+            @keydown="handleKeydown"
+          />
+          <button
+            class="hero-send-btn"
+            :disabled="!inputContent.trim()"
+            @click="handleSend"
+          >
+            <el-icon :size="20"><Promotion /></el-icon>
+          </button>
+        </div>
+        <div class="hero-input-hint">
+          按 Enter 发送，Shift + Enter 换行
+        </div>
+      </div>
+
+      <!-- Quick suggestion chips -->
+      <div class="hero-chips">
+        <button
+          v-for="chip in ['录取分数线', '公费师范生', '优势专业', '奖学金政策']"
+          :key="chip"
+          class="hero-chip"
+          @click="router.push({ path: '/chat', query: { q: chip } })"
+        >
+          {{ chip }}
+        </button>
+      </div>
     </div>
   </section>
 </template>
-
-<script lang="ts">
-import { ChatDotRound } from '@element-plus/icons-vue'
-export default { components: { ChatDotRound } }
-</script>
 
 <style lang="scss" scoped>
 .hero-section {
@@ -46,115 +96,292 @@ export default { components: { ChatDotRound } }
   display: flex;
   align-items: center;
   justify-content: center;
-  min-height: 520px;
-  background: linear-gradient(135deg, #003DA5 0%, #002D7A 40%, #001A4D 100%);
-  padding: 80px 24px;
+  min-height: 480px;
+  padding: 48px 24px 56px;
 }
 
 .hero-bg {
   position: absolute;
   inset: 0;
-  pointer-events: none;
+  z-index: 0;
 }
 
-.hero-shape {
+.hero-bg-image {
+  position: absolute;
+  inset: 0;
+  background-image: url('/images/bnu-gate.jpg');
+  background-size: cover;
+  background-position: center 40%;
+  filter: blur(1px);
+  transform: scale(1.05);
+}
+
+.hero-bg-overlay {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    135deg,
+    rgba(0, 45, 122, 0.88) 0%,
+    rgba(0, 61, 165, 0.82) 40%,
+    rgba(0, 26, 77, 0.90) 100%
+  );
+}
+
+.hero-particles {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.particle {
   position: absolute;
   border-radius: 50%;
+  opacity: 0.15;
 
-  &--circle {
-    width: 400px;
-    height: 400px;
-    background: radial-gradient(circle, rgba(196, 151, 47, 0.12) 0%, transparent 70%);
-    top: -100px;
-    right: -80px;
-  }
-
-  &--ring {
+  &--1 {
     width: 300px;
     height: 300px;
-    border: 2px solid rgba(255, 255, 255, 0.06);
-    bottom: -60px;
-    left: -60px;
+    background: radial-gradient(circle, rgba(196, 151, 47, 0.5) 0%, transparent 70%);
+    top: -60px;
+    right: -40px;
+    animation: float 8s ease-in-out infinite;
   }
 
-  &--dots {
+  &--2 {
     width: 200px;
     height: 200px;
-    background: radial-gradient(circle, rgba(255, 255, 255, 0.04) 1px, transparent 1px);
-    background-size: 20px 20px;
-    top: 40%;
-    left: 10%;
-    border-radius: 0;
+    border: 1.5px solid rgba(255, 255, 255, 0.15);
+    bottom: -40px;
+    left: 5%;
+    animation: float 10s ease-in-out infinite reverse;
   }
+
+  &--3 {
+    width: 120px;
+    height: 120px;
+    background: radial-gradient(circle, rgba(255, 255, 255, 0.12) 0%, transparent 70%);
+    top: 30%;
+    left: 15%;
+    animation: float 6s ease-in-out infinite 2s;
+  }
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0) scale(1); }
+  50% { transform: translateY(-20px) scale(1.05); }
 }
 
 .hero-content {
   position: relative;
-  z-index: 1;
+  z-index: 2;
   text-align: center;
-  max-width: 680px;
+  max-width: 720px;
+  width: 100%;
+}
+
+.hero-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 16px;
+  background: rgba(255, 255, 255, 0.12);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 100px;
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.9);
+  margin-bottom: 24px;
+  letter-spacing: 0.5px;
+}
+
+.badge-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #4ade80;
+  box-shadow: 0 0 8px rgba(74, 222, 128, 0.6);
+  animation: pulse-dot 2s ease-in-out infinite;
+}
+
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
 }
 
 .hero-title {
-  font-size: 48px;
+  font-size: 44px;
   font-weight: 700;
   color: #ffffff;
-  margin: 0 0 20px;
+  margin: 0 0 16px;
+  line-height: 1.25;
+  letter-spacing: 1px;
+}
+
+.title-line {
+  display: block;
+  font-size: 28px;
+  font-weight: 400;
+  opacity: 0.9;
   letter-spacing: 2px;
-  line-height: 1.2;
-  text-shadow: 0 2px 12px rgba(0, 0, 0, 0.2);
+  margin-bottom: 4px;
+}
+
+.title-highlight {
+  background: linear-gradient(135deg, #ffffff 0%, #C4972F 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
 }
 
 .hero-subtitle {
-  font-size: 20px;
-  color: rgba(255, 255, 255, 0.85);
-  margin: 0 0 40px;
+  font-size: 16px;
+  color: rgba(255, 255, 255, 0.75);
+  margin: 0 0 32px;
   line-height: 1.6;
-  font-weight: 400;
 }
 
-.hero-cta {
-  height: 52px;
-  padding: 0 40px;
-  font-size: 18px;
-  font-weight: 600;
-  background: linear-gradient(135deg, #C4972F 0%, #D4A94A 100%);
-  border: none;
-  color: #ffffff;
-  box-shadow: 0 4px 20px rgba(196, 151, 47, 0.4);
-  transition: all 0.3s ease;
+.hero-input-wrapper {
+  max-width: 600px;
+  margin: 0 auto 20px;
+}
 
-  &:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 6px 28px rgba(196, 151, 47, 0.55);
-    background: linear-gradient(135deg, #D4A94A 0%, #C4972F 100%);
+.hero-input-box {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(12px);
+  border-radius: 16px;
+  padding: 8px 8px 8px 20px;
+  box-shadow:
+    0 8px 32px rgba(0, 0, 0, 0.15),
+    0 0 0 1px rgba(255, 255, 255, 0.2);
+  transition: box-shadow 0.3s, transform 0.2s;
+
+  &:focus-within {
+    box-shadow:
+      0 12px 40px rgba(0, 0, 0, 0.2),
+      0 0 0 2px rgba(196, 151, 47, 0.4);
+    transform: translateY(-1px);
+  }
+}
+
+.hero-textarea {
+  flex: 1;
+  border: none;
+  outline: none;
+  resize: none;
+  font-size: 15px;
+  line-height: 24px;
+  color: #1a1a2e;
+  background: transparent;
+  font-family: inherit;
+  min-height: 24px;
+  max-height: 72px;
+
+  &::placeholder {
+    color: #9e9eb3;
+  }
+}
+
+.hero-send-btn {
+  flex-shrink: 0;
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #003DA5 0%, #0052D9 100%);
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s;
+
+  &:hover:not(:disabled) {
+    background: linear-gradient(135deg, #0052D9 0%, #003DA5 100%);
+    transform: scale(1.05);
   }
 
-  .cta-icon {
-    margin-right: 8px;
-    font-size: 20px;
+  &:disabled {
+    background: #c8cdd4;
+    cursor: not-allowed;
+  }
+}
+
+.hero-input-hint {
+  text-align: right;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.45);
+  margin-top: 8px;
+  padding-right: 4px;
+}
+
+.hero-chips {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+}
+
+.hero-chip {
+  padding: 6px 16px;
+  border-radius: 100px;
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.85);
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(4px);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.2);
+    border-color: rgba(255, 255, 255, 0.3);
+    transform: translateY(-1px);
   }
 }
 
 @media (max-width: 768px) {
   .hero-section {
-    min-height: 400px;
-    padding: 60px 20px;
+    min-height: 420px;
+    padding: 36px 16px 40px;
   }
 
   .hero-title {
     font-size: 32px;
   }
 
-  .hero-subtitle {
-    font-size: 16px;
-    margin-bottom: 32px;
+  .title-line {
+    font-size: 20px;
   }
 
-  .hero-cta {
-    height: 44px;
-    padding: 0 28px;
-    font-size: 16px;
+  .hero-subtitle {
+    font-size: 14px;
+    margin-bottom: 24px;
+  }
+
+  .hero-input-box {
+    padding: 6px 6px 6px 14px;
+  }
+
+  .hero-textarea {
+    font-size: 14px;
+  }
+
+  .hero-send-btn {
+    width: 38px;
+    height: 38px;
+  }
+
+  .hero-chips {
+    gap: 6px;
+  }
+
+  .hero-chip {
+    padding: 5px 12px;
+    font-size: 12px;
   }
 }
 </style>

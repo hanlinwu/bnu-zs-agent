@@ -40,8 +40,10 @@ function askQuestion(query: string) {
 <template>
   <section class="hot-questions">
     <div class="section-container">
-      <h2 class="section-title">热门问题</h2>
-      <p class="section-desc">考生与家长最关心的招生话题</p>
+      <div class="section-header">
+        <h2 class="section-title">热门问题</h2>
+        <p class="section-desc">考生与家长最关心的招生话题</p>
+      </div>
       <div class="questions-grid">
         <div
           v-for="item in questions"
@@ -50,24 +52,21 @@ function askQuestion(query: string) {
           @click="askQuestion(item.query)"
         >
           <div class="question-icon">
-            <el-icon :size="28"><component :is="item.icon" /></el-icon>
+            <el-icon :size="24"><component :is="item.icon" /></el-icon>
           </div>
           <span class="question-text">{{ item.text }}</span>
-          <el-icon class="question-arrow"><ArrowRight /></el-icon>
+          <svg class="question-arrow" width="16" height="16" viewBox="0 0 16 16" fill="none">
+            <path d="M6 3l5 5-5 5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
         </div>
       </div>
     </div>
   </section>
 </template>
 
-<script lang="ts">
-import { ArrowRight } from '@element-plus/icons-vue'
-export default { components: { ArrowRight } }
-</script>
-
 <style lang="scss" scoped>
 .hot-questions {
-  padding: 72px 24px;
+  padding: 56px 24px;
   background: var(--bg-primary, #ffffff);
 }
 
@@ -76,42 +75,46 @@ export default { components: { ArrowRight } }
   margin: 0 auto;
 }
 
+.section-header {
+  margin-bottom: 32px;
+}
+
 .section-title {
   text-align: center;
-  font-size: 30px;
+  font-size: 26px;
   font-weight: 700;
   color: var(--text-primary, #1A1A2E);
-  margin: 0 0 8px;
+  margin: 0 0 6px;
 }
 
 .section-desc {
   text-align: center;
-  font-size: 16px;
+  font-size: 15px;
   color: var(--text-secondary, #5A5A72);
-  margin: 0 0 40px;
+  margin: 0;
 }
 
 .questions-grid {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: 16px;
+  gap: 12px;
 }
 
 .question-card {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 20px;
+  padding: 16px 18px;
   background: var(--bg-secondary, #F4F6FA);
   border-radius: 12px;
   cursor: pointer;
-  transition: all 0.25s ease;
+  transition: all 0.2s ease;
   border: 1px solid transparent;
 
   &:hover {
     background: var(--bg-primary, #ffffff);
     border-color: var(--bnu-blue, #003DA5);
-    box-shadow: var(--shadow-md, 0 4px 16px rgba(0, 61, 165, 0.1));
+    box-shadow: 0 4px 16px rgba(0, 61, 165, 0.08);
     transform: translateY(-2px);
 
     .question-icon {
@@ -128,20 +131,20 @@ export default { components: { ArrowRight } }
 
 .question-icon {
   flex-shrink: 0;
-  width: 48px;
-  height: 48px;
+  width: 42px;
+  height: 42px;
   display: flex;
   align-items: center;
   justify-content: center;
   border-radius: 10px;
   background: rgba(0, 61, 165, 0.08);
   color: var(--bnu-blue, #003DA5);
-  transition: all 0.25s ease;
+  transition: all 0.2s ease;
 }
 
 .question-text {
   flex: 1;
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 500;
   color: var(--text-primary, #1A1A2E);
 }
@@ -149,8 +152,8 @@ export default { components: { ArrowRight } }
 .question-arrow {
   flex-shrink: 0;
   opacity: 0;
-  transform: translateX(-8px);
-  transition: all 0.25s ease;
+  transform: translateX(-6px);
+  transition: all 0.2s ease;
   color: var(--bnu-blue, #003DA5);
 }
 
@@ -162,29 +165,29 @@ export default { components: { ArrowRight } }
 
 @media (max-width: 768px) {
   .hot-questions {
-    padding: 48px 16px;
+    padding: 40px 16px;
   }
 
   .section-title {
-    font-size: 24px;
+    font-size: 22px;
   }
 
   .questions-grid {
     grid-template-columns: repeat(2, 1fr);
-    gap: 12px;
+    gap: 10px;
   }
 
   .question-card {
-    padding: 16px;
+    padding: 14px;
   }
 
   .question-icon {
-    width: 40px;
-    height: 40px;
+    width: 36px;
+    height: 36px;
   }
 
   .question-text {
-    font-size: 14px;
+    font-size: 13px;
   }
 }
 </style>

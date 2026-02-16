@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, computed } from 'vue'
 import {
   ChatDotRound,
   User,
@@ -7,6 +7,14 @@ import {
   Clock,
   TrendCharts,
 } from '@element-plus/icons-vue'
+import {
+  getDashboardStats,
+  getDashboardTrends,
+  getDashboardHot,
+  type DashboardStats,
+  type TrendItem,
+  type HotQuestion,
+} from '@/api/admin/dashboard'
 
 interface StatCard {
   title: string
@@ -16,35 +24,83 @@ interface StatCard {
   bgColor: string
 }
 
-const stats = ref<StatCard[]>([
-  { title: '今日对话数', value: 1283, icon: ChatDotRound, color: '#003DA5', bgColor: 'rgba(0, 61, 165, 0.08)' },
-  { title: '活跃用户数', value: 456, icon: User, color: '#2E7D32', bgColor: 'rgba(46, 125, 50, 0.08)' },
-  { title: '知识库文档数', value: 89, icon: Document, color: '#C4972F', bgColor: 'rgba(196, 151, 47, 0.08)' },
-  { title: '待审核文档数', value: 7, icon: Clock, color: '#C62828', bgColor: 'rgba(198, 40, 40, 0.08)' },
-])
+const loading = ref(true)
+const trendDays = ref<7 | 30>(7)
 
-interface HotTopic {
-  rank: number
-  question: string
-  count: number
+// Real data refs
+const statsData = ref<DashboardStats | null>(null)
+const trendsData = ref<TrendItem[]>([])
+const hotData = ref<HotQuestion[]>([])
+
+const stats = computed<StatCard[]>(() => {
+  const s = statsData.value
+  return [
+    { title: '对话总数', value: s?.conversation_count ?? 0, icon: ChatDotRound, color: '#003DA5', bgColor: 'rgba(0, 61, 165, 0.08)' },
+    { title: '今日活跃用户', value: s?.active_today ?? 0, icon: User, color: '#2E7D32', bgColor: 'rgba(46, 125, 50, 0.08)' },
+    { title: '知识库文档数', value: s?.knowledge_count ?? 0, icon: Document, color: '#C4972F', bgColor: 'rgba(196, 151, 47, 0.08)' },
+    { title: '待审核文档', value: s?.pending_review_count ?? 0, icon: Clock, color: '#C62828', bgColor: 'rgba(198, 40, 40, 0.08)' },
+  ]
+})
+
+const chartData = computed(() => {
+  if (trendsData.value.length === 0) return []
+  const maxCount = Math.max(...trendsData.value.map(t => t.count), 1)
+  return trendsData.value.map(t => {
+    const d = new Date(t.date)
+    const dayNames = ['日', '一', '二', '三', '四', '五', '六']
+    const label = trendDays.value <= 7
+      ? `周${dayNames[d.getDay()]}`
+      : `${d.getMonth() + 1}/${d.getDate()}`
+    return {
+      label,
+      value: t.count,
+      height: Math.max((t.count / maxCount) * 100, 4),
+    }
+  })
+})
+
+const hotTopics = computed(() =>
+  hotData.value.map((item, idx) => ({
+    rank: idx + 1,
+    question: item.question,
+    count: item.count,
+  }))
+)
+
+async function fetchStats() {
+  try {
+    const res = await getDashboardStats()
+    statsData.value = res.data
+  } catch { /* stats will show 0 */ }
 }
 
-const hotTopics = ref<HotTopic[]>([
-  { rank: 1, question: '2026年北京师范大学录取分数线是多少？', count: 328 },
-  { rank: 2, question: '公费师范生毕业后的就业政策是什么？', count: 256 },
-  { rank: 3, question: '北京师范大学有哪些优势学科？', count: 213 },
-  { rank: 4, question: '珠海校区和北京校区有什么区别？', count: 189 },
-  { rank: 5, question: '研究生奖学金覆盖比例是多少？', count: 167 },
-  { rank: 6, question: '北京师范大学国际交流项目有哪些？', count: 145 },
-  { rank: 7, question: '转专业政策是什么？', count: 132 },
-  { rank: 8, question: '北京师范大学宿舍条件如何？', count: 121 },
-])
+async function fetchTrends() {
+  try {
+    const res = await getDashboardTrends(trendDays.value)
+    trendsData.value = res.data.items
+  } catch {
+    trendsData.value = []
+  }
+}
 
-const loading = ref(false)
+async function fetchHot() {
+  try {
+    const res = await getDashboardHot(8, 7)
+    hotData.value = res.data.items
+  } catch {
+    hotData.value = []
+  }
+}
 
-onMounted(() => {
+async function handleTrendChange(days: 7 | 30) {
+  trendDays.value = days
+  await fetchTrends()
+}
+
+onMounted(async () => {
   loading.value = true
-  setTimeout(() => { loading.value = false }, 500)
+  await Promise.all([fetchStats(), fetchTrends(), fetchHot()])
+  loading.value = false
 })
 </script>
 
@@ -65,7 +121,7 @@ onMounted(() => {
           <el-icon :size="28"><component :is="stat.icon" /></el-icon>
         </div>
         <div class="stat-info">
-          <span class="stat-value">{{ stat.value.toLocaleString() }}</span>
+          <span class="stat-value">{{ loading ? '-' : stat.value.toLocaleString() }}</span>
           <span class="stat-title">{{ stat.title }}</span>
         </div>
       </div>
@@ -79,15 +135,25 @@ onMounted(() => {
               <el-icon><TrendCharts /></el-icon>
               对话趋势图
             </h3>
-            <el-radio-group size="small" model-value="week">
-              <el-radio-button value="week">近7天</el-radio-button>
-              <el-radio-button value="month">近30天</el-radio-button>
+            <el-radio-group size="small" :model-value="trendDays" @change="handleTrendChange">
+              <el-radio-button :value="7">近7天</el-radio-button>
+              <el-radio-button :value="30">近30天</el-radio-button>
             </el-radio-group>
           </div>
-          <div class="chart-placeholder">
-            <el-icon :size="48" color="#E2E6ED"><TrendCharts /></el-icon>
-            <span>对话趋势图</span>
-            <span class="chart-hint">集成 ECharts 后在此渲染图表</span>
+          <div class="chart-area">
+            <template v-if="chartData.length > 0">
+              <div class="chart-bars">
+                <div v-for="(bar, idx) in chartData" :key="idx" class="chart-bar-group">
+                  <div class="chart-bar" :style="{ height: bar.height + '%' }">
+                    <span class="chart-bar-value">{{ bar.value }}</span>
+                  </div>
+                  <span class="chart-bar-label">{{ bar.label }}</span>
+                </div>
+              </div>
+            </template>
+            <div v-else class="chart-empty">
+              <span>暂无数据</span>
+            </div>
           </div>
         </div>
       </div>
@@ -101,19 +167,24 @@ onMounted(() => {
             </h3>
           </div>
           <div class="topics-list">
-            <div
-              v-for="topic in hotTopics"
-              :key="topic.rank"
-              class="topic-item"
-            >
-              <span
-                class="topic-rank"
-                :class="{ 'topic-rank--top': topic.rank <= 3 }"
+            <template v-if="hotTopics.length > 0">
+              <div
+                v-for="topic in hotTopics"
+                :key="topic.rank"
+                class="topic-item"
               >
-                {{ topic.rank }}
-              </span>
-              <span class="topic-question">{{ topic.question }}</span>
-              <el-tag size="small" type="info" round>{{ topic.count }}次</el-tag>
+                <span
+                  class="topic-rank"
+                  :class="{ 'topic-rank--top': topic.rank <= 3 }"
+                >
+                  {{ topic.rank }}
+                </span>
+                <span class="topic-question">{{ topic.question }}</span>
+                <el-tag size="small" type="info" round>{{ topic.count }}次</el-tag>
+              </div>
+            </template>
+            <div v-else class="topics-empty">
+              <span>暂无数据</span>
             </div>
           </div>
         </div>
@@ -124,7 +195,6 @@ onMounted(() => {
 
 <style lang="scss" scoped>
 .dashboard-page {
-  max-width: 1200px;
 }
 
 .page-header {
@@ -229,26 +299,74 @@ onMounted(() => {
   }
 }
 
-.chart-placeholder {
+.chart-area {
   height: 320px;
+  padding: 20px;
+  display: flex;
+  align-items: flex-end;
+}
+
+.chart-bars {
+  display: flex;
+  align-items: flex-end;
+  gap: 16px;
+  width: 100%;
+  height: 100%;
+}
+
+.chart-bar-group {
+  flex: 1;
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
+  height: 100%;
+  justify-content: flex-end;
   gap: 8px;
-  color: var(--text-secondary, #5A5A72);
-  font-size: 16px;
+}
 
-  .chart-hint {
-    font-size: 12px;
-    color: var(--text-secondary, #9E9EB3);
-  }
+.chart-bar {
+  width: 100%;
+  max-width: 48px;
+  background: linear-gradient(180deg, var(--bnu-blue, #003DA5), #1A5FBF);
+  border-radius: 6px 6px 0 0;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding-top: 8px;
+  min-height: 24px;
+  transition: height 0.6s ease;
+}
+
+.chart-bar-value {
+  font-size: 11px;
+  font-weight: 600;
+  color: #ffffff;
+}
+
+.chart-bar-label {
+  font-size: 12px;
+  color: var(--text-secondary, #5A5A72);
+}
+
+.chart-empty,
+.topics-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  color: var(--text-secondary, #5A5A72);
+  font-size: 14px;
 }
 
 .topics-list {
   padding: 8px 0;
   max-height: 360px;
   overflow-y: auto;
+}
+
+.topics-empty {
+  padding: 40px 0;
 }
 
 .topic-item {

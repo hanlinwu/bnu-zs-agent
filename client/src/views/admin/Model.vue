@@ -32,7 +32,50 @@ async function fetchModels() {
   loading.value = true
   try {
     const res = await modelApi.getModels()
-    models.value = res.data
+    const data = res.data as any
+
+    // API returns flat config object, transform into model card array
+    if (data && !Array.isArray(data)) {
+      const items: ModelConfig[] = []
+      // Primary model
+      if (data.primary_provider || data.primary_model) {
+        items.push({
+          id: 'primary',
+          name: data.primary_model || 'unknown',
+          provider: data.primary_provider || 'unknown',
+          endpoint: data.primary_base_url || '',
+          apiKey: data.primary_api_key || '',
+          isPrimary: true,
+          isReviewer: false,
+          enabled: true,
+          weight: 1,
+          maxTokens: 4096,
+          temperature: 0.7,
+          createdAt: '',
+          updatedAt: '',
+        })
+      }
+      // Review model
+      if (data.review_provider || data.review_model) {
+        items.push({
+          id: 'review',
+          name: data.review_model || 'unknown',
+          provider: data.review_provider || data.primary_provider || 'unknown',
+          endpoint: data.review_base_url || data.primary_base_url || '',
+          isPrimary: false,
+          isReviewer: true,
+          enabled: true,
+          weight: 1,
+          maxTokens: 2048,
+          temperature: 0.3,
+          createdAt: '',
+          updatedAt: '',
+        })
+      }
+      models.value = items
+    } else {
+      models.value = data || []
+    }
   } catch {
     ElMessage.error('加载模型配置失败')
   } finally {
@@ -204,7 +247,6 @@ onMounted(() => {
 
 <style lang="scss" scoped>
 .model-page {
-  max-width: 1200px;
 }
 
 .page-header {

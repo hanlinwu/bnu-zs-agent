@@ -57,8 +57,10 @@ function handleAction(action: QuickAction) {
 <template>
   <section class="quick-actions">
     <div class="section-container">
-      <h2 class="section-title">快捷服务</h2>
-      <p class="section-desc">一站式招生服务入口</p>
+      <div class="section-header">
+        <h2 class="section-title">快捷服务</h2>
+        <p class="section-desc">一站式招生服务入口</p>
+      </div>
       <div class="actions-grid">
         <div
           v-for="action in actions"
@@ -67,10 +69,12 @@ function handleAction(action: QuickAction) {
           @click="handleAction(action)"
         >
           <div class="action-icon-wrapper">
-            <el-icon :size="32"><component :is="action.icon" /></el-icon>
+            <el-icon :size="28"><component :is="action.icon" /></el-icon>
           </div>
-          <h3 class="action-title">{{ action.title }}</h3>
-          <p class="action-desc">{{ action.description }}</p>
+          <div class="action-body">
+            <h3 class="action-title">{{ action.title }}</h3>
+            <p class="action-desc">{{ action.description }}</p>
+          </div>
         </div>
       </div>
     </div>
@@ -79,7 +83,7 @@ function handleAction(action: QuickAction) {
 
 <style lang="scss" scoped>
 .quick-actions {
-  padding: 72px 24px;
+  padding: 56px 24px;
   background: var(--bg-secondary, #F4F6FA);
 }
 
@@ -88,42 +92,45 @@ function handleAction(action: QuickAction) {
   margin: 0 auto;
 }
 
+.section-header {
+  margin-bottom: 32px;
+}
+
 .section-title {
   text-align: center;
-  font-size: 30px;
+  font-size: 26px;
   font-weight: 700;
   color: var(--text-primary, #1A1A2E);
-  margin: 0 0 8px;
+  margin: 0 0 6px;
 }
 
 .section-desc {
   text-align: center;
-  font-size: 16px;
+  font-size: 15px;
   color: var(--text-secondary, #5A5A72);
-  margin: 0 0 40px;
+  margin: 0;
 }
 
 .actions-grid {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: 20px;
+  gap: 16px;
 }
 
 .action-card {
   display: flex;
-  flex-direction: column;
-  align-items: center;
-  text-align: center;
-  padding: 36px 24px;
+  align-items: flex-start;
+  gap: 16px;
+  padding: 24px 20px;
   background: var(--bg-primary, #ffffff);
-  border-radius: 16px;
+  border-radius: 14px;
   cursor: pointer;
-  transition: all 0.3s ease;
+  transition: all 0.25s ease;
   border: 1px solid var(--border-color, #E2E6ED);
 
   &:hover {
-    transform: translateY(-4px);
-    box-shadow: var(--shadow-md, 0 8px 24px rgba(0, 61, 165, 0.12));
+    transform: translateY(-3px);
+    box-shadow: 0 8px 24px rgba(0, 61, 165, 0.1);
     border-color: var(--bnu-blue, #003DA5);
 
     .action-icon-wrapper {
@@ -134,27 +141,32 @@ function handleAction(action: QuickAction) {
 }
 
 .action-icon-wrapper {
-  width: 72px;
-  height: 72px;
+  flex-shrink: 0;
+  width: 52px;
+  height: 52px;
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 16px;
+  border-radius: 12px;
   background: rgba(0, 61, 165, 0.08);
   color: var(--bnu-blue, #003DA5);
-  margin-bottom: 20px;
-  transition: all 0.3s ease;
+  transition: all 0.25s ease;
+}
+
+.action-body {
+  flex: 1;
+  min-width: 0;
 }
 
 .action-title {
-  font-size: 18px;
+  font-size: 16px;
   font-weight: 600;
   color: var(--text-primary, #1A1A2E);
-  margin: 0 0 8px;
+  margin: 0 0 4px;
 }
 
 .action-desc {
-  font-size: 14px;
+  font-size: 13px;
   color: var(--text-secondary, #5A5A72);
   margin: 0;
   line-height: 1.5;
@@ -168,34 +180,29 @@ function handleAction(action: QuickAction) {
 
 @media (max-width: 768px) {
   .quick-actions {
-    padding: 48px 16px;
+    padding: 40px 16px;
   }
 
   .section-title {
-    font-size: 24px;
+    font-size: 22px;
   }
 
   .actions-grid {
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: 1fr;
     gap: 12px;
   }
 
   .action-card {
-    padding: 24px 16px;
+    padding: 18px 16px;
   }
 
   .action-icon-wrapper {
-    width: 56px;
-    height: 56px;
-    margin-bottom: 16px;
+    width: 44px;
+    height: 44px;
   }
 
   .action-title {
-    font-size: 16px;
-  }
-
-  .action-desc {
-    font-size: 13px;
+    font-size: 15px;
   }
 }
 </style>

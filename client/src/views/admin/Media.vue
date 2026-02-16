@@ -242,7 +242,6 @@ onMounted(() => {
 
 <style lang="scss" scoped>
 .media-page {
-  max-width: 1200px;
 }
 
 .page-header {
@@ -270,6 +269,7 @@ onMounted(() => {
   border-radius: 12px;
   border: 1px solid var(--border-color, #E2E6ED);
   padding: 20px;
+  overflow: hidden;
 }
 
 .toolbar {

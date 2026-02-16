@@ -68,7 +68,7 @@ function viewDetail(user: AdminUser) {
 }
 
 async function toggleStatus(user: AdminUser) {
-  const action = user.enabled ? '封禁' : '解封'
+  const action = user.status === 'active' ? '封禁' : '解封'
   try {
     await ElMessageBox.confirm(
       `确定要${action}用户「${user.nickname || user.phone}」吗？`,
@@ -121,20 +121,16 @@ onMounted(() => {
         stripe
         class="user-table"
       >
-        <el-table-column prop="phone" label="手机号" width="140" />
-        <el-table-column prop="nickname" label="昵称" width="140" show-overflow-tooltip />
-        <el-table-column prop="adminRole" label="角色" width="100" align="center">
-          <template #default="{ row }">
-            <el-tag size="small">{{ roleLabel(row.adminRole) }}</el-tag>
-          </template>
-        </el-table-column>
+        <el-table-column prop="phone" label="手机号" min-width="140" />
+        <el-table-column prop="nickname" label="昵称" min-width="140" show-overflow-tooltip />
+        <el-table-column prop="province" label="省份" min-width="100" show-overflow-tooltip />
         <el-table-column label="状态" width="80" align="center">
           <template #default="{ row }">
             <el-tag
               size="small"
-              :type="row.enabled ? 'success' : 'danger'"
+              :type="row.status === 'active' ? 'success' : 'danger'"
             >
-              {{ row.enabled ? '正常' : '封禁' }}
+              {{ row.status === 'active' ? '正常' : '封禁' }}
             </el-tag>
           </template>
         </el-table-column>
@@ -150,12 +146,12 @@ onMounted(() => {
               查看详情
             </el-button>
             <el-button
-              :type="row.enabled ? 'danger' : 'success'"
+              :type="row.status === 'active' ? 'danger' : 'success'"
               link
               size="small"
               @click="toggleStatus(row)"
             >
-              {{ row.enabled ? '封禁' : '解封' }}
+              {{ row.status === 'active' ? '封禁' : '解封' }}
             </el-button>
           </template>
         </el-table-column>
@@ -188,13 +184,13 @@ onMounted(() => {
           <span class="detail-value">{{ selectedUser.nickname || '-' }}</span>
         </div>
         <div class="detail-row">
-          <span class="detail-label">用户角色</span>
-          <span class="detail-value">{{ roleLabel(selectedUser.adminRole) }}</span>
+          <span class="detail-label">省份</span>
+          <span class="detail-value">{{ selectedUser.province || '-' }}</span>
         </div>
         <div class="detail-row">
           <span class="detail-label">账号状态</span>
-          <el-tag size="small" :type="selectedUser.enabled ? 'success' : 'danger'">
-            {{ selectedUser.enabled ? '正常' : '封禁' }}
+          <el-tag size="small" :type="selectedUser.status === 'active' ? 'success' : 'danger'">
+            {{ selectedUser.status === 'active' ? '正常' : '封禁' }}
           </el-tag>
         </div>
         <div class="detail-row">
@@ -212,7 +208,6 @@ onMounted(() => {
 
 <style lang="scss" scoped>
 .users-page {
-  max-width: 1200px;
 }
 
 .page-header {
@@ -240,6 +235,7 @@ onMounted(() => {
   border-radius: 12px;
   border: 1px solid var(--border-color, #E2E6ED);
   padding: 20px;
+  overflow: hidden;
 }
 
 .toolbar {
@@ -250,7 +246,7 @@ onMounted(() => {
 
 .user-table {
   :deep(.el-table__header th) {
-    background: var(--bg-secondary, #F4F6FA);
+    background: var(--bg-secondary, #F4F6FA) !important;
     font-weight: 600;
   }
 }

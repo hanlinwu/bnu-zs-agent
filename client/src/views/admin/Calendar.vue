@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
-import { Edit, Check } from '@element-plus/icons-vue'
+import { Edit, Check, Plus, Calendar } from '@element-plus/icons-vue'
 import * as calendarApi from '@/api/admin/calendar'
 import type { CalendarPeriod } from '@/types/admin'
 import type { FormInstance, FormRules } from 'element-plus'
@@ -88,7 +88,18 @@ async function fetchPeriods() {
   loading.value = true
   try {
     const res = await calendarApi.getPeriods()
-    periods.value = res.data.items || res.data
+    const raw = res.data.items || res.data || []
+    // Map backend fields (period_name, start_month, end_month) to frontend CalendarPeriod
+    periods.value = raw.map((item: any) => ({
+      id: item.id,
+      name: item.name || item.period_name || '',
+      startDate: item.startDate || (item.start_month ? `2026-${String(item.start_month).padStart(2, '0')}-01` : ''),
+      endDate: item.endDate || (item.end_month ? `2026-${String(item.end_month).padStart(2, '0')}-28` : ''),
+      style: item.style || item.tone_config?.style || 'general',
+      description: item.description || item.tone_config?.description || '',
+      keywords: item.keywords || item.tone_config?.keywords || [],
+      enabled: item.enabled ?? item.is_active ?? true,
+    }))
   } catch {
     ElMessage.error('加载招生日历失败')
   } finally {
@@ -110,6 +121,11 @@ function editPeriod(period: CalendarPeriod) {
 
 function cancelEdit() {
   editingPeriod.value = null
+}
+
+function openCreate() {
+  // TODO: implement create calendar period dialog
+  ElMessage.info('请通过数据库或 API 添加招生日历阶段')
 }
 
 async function savePeriod() {
@@ -151,7 +167,13 @@ onMounted(() => {
     </div>
 
     <div v-loading="loading" class="calendar-content">
-      <div class="timeline">
+      <div v-if="periods.length === 0 && !loading" class="empty-state">
+        <el-icon :size="48" color="#E2E6ED"><Calendar /></el-icon>
+        <p class="empty-text">暂无招生日历数据</p>
+        <el-button type="primary" :icon="Plus" @click="openCreate">添加阶段</el-button>
+      </div>
+
+      <div v-else class="timeline">
         <div
           v-for="(period, index) in periods"
           :key="period.id"
@@ -252,7 +274,6 @@ onMounted(() => {
 
 <style lang="scss" scoped>
 .calendar-page {
-  max-width: 900px;
 }
 
 .page-header {
@@ -267,6 +288,21 @@ onMounted(() => {
 }
 
 .page-desc {
+  font-size: 14px;
+  color: var(--text-secondary, #5A5A72);
+  margin: 0;
+}
+
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 80px 20px;
+  gap: 16px;
+}
+
+.empty-text {
   font-size: 14px;
   color: var(--text-secondary, #5A5A72);
   margin: 0;

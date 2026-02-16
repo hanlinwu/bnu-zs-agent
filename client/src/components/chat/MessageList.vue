@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch, nextTick, computed } from 'vue'
+import { ref, watch, nextTick, computed, onUnmounted } from 'vue'
 import { useChatStore } from '@/stores/chat'
 import MessageBubble from './MessageBubble.vue'
 import StreamingText from './StreamingText.vue'
@@ -14,6 +14,35 @@ const chatStore = useChatStore()
 const scrollContainerRef = ref<HTMLElement | null>(null)
 
 const isEmpty = computed(() => chatStore.messages.length === 0 && !chatStore.isStreaming)
+
+const THINKING_HINTS = [
+  '我正在思考你的问题',
+  '稍等，我正在查询相关信息',
+  '正在整理回答内容',
+  '请稍候，马上就好',
+]
+const thinkingIndex = ref(0)
+let thinkingTimer: ReturnType<typeof setInterval> | null = null
+
+const thinkingText = computed(() => THINKING_HINTS[thinkingIndex.value])
+
+watch(() => chatStore.isStreaming, (streaming) => {
+  if (streaming) {
+    thinkingIndex.value = 0
+    thinkingTimer = setInterval(() => {
+      thinkingIndex.value = (thinkingIndex.value + 1) % THINKING_HINTS.length
+    }, 3000)
+  } else {
+    if (thinkingTimer) {
+      clearInterval(thinkingTimer)
+      thinkingTimer = null
+    }
+  }
+}, { immediate: true })
+
+onUnmounted(() => {
+  if (thinkingTimer) clearInterval(thinkingTimer)
+})
 
 const displayMessages = computed<Message[]>(() => {
   return chatStore.messages.map((msg) => ({
@@ -95,7 +124,16 @@ function handleSelectQuestion(question: string) {
           </div>
           <div class="bubble-body">
             <div class="bubble-content assistant-bubble">
+              <div v-if="!streamingMessage.content" class="thinking-hint">
+                <span class="thinking-dots">
+                  <span class="dot"></span>
+                  <span class="dot"></span>
+                  <span class="dot"></span>
+                </span>
+                <span class="thinking-text">{{ thinkingText }}</span>
+              </div>
               <StreamingText
+                v-else
                 :text="streamingMessage.content"
                 :is-streaming="chatStore.isStreaming"
               />
@@ -173,5 +211,49 @@ function handleSelectQuestion(question: string) {
   border-top-left-radius: 4px;
   background-color: var(--bg-secondary, #f4f6fa);
   color: var(--text-primary, #1a1a2e);
+}
+
+.thinking-hint {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  color: var(--text-secondary, #5a5a72);
+}
+
+.thinking-dots {
+  display: flex;
+  gap: 4px;
+
+  .dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--bnu-blue, #003DA5);
+    animation: dotBounce 1.4s ease-in-out infinite;
+
+    &:nth-child(2) {
+      animation-delay: 0.2s;
+    }
+
+    &:nth-child(3) {
+      animation-delay: 0.4s;
+    }
+  }
+}
+
+@keyframes dotBounce {
+  0%, 80%, 100% {
+    opacity: 0.3;
+    transform: scale(0.8);
+  }
+  40% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.thinking-text {
+  transition: opacity 0.3s;
 }
 </style>

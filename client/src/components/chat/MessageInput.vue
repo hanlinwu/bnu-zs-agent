@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, watch, nextTick, computed } from 'vue'
-import { Promotion } from '@element-plus/icons-vue'
+import { Promotion, VideoPause } from '@element-plus/icons-vue'
 
 const props = withDefaults(
   defineProps<{
@@ -13,6 +13,7 @@ const props = withDefaults(
 
 const emit = defineEmits<{
   send: [content: string]
+  stop: []
 }>()
 
 const content = ref('')
@@ -38,6 +39,10 @@ function handleSend() {
   emit('send', content.value.trim())
   content.value = ''
   nextTick(() => autoResize())
+}
+
+function handleStop() {
+  emit('stop')
 }
 
 function autoResize() {
@@ -75,6 +80,16 @@ watch(content, () => {
           {{ charCount }} / {{ MAX_CHARS }}
         </span>
         <el-button
+          v-if="disabled"
+          class="stop-btn"
+          type="danger"
+          circle
+          @click="handleStop"
+        >
+          <el-icon :size="18"><VideoPause /></el-icon>
+        </el-button>
+        <el-button
+          v-else
           class="send-btn"
           :disabled="!canSend"
           type="primary"
@@ -95,7 +110,7 @@ watch(content, () => {
   border-top: 1px solid var(--border-color, #e2e6ed);
 
   &.is-disabled {
-    opacity: 0.7;
+    opacity: 0.85;
   }
 }
 
@@ -169,5 +184,10 @@ watch(content, () => {
     border-color: var(--border-color, #e2e6ed);
     color: var(--text-secondary, #9e9eb3);
   }
+}
+
+.stop-btn {
+  width: 36px;
+  height: 36px;
 }
 </style>

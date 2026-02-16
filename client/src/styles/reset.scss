@@ -15,6 +15,7 @@
   --color-primary-light: #{$color-primary-light};
   --color-primary-lighter: #{$color-primary-lighter};
   --color-primary-dark: #{$color-primary-dark};
+  --bnu-blue: #{$color-primary};
 
   // Auxiliary
   --color-secondary: #{$color-secondary};
@@ -30,14 +31,19 @@
   --color-text-primary: #{$color-text-primary};
   --color-text-secondary: #{$color-text-secondary};
   --color-text-placeholder: #{$color-text-placeholder};
+  --text-primary: #{$color-text-primary};
+  --text-secondary: #{$color-text-secondary};
 
   // Backgrounds
   --color-bg-primary: #{$color-bg-primary};
   --color-bg-secondary: #{$color-bg-secondary};
   --color-bg-chat: #{$color-bg-chat};
+  --bg-primary: #{$color-bg-primary};
+  --bg-secondary: #{$color-bg-secondary};
 
   // Borders
   --color-border: #{$color-border};
+  --border-color: #{$color-border};
 
   // Chat bubbles
   --bubble-user-bg: #{$bubble-user-bg};
@@ -54,6 +60,10 @@
   --radius-md: #{$radius-md};
   --radius-lg: #{$radius-lg};
   --radius-bubble: #{$radius-bubble};
+
+  // Shadows
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.06);
+  --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.08);
 }
 
 // ------------------------------------------------------------------
@@ -64,21 +74,32 @@
   --color-primary-light: #{$color-primary};
   --color-primary-lighter: #{$dark-bg-secondary};
   --color-primary-dark: #{$color-primary-dark};
+  --bnu-blue: #{$color-primary-light};
 
   --color-text-primary: #{$dark-text-primary};
   --color-text-secondary: #{$dark-text-secondary};
   --color-text-placeholder: #{$dark-text-secondary};
+  --text-primary: #{$dark-text-primary};
+  --text-secondary: #{$dark-text-secondary};
 
   --color-bg-primary: #{$dark-bg-primary};
   --color-bg-secondary: #{$dark-bg-secondary};
   --color-bg-chat: #{$dark-bg-chat};
+  --bg-primary: #{$dark-bg-primary};
+  --bg-secondary: #{$dark-bg-secondary};
 
   --color-border: #{$dark-border};
+  --border-color: #{$dark-border};
 
   --bubble-user-bg: #{$dark-bubble-user-bg};
   --bubble-user-text: #{$dark-bubble-user-text};
   --bubble-assistant-bg: #{$dark-bubble-assistant-bg};
   --bubble-assistant-text: #{$dark-bubble-assistant-text};
+
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.4);
+
+  color-scheme: dark;
 }
 
 // ------------------------------------------------------------------
@@ -94,6 +115,8 @@
 
 html {
   font-size: var(--font-size-base);
+  height: 100vh;
+  overflow: hidden;
   scroll-behavior: smooth;
   -webkit-text-size-adjust: 100%;
   -webkit-font-smoothing: antialiased;
@@ -106,7 +129,10 @@ body {
   line-height: 1.6;
   color: var(--color-text-primary);
   background-color: var(--color-bg-primary);
-  min-height: 100vh;
+  zoom: var(--font-scale, 1);
+  width: calc(100vw / var(--font-scale, 1));
+  height: calc(100vh / var(--font-scale, 1));
+  overflow: hidden;
   transition: color 0.3s ease, background-color 0.3s ease;
 }
 

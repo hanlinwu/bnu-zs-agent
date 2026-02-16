@@ -9,6 +9,7 @@ from app.api.v1 import (
     knowledge,
     media,
     admin_auth,
+    admin_admin,
     admin_user,
     admin_role,
     admin_sensitive,
@@ -30,6 +31,7 @@ api_router.include_router(admin_auth.router, prefix="/admin/auth", tags=["管理
 api_router.include_router(knowledge.router, prefix="/admin/knowledge", tags=["知识库管理"])
 api_router.include_router(media.router, prefix="/admin/media", tags=["多媒体资源"])
 api_router.include_router(admin_user.router, prefix="/admin/users", tags=["用户管理"])
+api_router.include_router(admin_admin.router, prefix="/admin/admins", tags=["管理员管理"])
 api_router.include_router(admin_role.router, prefix="/admin", tags=["角色权限"])
 api_router.include_router(admin_sensitive.router, prefix="/admin/sensitive", tags=["敏感词库"])
 api_router.include_router(admin_model.router, prefix="/admin/models", tags=["模型配置"])

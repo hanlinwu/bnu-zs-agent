@@ -90,7 +90,7 @@ const activeIndex = computed(() => {
 <style lang="scss" scoped>
 .admin-sidebar {
   width: 240px;
-  height: 100vh;
+  height: 100%;
   background: linear-gradient(180deg, #0A1628 0%, #0F1D36 100%);
   display: flex;
   flex-direction: column;

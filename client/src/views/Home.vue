@@ -34,10 +34,11 @@ import QuickActions from '@/components/home/QuickActions.vue'
 
 <style lang="scss" scoped>
 .home-page {
-  min-height: 100vh;
+  height: 100%;
   display: flex;
   flex-direction: column;
   background: var(--bg-primary, #ffffff);
+  overflow-y: auto;
 }
 
 .home-footer {

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import { ElMessageBox } from 'element-plus'
 import { useConversationStore } from '@/stores/conversation'
 import { useChatStore } from '@/stores/chat'
 import ConversationItem from './ConversationItem.vue'
@@ -18,11 +19,16 @@ const grouped = computed<GroupedConversations[]>(() => {
   const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime()
   const yesterdayStart = todayStart - 86400000
 
+  const pinned: Conversation[] = []
   const today: Conversation[] = []
   const yesterday: Conversation[] = []
   const earlier: Conversation[] = []
 
   for (const conv of conversationStore.conversations) {
+    if (conv.pinned) {
+      pinned.push(conv)
+      continue
+    }
     const t = new Date(conv.updated_at).getTime()
     if (t >= todayStart) {
       today.push(conv)
@@ -34,6 +40,7 @@ const grouped = computed<GroupedConversations[]>(() => {
   }
 
   const groups: GroupedConversations[] = []
+  if (pinned.length) groups.push({ label: '置顶', items: pinned })
   if (today.length) groups.push({ label: '今天', items: today })
   if (yesterday.length) groups.push({ label: '昨天', items: yesterday })
   if (earlier.length) groups.push({ label: '更早', items: earlier })
@@ -48,12 +55,41 @@ function handleSelect(conv: Conversation) {
   chatStore.loadMessages(conv.id)
 }
 
-function handleDelete(conv: Conversation) {
-  conversationStore.deleteConversation(conv.id)
+async function handleDelete(conv: Conversation) {
+  try {
+    await ElMessageBox.confirm(
+      `确定要删除对话「${conv.title || '新对话'}」吗？删除后无法恢复。`,
+      '删除确认',
+      {
+        confirmButtonText: '确定删除',
+        cancelButtonText: '取消',
+        type: 'warning',
+      }
+    )
+    const wasActive = chatStore.currentConversationId === conv.id
+    await conversationStore.deleteConversation(conv.id)
+    if (wasActive) {
+      if (conversationStore.conversations.length > 0) {
+        const next = conversationStore.conversations[0]
+        chatStore.setConversationId(next.id)
+        chatStore.clearMessages()
+        chatStore.loadMessages(next.id)
+      } else {
+        chatStore.setConversationId(null)
+        chatStore.clearMessages()
+      }
+    }
+  } catch {
+    // cancelled
+  }
 }
 
 function handleUpdateTitle(conv: Conversation, title: string) {
   conversationStore.updateTitle(conv.id, title)
+}
+
+function handleTogglePin(conv: Conversation) {
+  conversationStore.togglePin(conv.id)
 }
 </script>
 
@@ -82,6 +118,7 @@ function handleUpdateTitle(conv: Conversation, title: string) {
           @select="handleSelect(conv)"
           @delete="handleDelete(conv)"
           @update-title="(title: string) => handleUpdateTitle(conv, title)"
+          @toggle-pin="handleTogglePin(conv)"
         />
       </div>
     </template>

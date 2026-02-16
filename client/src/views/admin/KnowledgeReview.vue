@@ -245,7 +245,6 @@ onMounted(() => {
 
 <style lang="scss" scoped>
 .review-page {
-  max-width: 1000px;
 }
 
 .page-header {

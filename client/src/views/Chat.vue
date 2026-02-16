@@ -1,11 +1,13 @@
 <script setup lang="ts">
 import { ref, onMounted, computed, onBeforeUnmount } from 'vue'
+import { useRoute } from 'vue-router'
 import { useConversationStore } from '@/stores/conversation'
 import { useChatStore } from '@/stores/chat'
 import AppHeader from '@/components/common/AppHeader.vue'
 import AppSidebar from '@/components/common/AppSidebar.vue'
 import ChatContainer from '@/components/chat/ChatContainer.vue'
 
+const route = useRoute()
 const conversationStore = useConversationStore()
 const chatStore = useChatStore()
 
@@ -42,12 +44,23 @@ onMounted(async () => {
   await conversationStore.fetchConversations()
 
   if (conversationStore.conversations.length === 0) {
-    const conv = await conversationStore.createConversation()
-    chatStore.setConversationId(conv.id)
+    // Draft mode — no conversation created until first message
+    chatStore.setConversationId(null)
+    chatStore.clearMessages()
   } else {
-    const firstConv = conversationStore.conversations[0]!
-    chatStore.setConversationId(firstConv.id)
-    await chatStore.loadMessages(firstConv.id)
+    const savedId = localStorage.getItem('currentConversationId')
+    const saved = savedId ? conversationStore.conversations.find((c) => c.id === savedId) : null
+    const target = saved || conversationStore.conversations[0]!
+    chatStore.setConversationId(target.id)
+    await chatStore.loadMessages(target.id)
+  }
+
+  // Handle ?q= query param from home page / hot questions
+  const initialQuery = route.query.q as string | undefined
+  if (initialQuery?.trim()) {
+    chatStore.setConversationId(null)
+    chatStore.clearMessages()
+    await chatStore.sendMessage(initialQuery.trim())
   }
 })
 
@@ -107,7 +120,7 @@ onBeforeUnmount(() => {
 .chat-page {
   display: flex;
   flex-direction: column;
-  height: 100vh;
+  height: 100%;
   width: 100%;
   overflow: hidden;
   background: var(--bg-primary, #fff);

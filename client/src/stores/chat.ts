@@ -2,6 +2,7 @@ import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import { handleUnauthorized } from '@/api/request'
 import request from '@/api/request'
+import { useConversationStore } from '@/stores/conversation'
 
 export interface ChatMessage {
   id: string
@@ -15,9 +16,12 @@ export interface ChatMessage {
 export const useChatStore = defineStore('chat', () => {
   const messages = ref<ChatMessage[]>([])
   const isStreaming = ref(false)
+  const isLoadingMessages = ref(false)
   const currentConversationId = ref<string | null>(null)
+  let abortController: AbortController | null = null
 
   async function loadMessages(conversationId: string) {
+    isLoadingMessages.value = true
     try {
       const res = await request.get(`/conversations/${conversationId}/messages`, {
         params: { page: 1, page_size: 200 },
@@ -32,10 +36,20 @@ export const useChatStore = defineStore('chat', () => {
       }))
     } catch {
       messages.value = []
+    } finally {
+      isLoadingMessages.value = false
     }
   }
 
   async function sendMessage(content: string) {
+    // Lazily create conversation on first message
+    if (!currentConversationId.value) {
+      const conversationStore = useConversationStore()
+      const title = content.length > 30 ? content.slice(0, 30) + '...' : content
+      const conv = await conversationStore.createConversation(title)
+      setConversationId(conv.id)
+    }
+
     const userMsg: ChatMessage = {
       id: `msg-${Date.now()}`,
       role: 'user',
@@ -68,6 +82,7 @@ export const useChatStore = defineStore('chat', () => {
       const url = currentConversationId.value
         ? `/api/v1/chat/send?conversation_id=${encodeURIComponent(currentConversationId.value)}`
         : '/api/v1/chat/send'
+      abortController = new AbortController()
       const response = await fetch(url, {
         method: 'POST',
         headers: {
@@ -77,6 +92,7 @@ export const useChatStore = defineStore('chat', () => {
         body: JSON.stringify({
           content,
         }),
+        signal: abortController.signal,
       })
 
       if (!response.ok) {
@@ -123,9 +139,15 @@ export const useChatStore = defineStore('chat', () => {
         getAssistantMessage().loading = false
       }
     } catch (error) {
-      getAssistantMessage().content = '抱歉，请求出现异常，请稍后重试。'
-      getAssistantMessage().loading = false
+      if (error instanceof DOMException && error.name === 'AbortError') {
+        // User stopped generation - keep partial content
+        getAssistantMessage().loading = false
+      } else {
+        getAssistantMessage().content = '抱歉，请求出现异常，请稍后重试。'
+        getAssistantMessage().loading = false
+      }
     } finally {
+      abortController = null
       isStreaming.value = false
     }
   }
@@ -134,15 +156,28 @@ export const useChatStore = defineStore('chat', () => {
     messages.value = []
   }
 
+  function stopGeneration() {
+    if (abortController) {
+      abortController.abort()
+    }
+  }
+
   function setConversationId(id: string | null) {
     currentConversationId.value = id
+    if (id) {
+      localStorage.setItem('currentConversationId', id)
+    } else {
+      localStorage.removeItem('currentConversationId')
+    }
   }
 
   return {
     messages,
     isStreaming,
+    isLoadingMessages,
     currentConversationId,
     sendMessage,
+    stopGeneration,
     clearMessages,
     setConversationId,
     loadMessages,

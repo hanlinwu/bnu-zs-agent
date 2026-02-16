@@ -297,7 +297,6 @@ onMounted(() => {
 
 <style lang="scss" scoped>
 .sensitive-page {
-  max-width: 1200px;
 }
 
 .page-header {

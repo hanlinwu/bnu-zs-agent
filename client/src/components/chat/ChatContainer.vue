@@ -8,6 +8,7 @@ import MessageInput from './MessageInput.vue'
 const chatStore = useChatStore()
 
 const isStreaming = computed(() => chatStore.isStreaming)
+const isLoadingMessages = computed(() => chatStore.isLoadingMessages)
 
 async function handleSend(content: string) {
   await chatStore.sendMessage(content)
@@ -16,18 +17,22 @@ async function handleSend(content: string) {
 function handleSelectQuestion(question: string) {
   handleSend(question)
 }
+
+function handleStop() {
+  chatStore.stopGeneration()
+}
 </script>
 
 <template>
   <div class="chat-container">
-    <MessageList @select-question="handleSelectQuestion" />
-
-    <div v-if="isStreaming" class="thinking-indicator">
-      <el-icon class="thinking-icon" :size="14"><Loading /></el-icon>
-      <span>AI正在思考...</span>
+    <div v-if="isLoadingMessages" class="loading-overlay">
+      <el-icon class="loading-icon" :size="24"><Loading /></el-icon>
+      <span>加载消息中...</span>
     </div>
-
-    <MessageInput :disabled="isStreaming" @send="handleSend" />
+    <template v-else>
+      <MessageList @select-question="handleSelectQuestion" />
+      <MessageInput :disabled="isStreaming" @send="handleSend" @stop="handleStop" />
+    </template>
   </div>
 </template>
 
@@ -40,27 +45,28 @@ function handleSelectQuestion(question: string) {
   overflow: hidden;
 }
 
-.thinking-indicator {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  padding: 6px 0;
-  font-size: 13px;
-  color: var(--text-secondary, #5a5a72);
-  background: var(--bg-primary, #fff);
-
-  .thinking-icon {
-    animation: spin 1.2s linear infinite;
-  }
-}
-
 @keyframes spin {
   from {
     transform: rotate(0deg);
   }
   to {
     transform: rotate(360deg);
+  }
+}
+
+.loading-overlay {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  gap: 12px;
+  font-size: 14px;
+  color: var(--text-secondary, #5a5a72);
+
+  .loading-icon {
+    animation: spin 1.2s linear infinite;
+    color: var(--bnu-blue, #003DA5);
   }
 }
 </style>

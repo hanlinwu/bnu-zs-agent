@@ -1,17 +1,13 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
-import { useRouter } from 'vue-router'
-import { Sunny, Moon, ArrowDown, User, Setting, SwitchButton } from '@element-plus/icons-vue'
-import { useThemeStore } from '@/stores/theme'
-import { useUserStore } from '@/stores/user'
+import { Sunny, Moon } from '@element-plus/icons-vue'
 import { useConversationStore } from '@/stores/conversation'
 import { useChatStore } from '@/stores/chat'
+import { useThemeStore } from '@/stores/theme'
 
-const themeStore = useThemeStore()
-const userStore = useUserStore()
 const conversationStore = useConversationStore()
 const chatStore = useChatStore()
-const router = useRouter()
+const themeStore = useThemeStore()
 
 const isEditingTitle = ref(false)
 const editTitleValue = ref('')
@@ -23,11 +19,13 @@ const currentTitle = computed(() => {
   return conv?.title || '新对话'
 })
 
+const isDark = computed(() => themeStore.mode === 'dark')
+
 const fontSizeOptions = [
-  { label: '小 (14px)', value: 14 },
-  { label: '标准 (16px)', value: 16 },
-  { label: '大 (18px)', value: 18 },
-  { label: '特大 (20px)', value: 20 },
+  { label: '小', value: 14 },
+  { label: '标准', value: 16 },
+  { label: '大', value: 18 },
+  { label: '特大', value: 20 },
 ]
 
 function startEditTitle() {
@@ -50,23 +48,6 @@ function cancelEditTitle() {
 function handleFontSize(size: number) {
   themeStore.setFontSize(size as 14 | 16 | 18 | 20)
 }
-
-function handleLogout() {
-  userStore.logout()
-  router.replace('/login')
-}
-
-function handleUserCommand(command: string) {
-  if (command === 'logout') {
-    handleLogout()
-  } else if (command === 'settings') {
-    router.push('/settings')
-  }
-}
-
-const isDark = computed(() => themeStore.mode === 'dark')
-const userNickname = computed(() => userStore.userInfo?.nickname || '用户')
-const userAvatar = computed(() => userStore.userInfo?.avatar_url || '')
 </script>
 
 <template>
@@ -110,60 +91,38 @@ const userAvatar = computed(() => userStore.userInfo?.avatar_url || '')
     </div>
 
     <div class="header-right">
-      <el-tooltip :content="isDark ? '切换到亮色模式' : '切换到暗色模式'" placement="bottom">
-        <el-button class="icon-btn" text @click="themeStore.toggleTheme">
-          <el-icon :size="18">
-            <Moon v-if="!isDark" />
-            <Sunny v-else />
-          </el-icon>
-        </el-button>
-      </el-tooltip>
-
-      <el-dropdown trigger="click" @command="handleFontSize">
-        <el-button class="icon-btn" text>
-          <span class="font-size-label">A</span>
-          <el-icon :size="12"><ArrowDown /></el-icon>
+      <!-- Font size selector -->
+      <el-dropdown trigger="click" placement="bottom-end">
+        <el-button class="header-action-btn" text>
+          <span class="font-size-icon">A</span>
         </el-button>
         <template #dropdown>
           <el-dropdown-menu>
-            <el-dropdown-item
-              v-for="opt in fontSizeOptions"
-              :key="opt.value"
-              :command="opt.value"
-              :class="{ 'is-active': themeStore.fontSize === opt.value }"
-            >
-              {{ opt.label }}
-            </el-dropdown-item>
+            <li class="font-size-dropdown">
+              <div class="font-size-label">字体大小</div>
+              <div class="font-size-options">
+                <button
+                  v-for="opt in fontSizeOptions"
+                  :key="opt.value"
+                  class="font-size-opt"
+                  :class="{ 'is-active': themeStore.fontSize === opt.value }"
+                  @click="handleFontSize(opt.value)"
+                >
+                  {{ opt.label }}
+                </button>
+              </div>
+            </li>
           </el-dropdown-menu>
         </template>
       </el-dropdown>
 
-      <el-dropdown trigger="click" @command="handleUserCommand">
-        <div class="user-trigger">
-          <el-avatar :size="32" :src="userAvatar">
-            <el-icon :size="18"><User /></el-icon>
-          </el-avatar>
-        </div>
-        <template #dropdown>
-          <el-dropdown-menu>
-            <el-dropdown-item disabled>
-              <span class="dropdown-nickname">{{ userNickname }}</span>
-            </el-dropdown-item>
-            <el-dropdown-item command="settings" divided>
-              <el-icon><User /></el-icon>
-              <span>个人资料</span>
-            </el-dropdown-item>
-            <el-dropdown-item command="settings">
-              <el-icon><Setting /></el-icon>
-              <span>设置</span>
-            </el-dropdown-item>
-            <el-dropdown-item command="logout" divided>
-              <el-icon><SwitchButton /></el-icon>
-              <span>退出登录</span>
-            </el-dropdown-item>
-          </el-dropdown-menu>
-        </template>
-      </el-dropdown>
+      <!-- Theme toggle -->
+      <el-button class="header-action-btn" text @click="themeStore.toggleTheme()">
+        <el-icon :size="18">
+          <Moon v-if="!isDark" />
+          <Sunny v-else />
+        </el-icon>
+      </el-button>
     </div>
   </header>
 </template>
@@ -256,46 +215,64 @@ const userAvatar = computed(() => userStore.userInfo?.avatar_url || '')
   gap: 4px;
 }
 
-.icon-btn {
-  padding: 6px 8px;
+.header-action-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
   color: var(--text-secondary, #5a5a72);
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 
   &:hover {
     color: var(--bnu-blue, #003DA5);
+    background-color: var(--bg-secondary, #f4f6fa);
   }
+}
+
+.font-size-icon {
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.font-size-dropdown {
+  padding: 8px 12px;
+  list-style: none;
 }
 
 .font-size-label {
-  font-size: 16px;
-  font-weight: 600;
-  margin-right: 2px;
+  font-size: 12px;
+  color: var(--text-secondary, #5a5a72);
+  margin-bottom: 8px;
+  font-weight: 500;
 }
 
-.user-trigger {
+.font-size-options {
   display: flex;
-  align-items: center;
+  gap: 4px;
+}
+
+.font-size-opt {
+  padding: 6px 12px;
+  font-size: 13px;
+  border-radius: 6px;
+  color: var(--text-primary, #1a1a2e);
+  background: var(--bg-secondary, #f4f6fa);
   cursor: pointer;
-  padding: 2px;
-  border-radius: 50%;
-  transition: box-shadow 0.2s;
+  border: 1px solid transparent;
+  transition: all 0.15s;
+  white-space: nowrap;
 
   &:hover {
-    box-shadow: 0 0 0 2px var(--bnu-blue, #003DA5);
+    border-color: var(--border-color, #e2e6ed);
   }
-}
-
-.dropdown-nickname {
-  font-weight: 600;
-  color: var(--text-primary, #1a1a2e);
-}
-
-:deep(.el-dropdown-menu__item) {
-  display: flex;
-  align-items: center;
-  gap: 8px;
 
   &.is-active {
-    color: var(--bnu-blue, #003DA5);
+    color: #fff;
+    background-color: var(--bnu-blue, #003DA5);
+    border-color: var(--bnu-blue, #003DA5);
     font-weight: 600;
   }
 }

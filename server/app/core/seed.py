@@ -10,11 +10,13 @@ import uuid
 from datetime import datetime, timezone
 
 from sqlalchemy import select
+from sqlalchemy import func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_session_factory
 from app.models.role import Role, Permission, RolePermission, AdminRole
 from app.models.admin import AdminUser
+from app.models.calendar import AdmissionCalendar
 
 # 8 preset roles
 ROLES = [
@@ -153,5 +155,29 @@ async def seed_roles_and_permissions() -> None:
             )
             if ar_result.scalar_one_or_none() is None:
                 session.add(AdminRole(admin_id=default_admin.id, role_id=super_admin_role.id))
+
+        await session.commit()
+
+
+# Default calendar periods
+CALENDAR_PERIODS = [
+    {"period_name": "备考期", "start_month": 1, "end_month": 5, "year": 2026, "tone_config": {"style": "motivational", "description": "激励、备考建议、专业前景", "keywords": ["高考加油", "备考建议", "专业介绍"]}, "is_active": True},
+    {"period_name": "高考后/报名期", "start_month": 6, "end_month": 7, "year": 2026, "tone_config": {"style": "guidance", "description": "志愿填报、分数线预测、报名指南", "keywords": ["志愿填报", "分数线", "报名指南"]}, "is_active": True},
+    {"period_name": "录取查询期", "start_month": 8, "end_month": 9, "year": 2026, "tone_config": {"style": "enrollment", "description": "录取结果查询、入学准备清单", "keywords": ["录取查询", "入学准备", "报到须知"]}, "is_active": True},
+    {"period_name": "常态期", "start_month": 10, "end_month": 12, "year": 2026, "tone_config": {"style": "general", "description": "校园文化、师资力量、国际交流", "keywords": ["校园文化", "师资力量", "国际交流"]}, "is_active": True},
+]
+
+
+async def seed_calendar_periods() -> None:
+    """Seed default calendar periods if none exist."""
+    session_factory = get_session_factory()
+    async with session_factory() as session:
+        count_result = await session.execute(select(func.count()).select_from(AdmissionCalendar))
+        count = count_result.scalar() or 0
+        if count > 0:
+            return
+
+        for period in CALENDAR_PERIODS:
+            session.add(AdmissionCalendar(**period))
 
         await session.commit()

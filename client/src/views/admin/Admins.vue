@@ -2,18 +2,15 @@
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus } from '@element-plus/icons-vue'
-import * as userApi from '@/api/admin/user'
-import * as roleApi from '@/api/admin/role'
-import type { AdminUser } from '@/types/user'
-import type { Role } from '@/types/admin'
+import * as adminApi from '@/api/admin/admin'
+import type { AdminItem } from '@/api/admin/admin'
 import type { FormInstance, FormRules } from 'element-plus'
 
 const loading = ref(false)
-const admins = ref<AdminUser[]>([])
+const admins = ref<AdminItem[]>([])
 const total = ref(0)
 const currentPage = ref(1)
 const pageSize = ref(20)
-const roles = ref<Role[]>([])
 
 const createDialogVisible = ref(false)
 const editDialogVisible = ref(false)
@@ -24,18 +21,18 @@ const submitting = ref(false)
 const createForm = reactive({
   username: '',
   password: '',
-  nickname: '',
+  real_name: '',
   phone: '',
-  adminRole: '' as string,
+  role_code: '' as string,
 })
 
 const editForm = reactive({
   id: '',
   username: '',
-  nickname: '',
+  real_name: '',
   phone: '',
-  adminRole: '' as string,
-  enabled: true,
+  role_code: '' as string,
+  status: 'active' as string,
 })
 
 const createRules: FormRules = {
@@ -44,36 +41,38 @@ const createRules: FormRules = {
     { required: true, message: '请输入密码', trigger: 'blur' },
     { min: 8, message: '密码至少8位', trigger: 'blur' },
   ],
-  nickname: [{ required: true, message: '请输入姓名', trigger: 'blur' }],
-  adminRole: [{ required: true, message: '请选择角色', trigger: 'change' }],
+  real_name: [{ required: true, message: '请输入姓名', trigger: 'blur' }],
+  role_code: [{ required: true, message: '请选择角色', trigger: 'change' }],
 }
 
 const editRules: FormRules = {
-  nickname: [{ required: true, message: '请输入姓名', trigger: 'blur' }],
-  adminRole: [{ required: true, message: '请选择角色', trigger: 'change' }],
+  real_name: [{ required: true, message: '请输入姓名', trigger: 'blur' }],
+  role_code: [{ required: true, message: '请选择角色', trigger: 'change' }],
 }
 
-function adminRoleLabel(role: string) {
+function adminRoleLabel(roleCode: string | null) {
+  if (!roleCode) return '-'
   const map: Record<string, string> = {
     super_admin: '超级管理员',
-    content_reviewer: '内容审核员',
+    reviewer: '内容审核员',
     admin: '普通管理员',
     teacher: '招生老师',
   }
-  return map[role] || role
+  return map[roleCode] || roleCode
 }
 
-function adminRoleType(role: string) {
+function adminRoleType(roleCode: string | null) {
+  if (!roleCode) return 'info'
   const map: Record<string, string> = {
     super_admin: 'danger',
-    content_reviewer: 'warning',
+    reviewer: 'warning',
     admin: '',
     teacher: 'success',
   }
-  return map[role] || 'info'
+  return map[roleCode] || 'info'
 }
 
-function formatDate(date?: string) {
+function formatDate(date?: string | null) {
   if (!date) return '-'
   return new Date(date).toLocaleString('zh-CN', {
     year: 'numeric',
@@ -87,10 +86,9 @@ function formatDate(date?: string) {
 async function fetchAdmins() {
   loading.value = true
   try {
-    const res = await userApi.getUsers({
+    const res = await adminApi.getAdmins({
       page: currentPage.value,
       pageSize: pageSize.value,
-      keyword: undefined,
     })
     admins.value = res.data.items
     total.value = res.data.total
@@ -98,15 +96,6 @@ async function fetchAdmins() {
     ElMessage.error('加载管理员列表失败')
   } finally {
     loading.value = false
-  }
-}
-
-async function fetchRoles() {
-  try {
-    const res = await roleApi.getRoles()
-    roles.value = res.data
-  } catch {
-    // silent
   }
 }
 
@@ -118,19 +107,19 @@ function handlePageChange(page: number) {
 function openCreate() {
   createForm.username = ''
   createForm.password = ''
-  createForm.nickname = ''
+  createForm.real_name = ''
   createForm.phone = ''
-  createForm.adminRole = ''
+  createForm.role_code = ''
   createDialogVisible.value = true
 }
 
-function openEdit(admin: AdminUser) {
+function openEdit(admin: AdminItem) {
   editForm.id = admin.id
   editForm.username = admin.username
-  editForm.nickname = admin.nickname
+  editForm.real_name = admin.real_name || admin.nickname
   editForm.phone = admin.phone
-  editForm.adminRole = admin.adminRole
-  editForm.enabled = admin.enabled
+  editForm.role_code = admin.role_code || ''
+  editForm.status = admin.status
   editDialogVisible.value = true
 }
 
@@ -139,11 +128,12 @@ async function handleCreate() {
   if (!valid) return
   submitting.value = true
   try {
-    await userApi.createUser({
+    await adminApi.createAdmin({
       username: createForm.username,
-      phone: createForm.phone,
-      nickname: createForm.nickname,
-      adminRole: createForm.adminRole as any,
+      password: createForm.password,
+      real_name: createForm.real_name,
+      phone: createForm.phone || undefined,
+      role_code: createForm.role_code || undefined,
     })
     ElMessage.success('管理员创建成功')
     createDialogVisible.value = false
@@ -160,11 +150,11 @@ async function handleEdit() {
   if (!valid) return
   submitting.value = true
   try {
-    await userApi.updateUser(editForm.id, {
-      nickname: editForm.nickname,
-      phone: editForm.phone,
-      adminRole: editForm.adminRole as any,
-      enabled: editForm.enabled,
+    await adminApi.updateAdmin(editForm.id, {
+      real_name: editForm.real_name,
+      phone: editForm.phone || undefined,
+      role_code: editForm.role_code || undefined,
+      status: editForm.status,
     })
     ElMessage.success('修改成功')
     editDialogVisible.value = false
@@ -176,10 +166,10 @@ async function handleEdit() {
   }
 }
 
-async function handleDelete(admin: AdminUser) {
+async function handleDelete(admin: AdminItem) {
   try {
     await ElMessageBox.confirm(
-      `确定要删除管理员「${admin.nickname || admin.username}」吗？此操作不可撤销。`,
+      `确定要删除管理员「${admin.real_name || admin.username}」吗？此操作不可撤销。`,
       '删除确认',
       {
         confirmButtonText: '确定删除',
@@ -187,7 +177,7 @@ async function handleDelete(admin: AdminUser) {
         type: 'error',
       }
     )
-    await userApi.deleteUser(admin.id)
+    await adminApi.deleteAdmin(admin.id)
     ElMessage.success('删除成功')
     fetchAdmins()
   } catch {
@@ -197,7 +187,6 @@ async function handleDelete(admin: AdminUser) {
 
 onMounted(() => {
   fetchAdmins()
-  fetchRoles()
 })
 </script>
 
@@ -219,25 +208,25 @@ onMounted(() => {
         :data="admins"
         stripe
       >
-        <el-table-column prop="username" label="用户名" width="140" />
-        <el-table-column prop="nickname" label="姓名" width="120" show-overflow-tooltip />
-        <el-table-column prop="phone" label="手机号" width="140" />
-        <el-table-column prop="adminRole" label="角色" width="120" align="center">
+        <el-table-column prop="username" label="用户名" min-width="140" />
+        <el-table-column prop="real_name" label="姓名" min-width="120" show-overflow-tooltip />
+        <el-table-column prop="phone" label="手机号" min-width="140" />
+        <el-table-column label="角色" width="120" align="center">
           <template #default="{ row }">
-            <el-tag size="small" :type="(adminRoleType(row.adminRole) as any)">
-              {{ adminRoleLabel(row.adminRole) }}
+            <el-tag size="small" :type="(adminRoleType(row.role_code) as any)">
+              {{ adminRoleLabel(row.role_code) }}
             </el-tag>
           </template>
         </el-table-column>
         <el-table-column label="状态" width="80" align="center">
           <template #default="{ row }">
-            <el-tag size="small" :type="row.enabled ? 'success' : 'danger'">
-              {{ row.enabled ? '启用' : '禁用' }}
+            <el-tag size="small" :type="row.status === 'active' ? 'success' : 'danger'">
+              {{ row.status === 'active' ? '启用' : '禁用' }}
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="lastLoginAt" label="最后登录" width="160">
-          <template #default="{ row }">{{ formatDate(row.lastLoginAt) }}</template>
+        <el-table-column prop="last_login_at" label="最后登录" width="160">
+          <template #default="{ row }">{{ formatDate(row.last_login_at) }}</template>
         </el-table-column>
         <el-table-column label="操作" width="160" fixed="right">
           <template #default="{ row }">
@@ -281,16 +270,16 @@ onMounted(() => {
             show-password
           />
         </el-form-item>
-        <el-form-item label="姓名" prop="nickname">
-          <el-input v-model="createForm.nickname" placeholder="请输入真实姓名" />
+        <el-form-item label="姓名" prop="real_name">
+          <el-input v-model="createForm.real_name" placeholder="请输入真实姓名" />
         </el-form-item>
         <el-form-item label="手机号" prop="phone">
           <el-input v-model="createForm.phone" placeholder="请输入手机号" />
         </el-form-item>
-        <el-form-item label="角色" prop="adminRole">
-          <el-select v-model="createForm.adminRole" placeholder="请选择角色" style="width: 100%">
+        <el-form-item label="角色" prop="role_code">
+          <el-select v-model="createForm.role_code" placeholder="请选择角色" style="width: 100%">
             <el-option label="超级管理员" value="super_admin" />
-            <el-option label="内容审核员" value="content_reviewer" />
+            <el-option label="内容审核员" value="reviewer" />
             <el-option label="普通管理员" value="admin" />
             <el-option label="招生老师" value="teacher" />
           </el-select>
@@ -317,22 +306,28 @@ onMounted(() => {
         <el-form-item label="用户名">
           <el-input :model-value="editForm.username" disabled />
         </el-form-item>
-        <el-form-item label="姓名" prop="nickname">
-          <el-input v-model="editForm.nickname" placeholder="请输入真实姓名" />
+        <el-form-item label="姓名" prop="real_name">
+          <el-input v-model="editForm.real_name" placeholder="请输入真实姓名" />
         </el-form-item>
         <el-form-item label="手机号" prop="phone">
           <el-input v-model="editForm.phone" placeholder="请输入手机号" />
         </el-form-item>
-        <el-form-item label="角色" prop="adminRole">
-          <el-select v-model="editForm.adminRole" placeholder="请选择角色" style="width: 100%">
+        <el-form-item label="角色" prop="role_code">
+          <el-select v-model="editForm.role_code" placeholder="请选择角色" style="width: 100%">
             <el-option label="超级管理员" value="super_admin" />
-            <el-option label="内容审核员" value="content_reviewer" />
+            <el-option label="内容审核员" value="reviewer" />
             <el-option label="普通管理员" value="admin" />
             <el-option label="招生老师" value="teacher" />
           </el-select>
         </el-form-item>
         <el-form-item label="状态">
-          <el-switch v-model="editForm.enabled" active-text="启用" inactive-text="禁用" />
+          <el-switch
+            v-model="editForm.status"
+            active-value="active"
+            inactive-value="disabled"
+            active-text="启用"
+            inactive-text="禁用"
+          />
         </el-form-item>
       </el-form>
       <template #footer>
@@ -345,7 +340,6 @@ onMounted(() => {
 
 <style lang="scss" scoped>
 .admins-page {
-  max-width: 1200px;
 }
 
 .page-header {
@@ -373,6 +367,7 @@ onMounted(() => {
   border-radius: 12px;
   border: 1px solid var(--border-color, #E2E6ED);
   padding: 20px;
+  overflow: hidden;
 }
 
 .pagination-wrapper {
@@ -382,7 +377,7 @@ onMounted(() => {
 }
 
 :deep(.el-table__header th) {
-  background: var(--bg-secondary, #F4F6FA);
+  background: var(--bg-secondary, #F4F6FA) !important;
   font-weight: 600;
 }
 </style>

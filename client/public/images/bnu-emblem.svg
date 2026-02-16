@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" fill="none">
+  <!-- Outer ring -->
+  <circle cx="100" cy="100" r="96" stroke="currentColor" stroke-width="3" fill="none"/>
+  <circle cx="100" cy="100" r="82" stroke="currentColor" stroke-width="1.5" fill="none"/>
+
+  <!-- Text: BEIJING NORMAL UNIVERSITY along top arc -->
+  <path id="topArc" d="M 30,100 a 70,70 0 0,1 140,0" fill="none"/>
+  <text font-size="11" font-weight="600" fill="currentColor" letter-spacing="3">
+    <textPath href="#topArc" startOffset="50%" text-anchor="middle">BEIJING NORMAL UNIVERSITY</textPath>
+  </text>
+
+  <!-- Year 1902 at bottom -->
+  <text x="100" y="176" text-anchor="middle" font-size="13" font-weight="600" fill="currentColor" letter-spacing="2">1902</text>
+
+  <!-- Simplified 木铎 (wooden bell) symbol in center -->
+  <!-- Bell body -->
+  <path d="M 80,52 L 80,48 Q 80,40 100,38 Q 120,40 120,48 L 120,52 Z" fill="currentColor" opacity="0.15"/>
+  <path d="M 76,52 Q 72,95 68,110 L 132,110 Q 128,95 124,52 Z" stroke="currentColor" stroke-width="2.5" fill="none"/>
+
+  <!-- Bell top handle -->
+  <path d="M 90,52 L 90,42 Q 90,36 100,34 Q 110,36 110,42 L 110,52" stroke="currentColor" stroke-width="2" fill="none"/>
+
+  <!-- Bell decorative horizontal lines -->
+  <line x1="78" y1="65" x2="122" y2="65" stroke="currentColor" stroke-width="1.5"/>
+  <line x1="76" y1="78" x2="124" y2="78" stroke="currentColor" stroke-width="1.5"/>
+  <line x1="73" y1="92" x2="127" y2="92" stroke="currentColor" stroke-width="1.5"/>
+
+  <!-- Center character 師 simplified -->
+  <text x="100" y="88" text-anchor="middle" font-size="18" font-weight="700" fill="currentColor" font-family="serif">師</text>
+
+  <!-- Bell clapper -->
+  <line x1="100" y1="110" x2="100" y2="125" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/>
+  <circle cx="100" cy="128" r="4" fill="currentColor"/>
+
+  <!-- Side tassels -->
+  <path d="M 68,108 L 58,118 M 60,116 L 55,126 M 62,117 L 52,122" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+  <path d="M 132,108 L 142,118 M 140,116 L 145,126 M 138,117 L 148,122" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+
+  <!-- Decorative dots between text and emblem -->
+  <circle cx="38" cy="115" r="2.5" fill="currentColor"/>
+  <circle cx="162" cy="115" r="2.5" fill="currentColor"/>
+</svg>

@@ -4,22 +4,21 @@
     <div v-if="step === 'login'" class="login-form__step">
       <div class="login-form__field">
         <label class="login-form__label">手机号</label>
-        <el-input
-          v-model="phone"
-          placeholder="请输入11位手机号"
-          maxlength="11"
-          size="large"
-          :prefix-icon="Iphone"
-          :class="{ 'is-error': phoneError }"
-          @input="onPhoneInput"
-          @keydown.enter="handlePhoneEnter"
-        />
-        <p v-if="phoneError" class="login-form__error">{{ phoneError }}</p>
-      </div>
-
-      <div class="login-form__field">
-        <div class="login-form__sms-row">
-          <label class="login-form__label">验证码</label>
+        <div class="login-form__phone-row">
+          <div class="login-form__country-code">
+            <span class="country-flag">🇨🇳</span>
+            <span class="country-number">+86</span>
+          </div>
+          <el-input
+            v-model="phone"
+            placeholder="请输入11位手机号"
+            maxlength="11"
+            size="large"
+            class="login-form__phone-input"
+            :class="{ 'is-error': phoneError }"
+            @input="onPhoneInput"
+            @keydown.enter="handlePhoneEnter"
+          />
           <button
             class="login-form__sms-btn"
             :disabled="!canSendCode || smsSending"
@@ -28,10 +27,15 @@
             <el-icon v-if="smsSending" class="is-loading">
               <Loading />
             </el-icon>
-            <span v-if="countdown > 0">{{ countdown }}s 后重新发送</span>
-            <span v-else>发送验证码</span>
+            <span v-if="countdown > 0">{{ countdown }}s</span>
+            <span v-else>获取验证码</span>
           </button>
         </div>
+        <p v-if="phoneError" class="login-form__error">{{ phoneError }}</p>
+      </div>
+
+      <div v-if="codeSent" class="login-form__field">
+        <label class="login-form__label">验证码</label>
         <SmsCodeInput
           ref="smsCodeRef"
           v-model="smsCode"
@@ -39,23 +43,25 @@
         />
       </div>
 
-      <el-button
-        type="primary"
-        size="large"
-        class="login-form__submit"
-        :loading="loginLoading"
-        :disabled="!canSubmitLogin"
-        @click="handleLogin"
-      >
-        登录
-      </el-button>
+      <template v-if="codeSent">
+        <el-button
+          type="primary"
+          size="large"
+          class="login-form__submit"
+          :loading="loginLoading"
+          :disabled="!canSubmitLogin"
+          @click="handleLogin"
+        >
+          登录
+        </el-button>
 
-      <p class="login-form__agreement">
-        登录即表示您同意
-        <a href="javascript:void(0)">用户协议</a>
-        和
-        <a href="javascript:void(0)">隐私政策</a>
-      </p>
+        <p class="login-form__agreement">
+          登录即表示您同意
+          <a href="javascript:void(0)" @click.prevent="showAgreement('用户协议')">用户协议</a>
+          和
+          <a href="javascript:void(0)" @click.prevent="showAgreement('隐私政策')">隐私政策</a>
+        </p>
+      </template>
     </div>
 
     <!-- Step 2: Role Selection (for new users) -->
@@ -81,10 +87,10 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
-import { ElMessage } from 'element-plus'
-import { Iphone, Loading } from '@element-plus/icons-vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import { Loading } from '@element-plus/icons-vue'
 import { useUserStore } from '@/stores/user'
 import { sendSmsCode } from '@/api/auth'
 import SmsCodeInput from './SmsCodeInput.vue'
@@ -109,6 +115,7 @@ const roleLoading = ref(false)
 
 // SMS countdown
 const countdown = ref(0)
+const codeSent = ref(false)
 let countdownTimer: ReturnType<typeof setInterval> | null = null
 
 // Refs
@@ -162,9 +169,10 @@ async function handleSendCode() {
   try {
     await sendSmsCode(phone.value)
     ElMessage.success('验证码已发送，请注意查收')
+    codeSent.value = true
     startCountdown()
-    // Auto-focus SMS code input
-    smsCodeRef.value?.focus()
+    // Auto-focus SMS code input after transition
+    nextTick(() => smsCodeRef.value?.focus())
   } catch (error: any) {
     const msg = error?.response?.data?.message || '验证码发送失败，请稍后重试'
     ElMessage.error(msg)
@@ -233,6 +241,16 @@ async function handleRoleSubmit() {
 function handleSkipRole() {
   router.push('/')
 }
+
+function showAgreement(title: string) {
+  const content = title === '用户协议'
+    ? '本系统为北京师范大学招生咨询服务平台，仅供考生及家长咨询招生相关问题使用。使用本系统即表示您同意遵守相关法律法规，不得利用本系统发布违法违规信息。系统回答仅供参考，具体招生政策以北京师范大学招生办公室官方发布为准。'
+    : '我们重视您的隐私保护。本系统仅收集提供服务所必需的信息（手机号、对话记录），不会向第三方泄露您的个人信息。您的对话数据将按照《个人信息保护法》《数据安全法》要求进行存储和管理。如有疑问，请联系北京师范大学招生办公室。'
+  ElMessageBox.alert(content, title, {
+    confirmButtonText: '我知道了',
+    dangerouslyUseHTMLString: false,
+  })
+}
 </script>
 
 <style lang="scss" scoped>
@@ -264,33 +282,75 @@ function handleSkipRole() {
     margin-top: 2px;
   }
 
-  &__sms-row {
+  &__phone-row {
     display: flex;
     align-items: center;
-    justify-content: space-between;
+    gap: 8px;
+  }
+
+  &__country-code {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    height: 40px;
+    padding: 0 12px;
+    background: var(--color-bg-secondary, #f4f6fa);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--color-text-primary);
+    white-space: nowrap;
+    flex-shrink: 0;
+
+    .country-flag {
+      font-size: 16px;
+      line-height: 1;
+    }
+
+    .country-number {
+      font-size: 14px;
+    }
+  }
+
+  &__phone-input {
+    flex: 1;
+    min-width: 0;
   }
 
   &__sms-btn {
     display: inline-flex;
     align-items: center;
+    justify-content: center;
     gap: 4px;
+    height: 40px;
+    padding: 0 16px;
     font-size: 13px;
-    font-weight: 500;
-    color: var(--color-primary);
-    background: none;
+    font-weight: 600;
+    color: #ffffff;
+    background: var(--color-primary);
     border: none;
+    border-radius: var(--radius-md);
     cursor: pointer;
-    padding: 0;
-    transition: opacity 0.2s ease;
+    white-space: nowrap;
+    flex-shrink: 0;
+    transition: background 0.2s ease, opacity 0.2s ease;
 
     &:hover:not(:disabled) {
-      opacity: 0.8;
+      background: var(--color-primary-light);
     }
 
     &:disabled {
+      background: var(--color-border, #e2e6ed);
       color: var(--color-text-placeholder);
       cursor: not-allowed;
     }
+  }
+
+  &__sms-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
   }
 
   &__submit {

@@ -13,6 +13,7 @@ from app.models.admin import AdminUser
 from app.models.user import User
 from app.models.conversation import Conversation
 from app.models.message import Message
+from app.models.knowledge import KnowledgeDocument
 
 router = APIRouter()
 
@@ -51,11 +52,27 @@ async def get_stats(
         )
     ).scalar() or 0
 
+    knowledge_count = (
+        await db.execute(
+            select(func.count()).select_from(KnowledgeDocument)
+        )
+    ).scalar() or 0
+
+    pending_review_count = (
+        await db.execute(
+            select(func.count())
+            .select_from(KnowledgeDocument)
+            .where(KnowledgeDocument.status == "pending")
+        )
+    ).scalar() or 0
+
     return {
         "user_count": user_count,
         "conversation_count": conversation_count,
         "active_today": active_today,
         "message_count": message_count,
+        "knowledge_count": knowledge_count,
+        "pending_review_count": pending_review_count,
     }
 
 
@@ -102,9 +119,10 @@ async def get_hot_questions(
     start_date = datetime.now(timezone.utc) - timedelta(days=days)
 
     # Get most frequent user messages (truncated to first 100 chars for grouping)
+    truncated = func.left(Message.content, 100).label("question")
     stmt = (
         select(
-            func.left(Message.content, 100).label("question"),
+            truncated,
             func.count().label("count"),
         )
         .where(
@@ -112,7 +130,7 @@ async def get_hot_questions(
             Message.is_deleted == False,
             Message.created_at >= start_date,
         )
-        .group_by(func.left(Message.content, 100))
+        .group_by(truncated)
         .order_by(func.count().desc())
         .limit(limit)
     )

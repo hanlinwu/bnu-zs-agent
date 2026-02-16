@@ -1,6 +1,10 @@
 import { createRouter, createWebHistory } from 'vue-router'
+import { ref } from 'vue'
 import { userRoutes } from './user'
 import { adminRoutes } from './admin'
+
+/** Reactive loading flag — used by App.vue to show/hide progress bar */
+export const routeLoading = ref(false)
 
 const router = createRouter({
   history: createWebHistory(),
@@ -12,6 +16,8 @@ const router = createRouter({
 
 // Global guards: check token, check admin RBAC for /admin/* routes
 router.beforeEach(async (to, _from, next) => {
+  routeLoading.value = true
+
   const whiteList = ['/login', '/admin/login']
   if (whiteList.includes(to.path)) return next()
 
@@ -27,6 +33,10 @@ router.beforeEach(async (to, _from, next) => {
   if (!token) return next('/login')
 
   next()
+})
+
+router.afterEach(() => {
+  routeLoading.value = false
 })
 
 export default router
