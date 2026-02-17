@@ -26,18 +26,36 @@ export const useConversationStore = defineStore('conversation', () => {
   const conversations = ref<Conversation[]>([])
   const total = ref(0)
   const loading = ref(false)
+  const cacheTtlMs = 20_000
+  const lastLoadedAt = ref(0)
+  let fetchPromise: Promise<void> | null = null
 
-  async function fetchConversations(page = 1, pageSize = 20) {
+  async function fetchConversations(page = 1, pageSize = 20, force = false) {
+    const now = Date.now()
+    if (!force && conversations.value.length > 0 && now - lastLoadedAt.value < cacheTtlMs) {
+      return
+    }
+
+    if (fetchPromise) {
+      return fetchPromise
+    }
+
     loading.value = true
-    try {
-      const res = await request.get('/conversations', {
+    fetchPromise = request
+      .get('/conversations', {
         params: { page, page_size: pageSize },
       })
-      conversations.value = (res.data.items || []).map(mapConversation)
-      total.value = res.data.total
-    } finally {
-      loading.value = false
-    }
+      .then((res) => {
+        conversations.value = (res.data.items || []).map(mapConversation)
+        total.value = res.data.total
+        lastLoadedAt.value = Date.now()
+      })
+      .finally(() => {
+        loading.value = false
+        fetchPromise = null
+      })
+
+    return fetchPromise
   }
 
   async function createConversation(title?: string) {

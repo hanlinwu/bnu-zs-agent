@@ -17,7 +17,7 @@ export const adminRoutes: RouteRecordRaw[] = [
         path: 'dashboard',
         name: 'AdminDashboard',
         component: () => import('@/views/admin/Dashboard.vue'),
-        meta: { title: '管理面板' },
+        meta: { title: '管理面板', keepAlive: true },
       },
       {
         path: 'knowledge',
@@ -53,13 +53,13 @@ export const adminRoutes: RouteRecordRaw[] = [
         path: 'users',
         name: 'AdminUsers',
         component: () => import('@/views/admin/Users.vue'),
-        meta: { title: '用户管理' },
+        meta: { title: '用户管理', keepAlive: true },
       },
       {
         path: 'conversations',
         name: 'AdminConversations',
         component: () => import('@/views/admin/Conversations.vue'),
-        meta: { title: '对话日志' },
+        meta: { title: '对话日志', keepAlive: true },
       },
       {
         path: 'admins',

@@ -14,7 +14,7 @@ const router = createRouter({
   ],
 })
 
-// Global guards: check token, check admin RBAC for /admin/* routes
+// Global guards: check token and trigger profile hydration lazily
 router.beforeEach(async (to, _from, next) => {
   routeLoading.value = true
 
@@ -32,17 +32,16 @@ router.beforeEach(async (to, _from, next) => {
   const token = localStorage.getItem('token')
   if (!token) return next('/login')
 
-  // Ensure user profile is loaded (survives page refresh)
+  // Ensure user profile is loaded without blocking navigation
   const { useUserStore } = await import('@/stores/user')
   const userStore = useUserStore()
   if (!userStore.userInfo) {
-    try {
-      await userStore.fetchProfile()
-    } catch {
-      // Token expired or invalid — redirect to login
+    void userStore.fetchProfile().catch(() => {
       userStore.logout()
-      return next('/login')
-    }
+      if (router.currentRoute.value.path !== '/login') {
+        router.replace('/login')
+      }
+    })
   }
 
   next()

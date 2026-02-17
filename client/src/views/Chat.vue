@@ -37,31 +37,36 @@ function handleDrawerClose() {
 const showDesktopSidebar = computed(() => !isMobile.value)
 const showMobileDrawer = computed(() => isMobile.value)
 
-onMounted(async () => {
-  checkMobile()
-  window.addEventListener('resize', checkMobile)
+async function initializeChatPage() {
+  const initialQuery = route.query.q as string | undefined
+
+  if (initialQuery?.trim()) {
+    chatStore.setConversationId(null)
+    chatStore.clearMessages()
+    void conversationStore.fetchConversations()
+    await chatStore.sendMessage(initialQuery.trim())
+    return
+  }
 
   await conversationStore.fetchConversations()
 
   if (conversationStore.conversations.length === 0) {
-    // Draft mode — no conversation created until first message
     chatStore.setConversationId(null)
     chatStore.clearMessages()
-  } else {
-    const savedId = localStorage.getItem('currentConversationId')
-    const saved = savedId ? conversationStore.conversations.find((c) => c.id === savedId) : null
-    const target = saved || conversationStore.conversations[0]!
-    chatStore.setConversationId(target.id)
-    await chatStore.loadMessages(target.id)
+    return
   }
 
-  // Handle ?q= query param from home page / hot questions
-  const initialQuery = route.query.q as string | undefined
-  if (initialQuery?.trim()) {
-    chatStore.setConversationId(null)
-    chatStore.clearMessages()
-    await chatStore.sendMessage(initialQuery.trim())
-  }
+  const savedId = localStorage.getItem('currentConversationId')
+  const saved = savedId ? conversationStore.conversations.find((c) => c.id === savedId) : null
+  const target = saved || conversationStore.conversations[0]!
+  chatStore.setConversationId(target.id)
+  await chatStore.loadMessages(target.id)
+}
+
+onMounted(() => {
+  checkMobile()
+  window.addEventListener('resize', checkMobile)
+  void initializeChatPage()
 })
 
 onBeforeUnmount(() => {

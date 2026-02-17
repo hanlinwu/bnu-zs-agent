@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import { ref, computed } from 'vue'
+import { ref } from 'vue'
 import { handleUnauthorized } from '@/api/request'
 import * as chatApi from '@/api/chat'
 import { useConversationStore } from '@/stores/conversation'
@@ -48,6 +48,7 @@ function compareMessages(a: ChatMessage, b: ChatMessage): number {
 export const useChatStore = defineStore('chat', () => {
   // 使用 Map 存储消息，支持 O(1) 查找和去重
   const messageMap = ref<Map<string, ChatMessage>>(new Map())
+  const messages = ref<ChatMessage[]>([])
   const isStreaming = ref(false)
   const isLoadingMessages = ref(false)
   const isLoadingHistory = ref(false) // 加载历史消息中
@@ -61,11 +62,9 @@ export const useChatStore = defineStore('chat', () => {
 
   let abortController: AbortController | null = null
 
-  // 计算属性：按时间排序的消息列表
-  const messages = computed(() => {
-    return Array.from(messageMap.value.values())
-      .sort(compareMessages)
-  })
+  function rebuildSortedMessages() {
+    messages.value = Array.from(messageMap.value.values()).sort(compareMessages)
+  }
 
   // 获取最新消息（用于初始加载）
   async function loadMessages(conversationId: string, pageSize: number = 20) {
@@ -110,6 +109,7 @@ export const useChatStore = defineStore('chat', () => {
           mediaItems: m.media_items || undefined,
         })
       })
+      rebuildSortedMessages()
 
       // 更新游标
       if (items.length > 0) {
@@ -121,6 +121,7 @@ export const useChatStore = defineStore('chat', () => {
       hasMoreHistory.value = items.length >= pageSize && items.length < totalMessageCount.value
     } catch {
       messageMap.value.clear()
+      messages.value = []
       hasMoreHistory.value = false
     } finally {
       isLoadingMessages.value = false
@@ -170,8 +171,10 @@ export const useChatStore = defineStore('chat', () => {
       })
 
       // 添加到 Map（自动去重）
+      let hasNewMessage = false
       sortedItems.forEach((m: any) => {
         if (!messageMap.value.has(m.id)) {
+          hasNewMessage = true
           messageMap.value.set(m.id, {
             id: m.id,
             role: m.role,
@@ -182,6 +185,9 @@ export const useChatStore = defineStore('chat', () => {
           })
         }
       })
+      if (hasNewMessage) {
+        rebuildSortedMessages()
+      }
 
       // 更新最旧消息游标
       oldestMessageId.value = sortedItems[0]?.id || oldestMessageId.value
@@ -226,6 +232,7 @@ export const useChatStore = defineStore('chat', () => {
       loading: true,
     }
     messageMap.value.set(assistantMsg.id, assistantMsg)
+    rebuildSortedMessages()
 
     isStreaming.value = true
 
@@ -323,6 +330,7 @@ export const useChatStore = defineStore('chat', () => {
 
   function clearMessages() {
     messageMap.value.clear()
+    messages.value = []
     oldestMessageId.value = null
     newestMessageId.value = null
     hasMoreHistory.value = true

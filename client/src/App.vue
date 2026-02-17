@@ -11,7 +11,7 @@ useThemeStore()
   <div v-if="routeLoading" class="route-progress-bar" />
 
   <router-view v-slot="{ Component }">
-    <transition name="page-fade" mode="out-in">
+    <transition name="page-fade">
       <suspense>
         <template #default>
           <div class="route-page-root">

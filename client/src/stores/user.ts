@@ -15,6 +15,7 @@ export interface UserInfo {
 export const useUserStore = defineStore('user', () => {
   const token = ref<string>(localStorage.getItem('token') || '')
   const userInfo = ref<UserInfo | null>(null)
+  let profilePromise: Promise<UserInfo> | null = null
 
   const isLoggedIn = computed(() => !!token.value)
 
@@ -30,13 +31,30 @@ export const useUserStore = defineStore('user', () => {
   function logout() {
     token.value = ''
     userInfo.value = null
+    profilePromise = null
     localStorage.removeItem('token')
   }
 
   async function fetchProfile() {
-    const res = await request.get('/auth/me')
-    userInfo.value = res.data
-    return res.data
+    if (userInfo.value) {
+      return userInfo.value
+    }
+
+    if (profilePromise) {
+      return profilePromise
+    }
+
+    profilePromise = request
+      .get('/auth/me')
+      .then((res) => {
+        userInfo.value = res.data
+        return res.data as UserInfo
+      })
+      .finally(() => {
+        profilePromise = null
+      })
+
+    return profilePromise
   }
 
   async function updateProfile(updates: Partial<Pick<UserInfo, 'nickname' | 'avatar_url' | 'role'>>) {
