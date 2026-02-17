@@ -1,5 +1,6 @@
 """Application middleware: audit logging, rate limiting."""
 
+import asyncio
 import time
 import uuid
 from typing import Any
@@ -45,16 +46,22 @@ class AuditLogMiddleware(BaseHTTPMiddleware):
         return segments[2]
 
     @staticmethod
-    def _extract_actor_ids(request: Request) -> tuple[str | None, str | None]:
-        """Return (user_id, admin_id) from bearer token payload if available."""
+    def _extract_token_payload(request: Request) -> dict | None:
+        """Decode bearer token payload if present."""
         auth = request.headers.get("authorization") or ""
         if not auth.startswith("Bearer "):
-            return None, None
+            return None
 
         token = auth[7:]
         try:
-            payload = verify_token(token)
+            return verify_token(token)
         except Exception:
+            return None
+
+    @staticmethod
+    def _extract_actor_ids(payload: dict | None) -> tuple[str | None, str | None]:
+        """Return (user_id, admin_id) from decoded token payload if available."""
+        if not payload:
             return None, None
 
         actor_type = payload.get("type")
@@ -79,7 +86,8 @@ class AuditLogMiddleware(BaseHTTPMiddleware):
 
         action = self._action_from_method(request.method)
         resource = self._resource_from_path(path)
-        user_id, admin_id = self._extract_actor_ids(request)
+        payload = getattr(request.state, "token_payload", None)
+        user_id, admin_id = self._extract_actor_ids(payload)
 
         query_params: dict[str, Any] = dict(request.query_params)
         detail = {
@@ -104,6 +112,7 @@ class AuditLogMiddleware(BaseHTTPMiddleware):
 
     async def dispatch(self, request: Request, call_next):
         request.state.request_id = str(uuid.uuid4())
+        request.state.token_payload = self._extract_token_payload(request)
         start_time = time.time()
 
         response = await call_next(request)
@@ -125,7 +134,7 @@ class AuditLogMiddleware(BaseHTTPMiddleware):
             )
 
         try:
-            await self._write_audit_log(request, response, duration_ms)
+            asyncio.create_task(self._write_audit_log(request, response, duration_ms))
         except Exception:
             # Audit logging failures must not break normal requests
             pass

@@ -8,7 +8,6 @@ from fastapi import APIRouter, Depends, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import StreamingResponse
 from sqlalchemy import select, and_
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
 
 from app.core.database import get_db, get_session_factory
 from app.core.security import verify_token
@@ -151,10 +150,8 @@ async def send_message(
         conv = Conversation(user_id=current_user.id)
         db.add(conv)
         await db.flush()
-        # Re-fetch with messages eagerly loaded
         result = await db.execute(
             select(Conversation).where(Conversation.id == conv.id)
-            .options(selectinload(Conversation.messages))
         )
         conv = result.scalar_one()
     else:
@@ -165,7 +162,7 @@ async def send_message(
                     Conversation.user_id == current_user.id,
                     Conversation.is_deleted == False,
                 )
-            ).options(selectinload(Conversation.messages))
+            )
         )
         conv = result.scalar_one_or_none()
         if not conv:

@@ -1,6 +1,6 @@
 """Global dependencies for FastAPI dependency injection."""
 
-from fastapi import Depends, Header
+from fastapi import Depends, Header, Request
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -12,6 +12,7 @@ from app.models.admin import AdminUser
 
 
 async def get_current_user(
+    request: Request,
     authorization: str = Header(..., description="Bearer token"),
     db: AsyncSession = Depends(get_db),
 ) -> User:
@@ -19,11 +20,13 @@ async def get_current_user(
     if not authorization.startswith("Bearer "):
         raise UnauthorizedError("无效的认证头")
 
-    token = authorization[7:]
-    try:
-        payload = verify_token(token)
-    except Exception:
-        raise UnauthorizedError("Token 无效或已过期")
+    payload = getattr(request.state, "token_payload", None)
+    if not payload:
+        token = authorization[7:]
+        try:
+            payload = verify_token(token)
+        except Exception:
+            raise UnauthorizedError("Token 无效或已过期")
 
     if payload.get("type") != "user":
         raise UnauthorizedError("Token 类型错误")
@@ -44,6 +47,7 @@ async def get_current_user(
 
 
 async def get_current_admin(
+    request: Request,
     authorization: str = Header(..., description="Bearer token"),
     db: AsyncSession = Depends(get_db),
 ) -> AdminUser:
@@ -51,11 +55,13 @@ async def get_current_admin(
     if not authorization.startswith("Bearer "):
         raise UnauthorizedError("无效的认证头")
 
-    token = authorization[7:]
-    try:
-        payload = verify_token(token)
-    except Exception:
-        raise UnauthorizedError("Token 无效或已过期")
+    payload = getattr(request.state, "token_payload", None)
+    if not payload:
+        token = authorization[7:]
+        try:
+            payload = verify_token(token)
+        except Exception:
+            raise UnauthorizedError("Token 无效或已过期")
 
     if payload.get("type") != "admin":
         raise UnauthorizedError("需要管理员权限")

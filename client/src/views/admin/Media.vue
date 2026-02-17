@@ -1,12 +1,13 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Plus, Delete, Upload, Picture, VideoCamera, Edit } from '@element-plus/icons-vue'
+import { Plus, Delete, Upload, Picture, VideoCamera, Edit, ZoomIn } from '@element-plus/icons-vue'
 import * as mediaApi from '@/api/admin/media'
 import * as wfApi from '@/api/admin/workflow'
 import type { MediaResource } from '@/types/admin'
 import type { WorkflowNode, WorkflowAction, WorkflowTransition, ReviewHistoryRecord, ResourceWorkflowInfo } from '@/api/admin/workflow'
 import ReviewHistory from '@/components/admin/ReviewHistory.vue'
+import MediaPreview from '@/components/MediaPreview.vue'
 
 const loading = ref(false)
 const mediaList = ref<MediaResource[]>([])
@@ -103,6 +104,12 @@ const reviewNote = ref('')
 const reviewLoading = ref(false)
 const reviewHistory = ref<ReviewHistoryRecord[]>([])
 
+// Preview state
+const previewVisible = ref(false)
+const previewType = ref<'image' | 'video'>('image')
+const previewSrc = ref('')
+const previewTitle = ref('')
+
 const typeOptions = [
   { label: '全部', value: '' },
   { label: '图片', value: 'image' },
@@ -171,6 +178,17 @@ function formatDate(date: string) {
     month: '2-digit',
     day: '2-digit',
   })
+}
+
+function openPreview(media: MediaResource) {
+  previewType.value = media.media_type as 'image' | 'video'
+  previewSrc.value = media.file_url || ''
+  previewTitle.value = media.title
+  previewVisible.value = true
+}
+
+function closePreview() {
+  previewVisible.value = false
 }
 
 function thumbnailUrl(media: MediaResource) {
@@ -451,14 +469,33 @@ onMounted(async () => {
                 @click.stop
               />
             </div>
-            <img
+            <div
               v-if="media.media_type === 'image' && thumbnailUrl(media)"
-              :src="thumbnailUrl(media)"
-              :alt="media.title"
-              class="thumb-img"
-            />
-            <div v-else class="thumb-placeholder">
-              <el-icon :size="40"><component :is="typeIcon(media.media_type)" /></el-icon>
+              class="thumb-img-wrapper"
+              @click="openPreview(media)"
+            >
+              <img
+                :src="thumbnailUrl(media)"
+                :alt="media.title"
+                class="thumb-img"
+              />
+              <div class="thumb-overlay">
+                <el-icon :size="24"><ZoomIn /></el-icon>
+              </div>
+            </div>
+            <div
+              v-else-if="media.media_type === 'video' && media.file_url"
+              class="thumb-img-wrapper video-wrapper"
+              @click="openPreview(media)"
+            >
+              <video
+                :src="media.file_url"
+                class="thumb-img"
+                preload="metadata"
+              />
+              <div class="thumb-overlay video-overlay">
+                <el-icon :size="32"><VideoCamera /></el-icon>
+              </div>
             </div>
             <div class="media-badges">
               <el-tag size="small" type="info">{{ typeLabel(media.media_type) }}</el-tag>
@@ -599,6 +636,15 @@ onMounted(async () => {
       </template>
     </el-dialog>
 
+    <!-- Media Preview -->
+    <MediaPreview
+      :visible="previewVisible"
+      :type="previewType"
+      :src="previewSrc"
+      :title="previewTitle"
+      @close="closePreview"
+    />
+
     <!-- Review Dialog -->
     <el-dialog
       v-model="reviewDialogVisible"
@@ -731,10 +777,59 @@ onMounted(async () => {
   overflow: hidden;
 }
 
+.thumb-img-wrapper {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  cursor: pointer;
+  overflow: hidden;
+
+  &:hover .thumb-overlay {
+    opacity: 1;
+  }
+
+  &.video-wrapper {
+    video {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+  }
+}
+
 .thumb-img {
   width: 100%;
   height: 100%;
   object-fit: cover;
+  transition: transform 0.3s ease;
+
+  .thumb-img-wrapper:hover & {
+    transform: scale(1.05);
+  }
+}
+
+.thumb-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.2s;
+  color: #fff;
+
+  &.video-overlay {
+    opacity: 1;
+    background: rgba(0, 0, 0, 0.3);
+
+    &:hover {
+      background: rgba(0, 0, 0, 0.5);
+    }
+  }
 }
 
 .thumb-placeholder {

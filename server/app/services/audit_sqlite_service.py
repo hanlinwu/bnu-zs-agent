@@ -7,13 +7,21 @@ import json
 import logging
 import sqlite3
 import tempfile
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from app.config import settings
 
 
 logger = logging.getLogger(__name__)
+
+# China Standard Time (UTC+8)
+CST = timezone(timedelta(hours=8))
+
+
+def _now_cst() -> datetime:
+    """Return current time in China Standard Time (UTC+8)."""
+    return datetime.now(CST)
 
 
 TABLE_SQL = """
@@ -88,13 +96,19 @@ def _connect(path: Path) -> sqlite3.Connection:
 
 def _parse_created_at(value: str | datetime | None) -> datetime:
     if value is None:
-        return datetime.utcnow()
+        return _now_cst()
     if isinstance(value, datetime):
+        # Ensure datetime has timezone info
+        if value.tzinfo is None:
+            return value.replace(tzinfo=CST)
         return value
     try:
-        return datetime.fromisoformat(value)
+        dt = datetime.fromisoformat(value)
+        if dt.tzinfo is None:
+            return dt.replace(tzinfo=CST)
+        return dt
     except Exception:
-        return datetime.utcnow()
+        return _now_cst()
 
 
 def _iter_dates(start_time: datetime, end_time: datetime):

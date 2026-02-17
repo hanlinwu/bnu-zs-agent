@@ -1,7 +1,9 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { ref, computed } from 'vue'
 import type { Message, MediaItem } from '@/types/chat'
 import SourceCitation from './SourceCitation.vue'
+import MediaPreview from '@/components/MediaPreview.vue'
+import { ZoomIn } from '@element-plus/icons-vue'
 import { renderMarkdown } from '@/utils/markdown'
 
 const props = defineProps<{
@@ -94,6 +96,23 @@ const contentParts = computed<ContentPart[]>(() => {
   return parts
 })
 
+// Preview state
+const previewVisible = ref(false)
+const previewType = ref<'image' | 'video'>('image')
+const previewSrc = ref('')
+const previewTitle = ref('')
+
+function openPreview(item: MediaItem) {
+  previewType.value = item.media_type as 'image' | 'video'
+  previewSrc.value = item.url
+  previewTitle.value = item.title
+  previewVisible.value = true
+}
+
+function closePreview() {
+  previewVisible.value = false
+}
+
 </script>
 
 <template>
@@ -123,21 +142,34 @@ const contentParts = computed<ContentPart[]>(() => {
           v-else-if="part.item"
           class="media-card"
         >
-          <img
+          <div
             v-if="part.item.media_type === 'image'"
-            :src="part.item.url"
-            :alt="part.item.title"
-            class="media-image"
-            loading="lazy"
-          />
-          <video
-            v-else
-            class="media-video"
-            controls
-            preload="metadata"
+            class="media-image-wrapper"
+            @click="openPreview(part.item)"
           >
-            <source :src="part.item.url" type="video/mp4" />
-          </video>
+            <img
+              :src="part.item.url"
+              :alt="part.item.title"
+              class="media-image"
+              loading="lazy"
+            />
+            <div class="media-overlay">
+              <el-icon :size="20"><ZoomIn /></el-icon>
+            </div>
+          </div>
+          <div
+            v-else
+            class="media-video-wrapper"
+            @click="openPreview(part.item)"
+          >
+            <video
+              class="media-video"
+              controls
+              preload="metadata"
+            >
+              <source :src="part.item.url" type="video/mp4" />
+            </video>
+          </div>
           <div class="media-meta">
             <div class="media-title">{{ part.item.title }}</div>
             <div v-if="part.item.description" class="media-desc">{{ part.item.description }}</div>
@@ -153,6 +185,14 @@ const contentParts = computed<ContentPart[]>(() => {
         class="bubble-sources"
       />
     </div>
+
+    <MediaPreview
+      :visible="previewVisible"
+      :type="previewType"
+      :src="previewSrc"
+      :title="previewTitle"
+      @close="closePreview"
+    />
   </div>
 </template>
 
@@ -315,6 +355,21 @@ const contentParts = computed<ContentPart[]>(() => {
   background: var(--bg-primary, #fff);
 }
 
+.media-image-wrapper,
+.media-video-wrapper {
+  position: relative;
+  cursor: pointer;
+  overflow: hidden;
+
+  &:hover .media-overlay {
+    opacity: 1;
+  }
+
+  &:hover .media-image {
+    transform: scale(1.03);
+  }
+}
+
 .media-image,
 .media-video {
   width: 100%;
@@ -322,6 +377,22 @@ const contentParts = computed<ContentPart[]>(() => {
   object-fit: cover;
   display: block;
   background: #000;
+  transition: transform 0.3s ease;
+}
+
+.media-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.2s;
+  color: #fff;
 }
 
 .media-meta {

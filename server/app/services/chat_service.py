@@ -6,6 +6,7 @@ import re
 from typing import AsyncGenerator
 
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select, and_
 
 from app.models.user import User
 from app.models.conversation import Conversation
@@ -15,7 +16,7 @@ from app.services.risk_service import classify_risk
 from app.services.emotion_service import detect_emotion
 from app.services.calendar_service import get_current_tone
 from app.services.knowledge_service import search as knowledge_search, format_sources_for_prompt, format_sources_for_citation
-from app.services.system_config_service import get_chat_guardrail_config
+from app.services.system_config_service import get_chat_guardrail_config_cached
 from app.services.llm_service import llm_router
 from app.services.media_match_service import match_media_for_question
 
@@ -175,7 +176,7 @@ async def process_message(
         return
 
     # Step 2: Risk classification
-    guardrail_config = await get_chat_guardrail_config(db)
+    guardrail_config = get_chat_guardrail_config_cached()
     prompts_cfg = guardrail_config.get("prompts", {})
 
     high_risk_response = prompts_cfg.get("high_risk_response", "")
@@ -281,10 +282,23 @@ async def process_message(
     # Build message history (last 10 messages from conversation)
     messages = [{"role": "system", "content": system_prompt}]
 
-    # Add recent conversation history
-    for msg in (conversation.messages or [])[-10:]:
-        if not msg.is_deleted:
-            messages.append({"role": msg.role, "content": msg.content})
+    # Query only recent messages to avoid loading full conversation history
+    history_stmt = (
+        select(Message)
+        .where(
+            and_(
+                Message.conversation_id == conversation.id,
+                Message.is_deleted == False,
+            )
+        )
+        .order_by(Message.created_at.desc(), Message.id.desc())
+        .limit(10)
+    )
+    history_result = await db.execute(history_stmt)
+    recent_messages = list(reversed(history_result.scalars().all()))
+
+    for msg in recent_messages:
+        messages.append({"role": msg.role, "content": msg.content})
 
     messages.append({"role": "user", "content": user_message})
 
