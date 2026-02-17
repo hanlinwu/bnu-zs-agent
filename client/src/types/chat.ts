@@ -8,6 +8,17 @@ export interface SourceReference {
   snippet: string
 }
 
+export interface MediaItem {
+  id: string
+  media_type: 'image' | 'video'
+  url: string
+  title: string
+  description?: string
+  tags?: string[]
+  slot_key?: string
+  slot_tags?: string[]
+}
+
 /** 聊天消息 */
 export interface Message {
   id: string
@@ -15,6 +26,7 @@ export interface Message {
   role: MessageRole
   content: string
   sources?: SourceReference[]
+  mediaItems?: MediaItem[]
   riskLevel?: 'low' | 'medium' | 'high'
   createdAt: string
 }

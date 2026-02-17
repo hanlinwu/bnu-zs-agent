@@ -3,6 +3,7 @@
 from app.services.risk_service import classify_risk
 from app.services.emotion_service import detect_emotion
 from app.services.calendar_service import _get_default_period
+from app.services.chat_service import _fill_media_slot
 
 
 def test_high_risk_classification():
@@ -53,3 +54,14 @@ def test_default_period_mapping():
     assert _get_default_period(6) == "application"
     assert _get_default_period(8) == "admission"
     assert _get_default_period(11) == "normal"
+
+
+def test_fill_media_slot_replaces_standard_and_typo_tokens():
+    media = [{"id": "1", "media_type": "image", "url": "/uploads/media/a.jpg", "title": "校园"}]
+    assert "MEDIA_SLOT" not in _fill_media_slot("A [[MEDIA_SLOT]] B", media)
+    assert "MEDIA_SOLT" not in _fill_media_slot("A [[MEDIA_SOLT]] B", media)
+
+
+def test_fill_media_slot_removes_token_when_no_media():
+    result = _fill_media_slot("A [[MEDIA_SLOT]] B", [])
+    assert "MEDIA_SLOT" not in result

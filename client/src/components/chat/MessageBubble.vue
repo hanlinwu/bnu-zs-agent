@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import type { Message } from '@/types/chat'
+import type { Message, MediaItem } from '@/types/chat'
 import SourceCitation from './SourceCitation.vue'
 import { renderMarkdown } from '@/utils/markdown'
 
@@ -21,6 +21,79 @@ const hasSources = computed(() => {
   return props.message.sources && props.message.sources.length > 0
 })
 
+const mediaItems = computed(() => props.message.mediaItems || [])
+
+type ContentPart =
+  | { type: 'text'; key: string; content: string }
+  | { type: 'media'; key: string; item: MediaItem | null }
+
+const mediaBySlotKey = computed(() => {
+  const map = new Map<string, MediaItem>()
+  mediaItems.value.forEach((item, index) => {
+    const key = item.slot_key || `slot_${index}`
+    if (!map.has(key)) {
+      map.set(key, item)
+    }
+  })
+  return map
+})
+
+const contentParts = computed<ContentPart[]>(() => {
+  const content = props.message.content || ''
+  const mediaMarkerRegex = /\[\[\s*MEDIA_ITEM:([^\]]+)\s*\]\]/g
+  const parts: ContentPart[] = []
+  let lastIndex = 0
+  let matched = false
+
+  for (const match of content.matchAll(mediaMarkerRegex)) {
+    matched = true
+    const marker = match[0]
+    const slotKey = (match[1] || '').trim()
+    const markerIndex = match.index ?? 0
+
+    if (markerIndex > lastIndex) {
+      parts.push({
+        type: 'text',
+        key: `text-${lastIndex}`,
+        content: content.slice(lastIndex, markerIndex),
+      })
+    }
+
+    parts.push({
+      type: 'media',
+      key: `media-${slotKey}-${markerIndex}`,
+      item: mediaBySlotKey.value.get(slotKey) || null,
+    })
+
+    lastIndex = markerIndex + marker.length
+  }
+
+  if (lastIndex < content.length) {
+    parts.push({
+      type: 'text',
+      key: `text-${lastIndex}`,
+      content: content.slice(lastIndex),
+    })
+  }
+
+  if (!matched) {
+    parts.splice(0, parts.length, {
+      type: 'text',
+      key: 'text-full',
+      content,
+    })
+    mediaItems.value.forEach((item, index) => {
+      parts.push({
+        type: 'media',
+        key: `media-fallback-${item.id}-${index}`,
+        item,
+      })
+    })
+  }
+
+  return parts
+})
+
 </script>
 
 <template>
@@ -39,7 +112,38 @@ const hasSources = computed(() => {
     </div>
 
     <div class="bubble-body">
-      <div class="bubble-content" v-html="renderMarkdown(message.content)"></div>
+      <template v-for="part in contentParts" :key="part.key">
+        <div
+          v-if="part.type === 'text'"
+          class="bubble-content"
+          v-html="renderMarkdown(part.content)"
+        ></div>
+
+        <div
+          v-else-if="part.item"
+          class="media-card"
+        >
+          <img
+            v-if="part.item.media_type === 'image'"
+            :src="part.item.url"
+            :alt="part.item.title"
+            class="media-image"
+            loading="lazy"
+          />
+          <video
+            v-else
+            class="media-video"
+            controls
+            preload="metadata"
+          >
+            <source :src="part.item.url" type="video/mp4" />
+          </video>
+          <div class="media-meta">
+            <div class="media-title">{{ part.item.title }}</div>
+            <div v-if="part.item.description" class="media-desc">{{ part.item.description }}</div>
+          </div>
+        </div>
+      </template>
 
       <div class="bubble-time">{{ formattedTime }}</div>
 
@@ -201,5 +305,38 @@ const hasSources = computed(() => {
 
 .bubble-sources {
   margin-top: 6px;
+}
+
+.media-card {
+  margin-top: 8px;
+  border: 1px solid var(--border-color, #e2e6ed);
+  border-radius: 10px;
+  overflow: hidden;
+  background: var(--bg-primary, #fff);
+}
+
+.media-image,
+.media-video {
+  width: 100%;
+  max-height: 280px;
+  object-fit: cover;
+  display: block;
+  background: #000;
+}
+
+.media-meta {
+  padding: 8px 10px;
+}
+
+.media-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary, #1a1a2e);
+}
+
+.media-desc {
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--text-secondary, #5a5a72);
 }
 </style>

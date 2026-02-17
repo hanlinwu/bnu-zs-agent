@@ -61,8 +61,18 @@ const displayMessages = computed<Message[]>(() => {
     role: msg.role as 'user' | 'assistant',
     content: msg.content,
     sources: msg.sources
-      ? msg.sources.map((s) => ({ documentId: '', title: s, snippet: '' }))
+      ? msg.sources.map((s: any) => {
+        if (typeof s === 'string') {
+          return { documentId: '', title: s, snippet: '' }
+        }
+        return {
+          documentId: s.document_id || s.documentId || '',
+          title: s.title || '',
+          snippet: s.snippet || '',
+        }
+      })
       : undefined,
+    mediaItems: msg.mediaItems,
     createdAt: new Date(msg.timestamp).toISOString(),
   }))
 })

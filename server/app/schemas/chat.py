@@ -36,6 +36,7 @@ class MessageResponse(BaseModel):
     risk_level: str | None = None
     review_passed: bool | None = None
     sources: list | None = None
+    media_items: list | None = None
     created_at: str
 
 

@@ -20,6 +20,22 @@ from app.schemas.chat import (
 router = APIRouter()
 
 
+def _split_sources_payload(raw_sources):
+    if isinstance(raw_sources, dict):
+        citations = raw_sources.get("citations")
+        media_items = raw_sources.get("media_items")
+        if citations is None:
+            citations = []
+        if media_items is None:
+            media_items = []
+        return citations or None, media_items or None
+
+    if isinstance(raw_sources, list):
+        return raw_sources or None, None
+
+    return None, None
+
+
 @router.get("", response_model=ConversationListResponse)
 async def list_conversations(
     page: int = Query(1, ge=1),
@@ -270,19 +286,22 @@ async def list_messages(
     # 确保稳定正序（从早到晚，同时间戳按 ID）
     sorted_messages = sorted(messages, key=lambda m: (m.created_at, m.id))
 
-    items = [
-        MessageResponse(
-            id=str(m.id),
-            role=m.role,
-            content=m.content,
-            model_version=m.model_version,
-            risk_level=m.risk_level,
-            review_passed=m.review_passed,
-            sources=m.sources,
-            created_at=m.created_at.isoformat(),
+    items = []
+    for m in sorted_messages:
+        citations, media_items = _split_sources_payload(m.sources)
+        items.append(
+            MessageResponse(
+                id=str(m.id),
+                role=m.role,
+                content=m.content,
+                model_version=m.model_version,
+                risk_level=m.risk_level,
+                review_passed=m.review_passed,
+                sources=citations,
+                media_items=media_items,
+                created_at=m.created_at.isoformat(),
+            )
         )
-        for m in sorted_messages
-    ]
 
     return MessageListResponse(items=items, total=total, page=page, page_size=page_size)
 

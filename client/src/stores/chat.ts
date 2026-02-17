@@ -9,7 +9,20 @@ export interface ChatMessage {
   role: 'user' | 'assistant' | 'system'
   content: string
   timestamp: number
-  sources?: string[]
+  sources?: Array<{
+    documentId?: string
+    document_id?: string
+    title?: string
+    snippet?: string
+  }>
+  mediaItems?: Array<{
+    id: string
+    media_type: 'image' | 'video'
+    url: string
+    title: string
+    description?: string
+    tags?: string[]
+  }>
   loading?: boolean
 }
 
@@ -94,6 +107,7 @@ export const useChatStore = defineStore('chat', () => {
           content: m.content,
           timestamp: new Date(m.created_at).getTime(),
           sources: m.sources || undefined,
+          mediaItems: m.media_items || undefined,
         })
       })
 
@@ -164,6 +178,7 @@ export const useChatStore = defineStore('chat', () => {
             content: m.content,
             timestamp: new Date(m.created_at).getTime(),
             sources: m.sources || undefined,
+            mediaItems: m.media_items || undefined,
           })
         }
       })
@@ -273,8 +288,16 @@ export const useChatStore = defineStore('chat', () => {
                 getAssistantMessage().content += event.content
               } else if (event.type === 'sensitive_block' || event.type === 'high_risk') {
                 getAssistantMessage().content = event.content
-              } else if (event.type === 'done' && event.sources?.length) {
-                getAssistantMessage().sources = event.sources
+              } else if (event.type === 'done') {
+                if (typeof event.content === 'string') {
+                  getAssistantMessage().content = event.content
+                }
+                if (event.sources?.length) {
+                  getAssistantMessage().sources = event.sources
+                }
+                if (event.media_items?.length) {
+                  getAssistantMessage().mediaItems = event.media_items
+                }
               }
             } catch {
               // skip malformed JSON
