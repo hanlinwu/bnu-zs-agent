@@ -13,7 +13,11 @@ useThemeStore()
   <router-view v-slot="{ Component }">
     <transition name="page-fade" mode="out-in">
       <suspense>
-        <component :is="Component" />
+        <template #default>
+          <div class="route-page-root">
+            <component :is="Component" />
+          </div>
+        </template>
         <template #fallback>
           <div class="page-loading">
             <div class="page-loading-spinner" />
@@ -26,6 +30,11 @@ useThemeStore()
 
 <style lang="scss">
 #app {
+  width: 100%;
+  height: 100%;
+}
+
+.route-page-root {
   width: 100%;
   height: 100%;
 }

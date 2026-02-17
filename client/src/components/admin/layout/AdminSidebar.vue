@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { useAdminStore } from '@/stores/admin'
 import { computed } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import {
   Odometer,
   Collection,
@@ -24,6 +24,7 @@ const props = defineProps<{
 
 const adminStore = useAdminStore()
 const route = useRoute()
+const router = useRouter()
 
 interface MenuItem {
   index: string
@@ -94,6 +95,11 @@ const activeIndex = computed(() => {
   const match = allVisibleItems.value.find(item => path.startsWith(item.index))
   return match?.index || '/admin/dashboard'
 })
+
+function handleMenuSelect(index: string) {
+  if (!index || route.path === index) return
+  router.push(index)
+}
 </script>
 
 <template>
@@ -111,7 +117,7 @@ const activeIndex = computed(() => {
       :default-active="activeIndex"
       :collapse="props.collapsed"
       :collapse-transition="false"
-      router
+      @select="handleMenuSelect"
       class="sidebar-menu"
       background-color="transparent"
       text-color="rgba(255, 255, 255, 0.7)"

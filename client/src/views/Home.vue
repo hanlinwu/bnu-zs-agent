@@ -19,7 +19,7 @@ import QuickActions from '@/components/home/QuickActions.vue'
           <span class="footer-divider">|</span>
           <a href="https://yz.bnu.edu.cn" target="_blank" rel="noopener">研究生招生</a>
           <span class="footer-divider">|</span>
-          <a href="/admin/login">管理后台</a>
+          <router-link to="/admin/login">管理后台</router-link>
         </div>
         <p class="footer-copyright">
           &copy; {{ new Date().getFullYear() }} 北京师范大学招生办公室 &mdash; 京师小智智能招生助手

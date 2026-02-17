@@ -50,11 +50,6 @@ function actionButtonType(actionId: string) {
   return 'primary'
 }
 
-function getNodeName(nodeId: string) {
-  const node = workflowNodes.value.find(n => n.id === nodeId)
-  return node?.name || nodeId
-}
-
 function statusLabel(status: string) {
   const node = workflowNodes.value.find(n => n.id === status)
   if (node) return node.name
@@ -78,7 +73,7 @@ function statusTagType(status: string) {
     approved: 'success',
     active: 'success',
     rejected: 'danger',
-    processing: '',
+    processing: 'info',
     archived: 'info',
   }
   return map[status] || 'info'

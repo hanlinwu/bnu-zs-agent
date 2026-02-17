@@ -63,7 +63,8 @@ async function fetchRoles() {
   loading.value = true
   try {
     const res = await roleApi.getRoles()
-    const items = res.data.items || res.data
+    const raw = res.data as any[] | { items?: any[] }
+    const items = Array.isArray(raw) ? raw : (raw.items || [])
     roles.value = items.map((r: any) => ({
       ...r,
       builtIn: r.is_system ?? r.builtIn ?? false,
@@ -79,7 +80,8 @@ async function fetchRoles() {
 async function fetchPermissions() {
   try {
     const res = await roleApi.getPermissions()
-    const items = res.data.items || res.data
+    const raw = res.data as any[] | { items?: any[] }
+    const items = Array.isArray(raw) ? raw : (raw.items || [])
     allPermissions.value = items.map((p: any) => ({
       ...p,
       group: p.resource ?? p.group,
@@ -224,7 +226,7 @@ onMounted(() => {
         </el-table-column>
         <el-table-column label="类型" width="100" align="center">
           <template #default="{ row }">
-            <el-tag size="small" :type="(row.builtIn ? 'warning' : '') as any">
+            <el-tag size="small" :type="(row.builtIn ? 'warning' : 'info') as any">
               {{ row.builtIn ? '内置' : '自定义' }}
             </el-tag>
           </template>

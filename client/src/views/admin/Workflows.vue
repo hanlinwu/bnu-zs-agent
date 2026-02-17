@@ -55,11 +55,6 @@ const actionOptions = computed(() =>
   formActions.value.map(a => ({ label: `${a.name} (${a.id})`, value: a.id }))
 )
 
-function nodeTypeLabel(type: string) {
-  const found = nodeTypeOptions.find(o => o.value === type)
-  return found ? found.label : type
-}
-
 async function fetchData() {
   loading.value = true
   try {

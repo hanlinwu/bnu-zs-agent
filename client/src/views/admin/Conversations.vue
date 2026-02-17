@@ -20,7 +20,7 @@ const detailLoading = ref(false)
 const detailTitle = ref('')
 const detailMessages = ref<AdminMessage[]>([])
 
-function riskTag(level: string | null): { type: '' | 'success' | 'warning' | 'danger' | 'info'; label: string } {
+function riskTag(level: string | null): { type: 'success' | 'warning' | 'danger' | 'info'; label: string } {
   switch (level) {
     case 'low': return { type: 'success', label: '低风险' }
     case 'medium': return { type: 'warning', label: '中风险' }
@@ -30,18 +30,18 @@ function riskTag(level: string | null): { type: '' | 'success' | 'warning' | 'da
   }
 }
 
-function sensitiveTag(level: string | null): { type: '' | 'success' | 'warning' | 'danger' | 'info'; label: string } {
+function sensitiveTag(level: string | null): { type: 'success' | 'warning' | 'danger' | 'info'; label: string } {
   switch (level) {
     case 'block': return { type: 'danger', label: '屏蔽级' }
     case 'warn': return { type: 'warning', label: '警告级' }
     case 'review': return { type: 'info', label: '审查级' }
-    default: return { type: '', label: '无' }
+    default: return { type: 'info', label: '无' }
   }
 }
 
-function roleTag(role: string): { type: '' | 'success' | 'info'; label: string } {
+function roleTag(role: string): { type: 'success' | 'info'; label: string } {
   switch (role) {
-    case 'user': return { type: '', label: '用户' }
+    case 'user': return { type: 'info', label: '用户' }
     case 'assistant': return { type: 'success', label: '助手' }
     default: return { type: 'info', label: '系统' }
   }

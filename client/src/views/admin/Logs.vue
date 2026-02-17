@@ -15,6 +15,8 @@ const dateRange = ref<[string, string] | null>(null)
 const actionFilter = ref<string>('')
 const moduleFilter = ref<string>('')
 const exporting = ref(false)
+const detailDialogVisible = ref(false)
+const currentDetailText = ref('')
 
 const actionOptions = [
   { label: '全部操作', value: '' },
@@ -72,6 +74,32 @@ function formatDateTime(date: string) {
   })
 }
 
+function formatDetail(detail: unknown): string {
+  if (!detail) return '-'
+  if (typeof detail === 'string') return detail
+  try {
+    return JSON.stringify(detail)
+  } catch {
+    return String(detail)
+  }
+}
+
+function openDetail(log: AuditLog) {
+  const raw = log.detail
+  if (!raw || raw === '-') {
+    currentDetailText.value = '无详情'
+    detailDialogVisible.value = true
+    return
+  }
+
+  try {
+    currentDetailText.value = JSON.stringify(JSON.parse(raw), null, 2)
+  } catch {
+    currentDetailText.value = raw
+  }
+  detailDialogVisible.value = true
+}
+
 async function fetchLogs() {
   loading.value = true
   try {
@@ -101,7 +129,7 @@ async function fetchLogs() {
       ip: item.ip_address || '-',
       action: item.action || 'query',
       module: item.resource || '-',
-      detail: item.detail ? JSON.stringify(item.detail) : '-',
+      detail: formatDetail(item.detail),
       createdAt: item.created_at,
     }))
     total.value = res.data.total
@@ -239,6 +267,11 @@ onMounted(() => {
         </el-table-column>
         <el-table-column prop="ip" label="IP 地址" width="140" />
         <el-table-column prop="detail" label="详情" min-width="240" show-overflow-tooltip />
+        <el-table-column label="操作" width="100" align="center" fixed="right">
+          <template #default="{ row }">
+            <el-button type="primary" text size="small" @click="openDetail(row)">查看详情</el-button>
+          </template>
+        </el-table-column>
       </el-table>
 
       <div class="pagination-wrapper">
@@ -250,6 +283,14 @@ onMounted(() => {
           @current-change="handlePageChange"
         />
       </div>
+
+      <el-dialog
+        v-model="detailDialogVisible"
+        title="审计详情"
+        width="720px"
+      >
+        <pre class="detail-json">{{ currentDetailText }}</pre>
+      </el-dialog>
     </div>
   </div>
 </template>
@@ -324,6 +365,20 @@ onMounted(() => {
   display: flex;
   justify-content: flex-end;
   margin-top: 16px;
+}
+
+.detail-json {
+  margin: 0;
+  max-height: 420px;
+  overflow: auto;
+  padding: 12px;
+  border-radius: 8px;
+  background: var(--bg-secondary, #F4F6FA);
+  color: var(--text-primary, #1A1A2E);
+  font-size: 13px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
 @media (max-width: 768px) {

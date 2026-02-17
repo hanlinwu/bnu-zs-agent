@@ -61,9 +61,6 @@ const grpRules: FormRules = {
   name: [{ required: true, message: '请输入组名', trigger: 'blur' }],
 }
 
-// Test connectivity
-const testingId = ref('')
-
 const providerOptions = [
   { label: '通义千问', value: 'qwen' },
   { label: '智谱 GLM', value: 'glm' },
@@ -94,10 +91,6 @@ function groupTypeLabel(type: string) {
 function groupTypeTag(type: string) {
   const map: Record<string, string> = { llm: 'primary', embedding: 'success', review: 'warning' }
   return map[type] || 'info'
-}
-
-function strategyLabel(strategy: string) {
-  return strategyOptions.find(o => o.value === strategy)?.label || strategy
 }
 
 async function fetchConfig() {
@@ -173,23 +166,6 @@ async function handleDeleteEp(ep: ModelEndpoint) {
     ElMessage.success('删除成功')
     fetchConfig()
   } catch { /* cancelled */ }
-}
-
-async function handleTestEp(ep: ModelEndpoint) {
-  testingId.value = ep.id
-  try {
-    const res = await modelApi.testModel({
-      provider: ep.provider,
-      api_key: '',  // will use stored key on backend
-      base_url: ep.baseUrl,
-      model: 'test',
-    })
-    ElMessage.success((res.data as any).message || '连接成功')
-  } catch {
-    ElMessage.error('连接测试失败')
-  } finally {
-    testingId.value = ''
-  }
 }
 
 // ── Group CRUD ──

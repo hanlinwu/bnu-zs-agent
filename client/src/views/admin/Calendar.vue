@@ -40,14 +40,14 @@ function styleLabel(style: string) {
   return map[style] || style
 }
 
-function styleTagType(style: string) {
+function styleTagType(style: string): 'success' | 'warning' | 'info' {
   const map: Record<string, string> = {
-    motivational: '',
+    motivational: 'info',
     guidance: 'success',
     enrollment: 'warning',
     general: 'info',
   }
-  return map[style] || 'info'
+  return (map[style] as 'success' | 'warning' | 'info') || 'info'
 }
 
 function styleDescription(style: string) {
@@ -88,17 +88,20 @@ async function fetchPeriods() {
   loading.value = true
   try {
     const res = await calendarApi.getPeriods()
-    const raw = res.data.items || res.data || []
+    const raw = (res.data as any[] | { items?: any[] })
+    const list = Array.isArray(raw) ? raw : (raw.items || [])
     // Map backend fields (period_name, start_month, end_month) to frontend CalendarPeriod
-    periods.value = raw.map((item: any) => ({
+    periods.value = list.map((item: any) => ({
       id: item.id,
       name: item.name || item.period_name || '',
       startDate: item.startDate || (item.start_month ? `2026-${String(item.start_month).padStart(2, '0')}-01` : ''),
       endDate: item.endDate || (item.end_month ? `2026-${String(item.end_month).padStart(2, '0')}-28` : ''),
-      style: item.style || item.tone_config?.style || 'general',
+      style: (item.style || item.tone_config?.style || 'general') as CalendarPeriod['style'],
       description: item.description || item.tone_config?.description || '',
       keywords: item.keywords || item.tone_config?.keywords || [],
       enabled: item.enabled ?? item.is_active ?? true,
+      createdAt: item.createdAt || item.created_at || '',
+      updatedAt: item.updatedAt || item.updated_at || '',
     }))
   } catch {
     ElMessage.error('加载招生日历失败')

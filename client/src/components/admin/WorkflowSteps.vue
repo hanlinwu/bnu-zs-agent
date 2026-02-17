@@ -26,7 +26,7 @@ const roleLabels: Record<string, string> = {
   teacher: '招生老师',
 }
 
-function stepTagType(step: WorkflowStep): '' | 'success' | 'warning' | 'info' | 'danger' {
+function stepTagType(step: WorkflowStep): 'success' | 'warning' | 'info' | 'danger' {
   if (props.mode === 'tags') return 'info'
   // In progress mode, color by completion status
   if (step.step < props.currentStep) return 'success'

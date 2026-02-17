@@ -75,9 +75,11 @@ async function handleDelete(conv: Conversation) {
     if (wasActive) {
       if (conversationStore.conversations.length > 0) {
         const next = conversationStore.conversations[0]
-        chatStore.setConversationId(next.id)
-        chatStore.clearMessages()
-        chatStore.loadMessages(next.id)
+        if (next) {
+          chatStore.setConversationId(next.id)
+          chatStore.clearMessages()
+          chatStore.loadMessages(next.id)
+        }
       } else {
         chatStore.setConversationId(null)
         chatStore.clearMessages()

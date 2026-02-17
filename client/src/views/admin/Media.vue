@@ -132,7 +132,7 @@ function nodeIsTerminal(nodeId: string): boolean {
   return node?.type === 'terminal'
 }
 
-function nodeTagType(nodeId: string): '' | 'success' | 'danger' | 'warning' | 'info' {
+function nodeTagType(nodeId: string): 'success' | 'danger' | 'warning' | 'info' {
   const node = workflowNodes.value.find(n => n.id === nodeId)
   if (!node) return 'info'
   if (node.type === 'start') return 'warning'
@@ -274,10 +274,16 @@ async function handleUploadSubmit() {
     return
   }
 
+  const selectedFile = uploadFileList.value[0]
+  if (!selectedFile) {
+    ElMessage.warning('文件无效，请重新选择')
+    return
+  }
+
   uploading.value = true
   try {
     const formData = new FormData()
-    formData.append('file', uploadFileList.value[0])
+    formData.append('file', selectedFile)
     formData.append('title', uploadTitle.value.trim())
     if (uploadDescription.value.trim()) {
       formData.append('description', uploadDescription.value.trim())

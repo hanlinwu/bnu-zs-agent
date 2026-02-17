@@ -92,8 +92,8 @@ async function fetchHot() {
   }
 }
 
-async function handleTrendChange(days: 7 | 30) {
-  trendDays.value = days
+async function handleTrendChange(days: string | number | boolean | undefined) {
+  trendDays.value = Number(days) === 30 ? 30 : 7
   await fetchTrends()
 }
 

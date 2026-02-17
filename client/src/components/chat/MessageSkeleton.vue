@@ -1,16 +1,16 @@
 <script setup lang="ts">
-defineProps<{
+const props = defineProps<{
   index?: number
 }>()
 </script>
 
 <template>
-  <div class="message-skeleton" :class="{ 'is-user': index % 2 === 1 }">
+  <div class="message-skeleton" :class="{ 'is-user': (props.index ?? 0) % 2 === 1 }">
     <div class="skeleton-avatar" />
     <div class="skeleton-content">
-      <div class="skeleton-line" :style="{ width: `${60 + (index || 0) * 15}%` }" />
-      <div class="skeleton-line" :style="{ width: `${40 + (index || 0) * 10}%` }" />
-      <div v-if="index === 1" class="skeleton-line" style="width: 80%" />
+      <div class="skeleton-line" :style="{ width: `${60 + (props.index || 0) * 15}%` }" />
+      <div class="skeleton-line" :style="{ width: `${40 + (props.index || 0) * 10}%` }" />
+      <div v-if="props.index === 1" class="skeleton-line" style="width: 80%" />
     </div>
   </div>
 </template>

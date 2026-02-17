@@ -233,7 +233,15 @@ const layout = computed(() => {
       labelY,
       label: actionNameMap.get(t.action) || t.action,
     }
-  }).filter(Boolean)
+  }).filter((edge): edge is {
+    from: string
+    to: string
+    action: string
+    path: string
+    labelX: number
+    labelY: number
+    label: string
+  } => edge !== null)
 
   return { layoutNodes, layoutEdges, totalWidth, totalHeight }
 })

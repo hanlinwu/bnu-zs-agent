@@ -11,6 +11,7 @@
  *   update:activeNode - Fired when a tab/tag is clicked
  */
 import type { WorkflowNode } from '@/api/admin/workflow'
+import type { TabPaneName } from 'element-plus'
 
 const props = withDefaults(defineProps<{
   nodes: WorkflowNode[]
@@ -25,19 +26,19 @@ const emit = defineEmits<{
   'update:activeNode': [nodeId: string]
 }>()
 
-function nodeTagType(node: WorkflowNode): '' | 'success' | 'warning' | 'info' | 'danger' {
-  if (node.type === 'start') return ''
+function nodeTagType(node: WorkflowNode): 'success' | 'warning' | 'info' | 'danger' {
+  if (node.type === 'start') return 'info'
   if (node.type === 'intermediate') return 'info'
   if (node.type === 'terminal') {
     if (node.id.includes('approved')) return 'success'
     if (node.id.includes('rejected')) return 'danger'
     return 'warning'
   }
-  return ''
+  return 'info'
 }
 
-function handleTabChange(nodeId: string) {
-  emit('update:activeNode', nodeId)
+function handleTabChange(nodeId: TabPaneName) {
+  emit('update:activeNode', String(nodeId))
 }
 
 function handleTagClick(nodeId: string) {

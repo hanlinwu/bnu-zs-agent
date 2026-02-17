@@ -91,13 +91,6 @@ function isNearBottom(): boolean {
   return el.scrollHeight - el.scrollTop - el.clientHeight < threshold
 }
 
-// Check if scroll is near top (触发加载历史)
-function isNearTop(): boolean {
-  const el = scrollContainerRef.value
-  if (!el) return false
-  return el.scrollTop < LOAD_THRESHOLD
-}
-
 // 保存当前滚动位置（用于加载历史后恢复）
 function saveScrollPosition(): number {
   const el = scrollContainerRef.value
@@ -106,7 +99,7 @@ function saveScrollPosition(): number {
 }
 
 // 恢复滚动位置（加载历史后）
-function restoreScrollPosition(oldScrollHeight: number) {
+function restoreScrollPosition() {
   const el = scrollContainerRef.value
   if (!el) return
   const newScrollHeight = el.scrollHeight
@@ -127,7 +120,7 @@ async function handleScroll() {
     oldScrollPosition.value = saveScrollPosition()
     const loaded = await chatStore.loadMoreHistory(20)
     if (loaded) {
-      nextTick(() => restoreScrollPosition(oldScrollPosition.value))
+      nextTick(() => restoreScrollPosition())
     }
   }
 

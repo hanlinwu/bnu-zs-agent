@@ -5,6 +5,7 @@ import { Plus } from '@element-plus/icons-vue'
 import * as adminApi from '@/api/admin/admin'
 import type { AdminItem } from '@/api/admin/admin'
 import type { FormInstance, FormRules } from 'element-plus'
+import type { TabPaneName } from 'element-plus'
 
 const loading = ref(false)
 const admins = ref<AdminItem[]>([])
@@ -113,8 +114,8 @@ function handlePageChange(page: number) {
   fetchAdmins()
 }
 
-function handleStatusTabChange(status: string) {
-  activeStatus.value = status
+function handleStatusTabChange(status: TabPaneName) {
+  activeStatus.value = String(status)
   currentPage.value = 1
   selectedAdmins.value = []
   tableRef.value?.clearSelection()

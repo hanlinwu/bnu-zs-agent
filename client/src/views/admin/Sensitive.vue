@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted, computed } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Plus, Upload, Document, Delete } from '@element-plus/icons-vue'
+import { Plus, Upload, Document } from '@element-plus/icons-vue'
 import * as sensitiveApi from '@/api/admin/sensitive'
 import type { GroupListItem, GroupDetail } from '@/api/admin/sensitive'
 import type { FormInstance, FormRules } from 'element-plus'
@@ -221,8 +221,9 @@ function openUploadDialog() {
 
 function handleFileSelect(event: Event) {
   const target = event.target as HTMLInputElement
-  if (target.files && target.files.length > 0) {
-    uploadForm.file = target.files[0]
+  const file = target.files?.item(0)
+  if (file) {
+    uploadForm.file = file
   }
 }
 
@@ -234,6 +235,7 @@ async function handleUpload() {
     ElMessage.warning('请选择要上传的txt文件')
     return
   }
+  const uploadFile: File = uploadForm.file
 
   uploading.value = true
   uploadProgress.value = 0
@@ -243,7 +245,7 @@ async function handleUpload() {
       name: uploadForm.name,
       description: uploadForm.description,
       level: uploadForm.level,
-      file: uploadForm.file,
+      file: uploadFile,
       onProgress: (percent) => {
         uploadProgress.value = percent
         if (percent >= 100) {
@@ -346,7 +348,7 @@ onMounted(() => {
                 <el-switch
                   :model-value="row.is_active"
                   size="small"
-                  @change="(val: boolean) => handleToggleGroup(row, val)"
+                  @change="(val) => handleToggleGroup(row, Boolean(val))"
                   @click.stop
                 />
               </template>

@@ -4,15 +4,21 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { Search } from '@element-plus/icons-vue'
 import * as userApi from '@/api/admin/user'
 import type { AdminUser } from '@/types/user'
+import type { TabPaneName } from 'element-plus'
+
+type UserRow = AdminUser & {
+  status?: 'active' | 'banned'
+  province?: string
+}
 
 const loading = ref(false)
-const users = ref<AdminUser[]>([])
+const users = ref<UserRow[]>([])
 const total = ref(0)
 const currentPage = ref(1)
 const pageSize = ref(20)
 const searchKeyword = ref('')
 const detailDialogVisible = ref(false)
-const selectedUser = ref<AdminUser | null>(null)
+const selectedUser = ref<UserRow | null>(null)
 
 const activeStatus = ref<string>('all')
 const selectedUsers = ref<any[]>([])
@@ -20,16 +26,6 @@ const batchLoading = ref(false)
 const tableRef = ref()
 
 const batchEnabled = computed(() => activeStatus.value !== 'all')
-
-function roleLabel(role: string) {
-  const map: Record<string, string> = {
-    gaokao: '高考生',
-    kaoyan: '考研生',
-    international: '国际学生',
-    parent: '家长',
-  }
-  return map[role] || role
-}
 
 function formatDate(date?: string) {
   if (!date) return '-'
@@ -51,7 +47,11 @@ async function fetchUsers() {
       keyword: searchKeyword.value || undefined,
       status: activeStatus.value === 'all' ? undefined : activeStatus.value,
     })
-    users.value = res.data.items
+    users.value = (res.data.items || []).map((item: any) => ({
+      ...item,
+      status: item.status ?? (item.enabled === false ? 'banned' : 'active'),
+      province: item.province ?? '',
+    }))
     total.value = res.data.total
   } catch {
     ElMessage.error('加载用户列表失败')
@@ -72,8 +72,8 @@ function handlePageChange(page: number) {
   fetchUsers()
 }
 
-function handleStatusTabChange(status: string) {
-  activeStatus.value = status
+function handleStatusTabChange(status: TabPaneName) {
+  activeStatus.value = String(status)
   currentPage.value = 1
   selectedUsers.value = []
   tableRef.value?.clearSelection()
@@ -109,12 +109,12 @@ async function handleBatchAction(action: 'ban' | 'unban') {
   }
 }
 
-function viewDetail(user: AdminUser) {
+function viewDetail(user: UserRow) {
   selectedUser.value = user
   detailDialogVisible.value = true
 }
 
-async function toggleStatus(user: AdminUser) {
+async function toggleStatus(user: UserRow) {
   const action = user.status === 'active' ? '封禁' : '解封'
   try {
     await ElMessageBox.confirm(

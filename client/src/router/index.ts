@@ -52,4 +52,8 @@ router.afterEach(() => {
   routeLoading.value = false
 })
 
+router.onError(() => {
+  routeLoading.value = false
+})
+
 export default router

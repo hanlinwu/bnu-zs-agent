@@ -151,10 +151,9 @@ asyncio.run(create_tables())
             "ALTER TABLE knowledge_chunks ADD COLUMN IF NOT EXISTS embedding vector(1536);" 2>/dev/null || true
     }
 
-    # 确保上传目录存在
-    local UPLOAD_DIR
-    UPLOAD_DIR=$(grep UPLOAD_DIR .env 2>/dev/null | cut -d= -f2 || echo "/data/uploads")
-    sudo mkdir -p "$UPLOAD_DIR" 2>/dev/null && sudo chmod 777 "$UPLOAD_DIR" 2>/dev/null || true
+    # 放权 /data 下所有路径（本地开发环境）
+    sudo mkdir -p /data 2>/dev/null || true
+    sudo chmod -R 777 /data 2>/dev/null || true
 
     info "后端配置完成 ✓"
 }

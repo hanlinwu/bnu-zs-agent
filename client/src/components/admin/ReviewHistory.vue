@@ -19,7 +19,7 @@ function formatDate(date: string) {
   })
 }
 
-function actionTagType(action: string): '' | 'success' | 'danger' | 'warning' | 'info' {
+function actionTagType(action: string): 'success' | 'danger' | 'warning' | 'info' {
   if (action === 'approve') return 'success'
   if (action === 'reject') return 'danger'
   return 'warning'

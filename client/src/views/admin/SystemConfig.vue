@@ -129,6 +129,10 @@ const activePathMap: Record<string, string[]> = {
 
 const activeNodeSet = computed(() => new Set(activePathMap[activeFlowNode.value] || [activeFlowNode.value]))
 
+function getFlowNodeMeta(nodeId: string): FlowNodeMeta {
+  return flowNodeMap[nodeId] || { id: nodeId, label: nodeId, short: '' }
+}
+
 function isEdgeActive(edge: GraphEdge): boolean {
   const pathNodes = activePathMap[activeFlowNode.value] || []
   const fromIdx = pathNodes.indexOf(edge.from)
@@ -430,10 +434,10 @@ onMounted(() => {
                 :stroke-width="activeNodeSet.has(node.id) ? 2 : 1.2"
               />
               <text :x="node.x + 12" :y="node.y + 28" class="graph-node-title">
-                {{ flowNodeMap[node.id].label }}
+                {{ getFlowNodeMeta(node.id).label }}
               </text>
               <text :x="node.x + 12" :y="node.y + 48" class="graph-node-sub">
-                {{ flowNodeMap[node.id].short }}
+                {{ getFlowNodeMeta(node.id).short }}
               </text>
             </g>
           </svg>

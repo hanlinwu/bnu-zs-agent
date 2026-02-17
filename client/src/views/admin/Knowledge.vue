@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus, Upload, Edit, Delete } from '@element-plus/icons-vue'
@@ -8,7 +8,8 @@ import * as knowledgeApi from '@/api/admin/knowledge'
 import * as knowledgeBaseApi from '@/api/admin/knowledgeBase'
 import { getWorkflowForResource } from '@/api/admin/workflow'
 import type { WorkflowNode, WorkflowAction, WorkflowTransition } from '@/api/admin/workflow'
-import type { KnowledgeDocument, DocumentStatus, KnowledgeBase } from '@/types/knowledge'
+import type { KnowledgeDocument, KnowledgeBase } from '@/types/knowledge'
+import type { TabPaneName } from 'element-plus'
 
 const router = useRouter()
 
@@ -74,11 +75,6 @@ const batchActions = computed(() => {
 })
 
 // === Workflow Helpers ===
-function getNodeName(nodeId: string) {
-  const node = workflowNodes.value.find(n => n.id === nodeId)
-  return node?.name || nodeId
-}
-
 function nodeIsTerminal(nodeId: string) {
   const node = workflowNodes.value.find(n => n.id === nodeId)
   return node?.type === 'terminal'
@@ -204,7 +200,7 @@ async function handleKbDelete(kb: KnowledgeBase) {
     await fetchKnowledgeBases()
     // Select next available
     if (selectedKbId.value === kb.id) {
-      selectedKbId.value = knowledgeBases.value.length > 0 ? knowledgeBases.value[0].id : ''
+      selectedKbId.value = knowledgeBases.value[0]?.id || ''
       if (selectedKbId.value) fetchDocuments()
     }
   } catch {
@@ -212,11 +208,12 @@ async function handleKbDelete(kb: KnowledgeBase) {
   }
 }
 
-async function handleKbToggleEnabled(enabled: boolean) {
+async function handleKbToggleEnabled(enabled: string | number | boolean) {
   if (!selectedKb.value) return
   try {
-    await knowledgeBaseApi.updateKnowledgeBase(selectedKb.value.id, { enabled })
-    ElMessage.success(enabled ? '已启用' : '已禁用')
+    const finalEnabled = Boolean(enabled)
+    await knowledgeBaseApi.updateKnowledgeBase(selectedKb.value.id, { enabled: finalEnabled })
+    ElMessage.success(finalEnabled ? '已启用' : '已禁用')
     await fetchKnowledgeBases()
   } catch {
     ElMessage.error('操作失败')
@@ -258,8 +255,8 @@ async function fetchDocuments() {
   }
 }
 
-function handleTabChange(nodeId: string) {
-  activeTab.value = nodeId
+function handleTabChange(nodeId: TabPaneName) {
+  activeTab.value = String(nodeId)
   currentPage.value = 1
   tableRef.value?.clearSelection()
   selectedDocs.value = []
@@ -379,7 +376,7 @@ onMounted(async () => {
   await Promise.all([fetchWorkflow(), fetchKnowledgeBases()])
   // Auto-select first KB
   if (knowledgeBases.value.length > 0) {
-    selectedKbId.value = knowledgeBases.value[0].id
+    selectedKbId.value = knowledgeBases.value[0]?.id || ''
     fetchDocuments()
   }
 })

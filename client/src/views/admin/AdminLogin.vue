@@ -113,7 +113,7 @@ async function handleLogin() {
       </el-form>
 
       <div class="login-footer">
-        <a href="/" class="back-link">返回首页</a>
+        <router-link to="/" class="back-link">返回首页</router-link>
       </div>
     </div>
 
