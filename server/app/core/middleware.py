@@ -2,16 +2,108 @@
 
 import time
 import uuid
+from typing import Any
 
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import Response, JSONResponse
 
 from app.config import settings
+from app.core.database import get_session_factory
+from app.core.security import verify_token
+from app.models.audit_log import AuditLog
 
 
 class AuditLogMiddleware(BaseHTTPMiddleware):
     """Automatically log each request for audit trail."""
+
+    @staticmethod
+    def _action_from_method(method: str) -> str:
+        mapping = {
+            "GET": "query",
+            "POST": "create",
+            "PUT": "update",
+            "PATCH": "update",
+            "DELETE": "delete",
+        }
+        return mapping.get(method.upper(), "query")
+
+    @staticmethod
+    def _resource_from_path(path: str) -> str | None:
+        """Extract resource name from /api/v1/{resource} or /api/v1/admin/{resource} path."""
+        if not path.startswith("/api/v1/"):
+            return None
+
+        segments = [seg for seg in path.split("/") if seg]
+        # ['api', 'v1', ...]
+        if len(segments) < 3:
+            return None
+
+        if segments[2] == "admin":
+            if len(segments) >= 4:
+                return segments[3]
+            return "admin"
+        return segments[2]
+
+    @staticmethod
+    def _extract_actor_ids(request: Request) -> tuple[str | None, str | None]:
+        """Return (user_id, admin_id) from bearer token payload if available."""
+        auth = request.headers.get("authorization") or ""
+        if not auth.startswith("Bearer "):
+            return None, None
+
+        token = auth[7:]
+        try:
+            payload = verify_token(token)
+        except Exception:
+            return None, None
+
+        actor_type = payload.get("type")
+        subject = payload.get("sub")
+        if not subject:
+            return None, None
+
+        if actor_type == "admin":
+            return None, str(subject)
+        if actor_type == "user":
+            return str(subject), None
+        return None, None
+
+    async def _write_audit_log(self, request: Request, response: Response, duration_ms: float) -> None:
+        path = request.url.path
+        if not path.startswith("/api/"):
+            return
+
+        # Skip frequently-hit and self-observing endpoints
+        if path in ("/health",) or path.startswith("/api/v1/admin/logs"):
+            return
+
+        action = self._action_from_method(request.method)
+        resource = self._resource_from_path(path)
+        user_id, admin_id = self._extract_actor_ids(request)
+
+        query_params: dict[str, Any] = dict(request.query_params)
+        detail = {
+            "path": path,
+            "status_code": response.status_code,
+            "duration_ms": duration_ms,
+            "query": query_params,
+        }
+
+        session_factory = get_session_factory()
+        async with session_factory() as session:
+            log = AuditLog(
+                user_id=user_id,
+                admin_id=admin_id,
+                action=action,
+                resource=resource,
+                resource_id=None,
+                ip_address=request.client.host if request.client else None,
+                user_agent=request.headers.get("user-agent"),
+                detail=detail,
+            )
+            session.add(log)
+            await session.commit()
 
     async def dispatch(self, request: Request, call_next):
         request.state.request_id = str(uuid.uuid4())
@@ -34,6 +126,12 @@ class AuditLogMiddleware(BaseHTTPMiddleware):
                 duration_ms,
                 request.client.host if request.client else "unknown",
             )
+
+        try:
+            await self._write_audit_log(request, response, duration_ms)
+        except Exception:
+            # Audit logging failures must not break normal requests
+            pass
 
         return response
 

@@ -2,6 +2,7 @@
 import { computed } from 'vue'
 import type { Message } from '@/types/chat'
 import SourceCitation from './SourceCitation.vue'
+import { renderMarkdown } from '@/utils/markdown'
 
 const props = defineProps<{
   message: Message
@@ -20,75 +21,6 @@ const hasSources = computed(() => {
   return props.message.sources && props.message.sources.length > 0
 })
 
-/**
- * Simple markdown-to-HTML converter.
- * Handles: bold, italic, inline code, code blocks, unordered/ordered lists, line breaks.
- */
-function renderMarkdown(text: string): string {
-  let html = text
-
-  // Code blocks (```...```)
-  html = html.replace(/```(\w*)\n?([\s\S]*?)```/g, (_match, _lang, code) => {
-    return `<pre class="md-code-block"><code>${escapeHtml(code.trim())}</code></pre>`
-  })
-
-  // Inline code
-  html = html.replace(/`([^`]+)`/g, '<code class="md-inline-code">$1</code>')
-
-  // Bold
-  html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-
-  // Italic
-  html = html.replace(/\*(.+?)\*/g, '<em>$1</em>')
-
-  // Split into lines for list processing
-  const lines = html.split('\n')
-  const result: string[] = []
-  let inUl = false
-  let inOl = false
-
-  for (const line of lines) {
-    const ulMatch = line.match(/^[-*]\s+(.+)/)
-    const olMatch = line.match(/^\d+\.\s+(.+)/)
-
-    if (ulMatch) {
-      if (!inUl) { result.push('<ul>'); inUl = true }
-      result.push(`<li>${ulMatch[1]}</li>`)
-      continue
-    } else if (inUl) {
-      result.push('</ul>')
-      inUl = false
-    }
-
-    if (olMatch) {
-      if (!inOl) { result.push('<ol>'); inOl = true }
-      result.push(`<li>${olMatch[1]}</li>`)
-      continue
-    } else if (inOl) {
-      result.push('</ol>')
-      inOl = false
-    }
-
-    if (line.trim() === '') {
-      result.push('<br />')
-    } else {
-      result.push(`<p>${line}</p>`)
-    }
-  }
-
-  if (inUl) result.push('</ul>')
-  if (inOl) result.push('</ol>')
-
-  return result.join('')
-}
-
-function escapeHtml(str: string): string {
-  return str
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-}
 </script>
 
 <template>
@@ -191,6 +123,31 @@ function escapeHtml(str: string): string {
   :deep(ul), :deep(ol) {
     margin: 6px 0;
     padding-left: 20px;
+  }
+
+  :deep(table) {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 8px 0;
+    font-size: 13px;
+  }
+
+  :deep(th), :deep(td) {
+    border: 1px solid #d8deea;
+    padding: 6px 8px;
+    text-align: left;
+    vertical-align: top;
+  }
+
+  :deep(th) {
+    background: #eef3fb;
+    font-weight: 600;
+  }
+
+  :deep(a) {
+    color: #1d4ed8;
+    text-decoration: underline;
+    word-break: break-all;
   }
 
   :deep(li) {

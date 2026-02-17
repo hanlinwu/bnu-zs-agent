@@ -63,6 +63,7 @@ async def process_message(
             conversation_id=conversation.id,
             role="assistant",
             content=filter_result.message,
+            model_version="system",
             risk_level="blocked",
         )
         db.add(assistant_msg)
@@ -88,7 +89,7 @@ async def process_message(
         db.add(msg)
         assistant_msg = Message(
             conversation_id=conversation.id, role="assistant",
-            content=high_risk_response, risk_level="high",
+            content=high_risk_response, model_version="system", risk_level="high",
         )
         db.add(assistant_msg)
         await db.commit()
@@ -137,6 +138,7 @@ async def process_message(
                 conversation_id=conversation.id,
                 role="assistant",
                 content=no_knowledge_response,
+                model_version="system",
                 risk_level=risk_level,
                 review_passed=True,
                 sources=None,
@@ -191,8 +193,10 @@ async def process_message(
 
     # Step 7: LLM streaming call
     full_response = []
+    model_version_used = "system"
     try:
         stream = await llm_router.chat(messages, stream=True)
+        model_version_used = getattr(llm_router, "last_model_name", None) or "unknown"
         async for token in stream:
             if cancel_event and cancel_event.is_set():
                 # Close the LLM stream
@@ -218,6 +222,7 @@ async def process_message(
         conversation_id=conversation.id,
         role="assistant",
         content=response_text if response_text else "（已停止生成）",
+        model_version=model_version_used,
         risk_level=risk_level,
         review_passed=review_passed,
         sources=sources_citation if sources_citation else None,

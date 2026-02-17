@@ -93,7 +93,17 @@ async function fetchLogs() {
       params.endDate = dateRange.value[1]
     }
     const res = await logApi.getLogs(params)
-    logs.value = res.data.items
+    const rawItems = (res.data.items || []) as any[]
+    logs.value = rawItems.map((item) => ({
+      id: String(item.id),
+      userId: item.user_id || item.admin_id || '',
+      userName: item.admin_id ? `管理员:${String(item.admin_id).slice(0, 8)}` : (item.user_id ? `用户:${String(item.user_id).slice(0, 8)}` : '-'),
+      ip: item.ip_address || '-',
+      action: item.action || 'query',
+      module: item.resource || '-',
+      detail: item.detail ? JSON.stringify(item.detail) : '-',
+      createdAt: item.created_at,
+    }))
     total.value = res.data.total
   } catch {
     ElMessage.error('加载审计日志失败')
@@ -229,9 +239,6 @@ onMounted(() => {
         </el-table-column>
         <el-table-column prop="ip" label="IP 地址" width="140" />
         <el-table-column prop="detail" label="详情" min-width="240" show-overflow-tooltip />
-        <el-table-column prop="modelVersion" label="模型版本" width="120" show-overflow-tooltip>
-          <template #default="{ row }">{{ row.modelVersion || '-' }}</template>
-        </el-table-column>
       </el-table>
 
       <div class="pagination-wrapper">

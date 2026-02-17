@@ -177,8 +177,10 @@ onMounted(() => {
       >
         <el-table-column label="用户" min-width="160">
           <template #default="{ row }">
-            <div>{{ row.user_nickname || '-' }}</div>
-            <div class="sub-text">{{ row.user_phone }}</div>
+            <div class="user-inline" :title="`${row.user_nickname || '-'} ${row.user_phone || ''}`">
+              {{ row.user_nickname || '-' }}
+              <span class="sub-text">{{ row.user_phone }}</span>
+            </div>
           </template>
         </el-table-column>
         <el-table-column prop="title" label="对话标题" min-width="180" show-overflow-tooltip>
@@ -250,6 +252,9 @@ onMounted(() => {
             </el-tag>
             <el-tag v-if="msg.risk_level" size="small" :type="riskTag(msg.risk_level).type">
               {{ riskTag(msg.risk_level).label }}
+            </el-tag>
+            <el-tag v-if="msg.role === 'assistant'" size="small" type="info">
+              模型: {{ msg.model_version || 'unknown' }}
             </el-tag>
             <el-tag v-if="msg.sensitive_level" size="small" :type="sensitiveTag(msg.sensitive_level).type">
               {{ sensitiveTag(msg.sensitive_level).label }}
@@ -330,12 +335,33 @@ onMounted(() => {
   :deep(.el-table__header th) {
     background: var(--bg-secondary, #F4F6FA) !important;
     font-weight: 600;
+    padding-top: 6px;
+    padding-bottom: 6px;
+  }
+
+  :deep(.el-table__body td) {
+    padding-top: 6px;
+    padding-bottom: 6px;
+  }
+
+  :deep(.el-table .cell) {
+    line-height: 1.35;
   }
 }
 
 .sub-text {
   font-size: 12px;
   color: var(--text-secondary, #5A5A72);
+}
+
+.user-inline {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
 .deleted-tag {
@@ -362,9 +388,9 @@ onMounted(() => {
 }
 
 .message-item {
-  padding: 12px 16px;
+  padding: 8px 12px;
   border-radius: 8px;
-  margin-bottom: 8px;
+  margin-bottom: 6px;
 
   &.message-user {
     background: var(--bg-secondary, #F4F6FA);
@@ -382,8 +408,9 @@ onMounted(() => {
 .message-header {
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin-bottom: 8px;
+  gap: 6px;
+  margin-bottom: 6px;
+  flex-wrap: wrap;
 }
 
 .message-meta {
@@ -398,8 +425,8 @@ onMounted(() => {
 }
 
 .message-content {
-  font-size: 14px;
-  line-height: 1.6;
+  font-size: 13px;
+  line-height: 1.45;
   color: var(--text-primary, #1A1A2E);
   white-space: pre-wrap;
   word-break: break-word;

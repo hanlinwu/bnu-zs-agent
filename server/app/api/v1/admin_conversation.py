@@ -216,6 +216,7 @@ async def get_conversation_messages(
                 "role": msg.role,
                 "content": msg.content,
                 "char_count": len(msg.content) if msg.content else 0,
+                "model_version": msg.model_version,
                 "risk_level": msg.risk_level,
                 "review_passed": msg.review_passed,
                 "sources": msg.sources,

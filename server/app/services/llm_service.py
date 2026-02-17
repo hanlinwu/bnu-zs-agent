@@ -102,6 +102,7 @@ class LLMRouter:
         self.review_provider: LLMProvider | None = None
         self.strategy: str = "failover"  # failover / round_robin / weighted
         self._current_index: int = 0
+        self.last_model_name: str | None = None
 
     def add_provider(self, provider: LLMProvider):
         self.providers.append(provider)
@@ -126,6 +127,7 @@ class LLMRouter:
         last_error = None
         for i, provider in enumerate(self.providers):
             try:
+                self.last_model_name = getattr(provider, "model", None)
                 result = await provider.chat(messages, stream=stream)
                 return result
             except Exception as e:

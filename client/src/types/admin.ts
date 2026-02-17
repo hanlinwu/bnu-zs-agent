@@ -61,7 +61,6 @@ export interface AuditLog {
   action: string
   module: string
   detail: string
-  modelVersion?: string
   knowledgeHits?: string[]
   createdAt: string
 }
@@ -182,6 +181,7 @@ export interface AdminMessage {
   role: 'user' | 'assistant' | 'system'
   content: string
   char_count: number
+  model_version: string | null
   risk_level: string | null
   review_passed: boolean | null
   sources: Record<string, unknown> | null
