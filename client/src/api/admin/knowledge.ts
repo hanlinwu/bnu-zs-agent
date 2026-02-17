@@ -2,7 +2,7 @@ import request from '../request'
 import type { KnowledgeDocument, KnowledgeChunk } from '@/types/knowledge'
 import type { PaginatedResult } from '@/types/admin'
 
-export const getDocuments = (params: { page: number; pageSize: number; status?: string }) =>
+export const getDocuments = (params: { page: number; pageSize: number; status?: string; kb_id?: string }) =>
   request.get<PaginatedResult<KnowledgeDocument>>('/admin/knowledge', { params })
 
 export const getDocument = (id: string) =>
@@ -13,8 +13,11 @@ export const uploadDocument = (formData: FormData) =>
     headers: { 'Content-Type': 'multipart/form-data' },
   })
 
-export const reviewDocument = (id: string, data: { action: 'approve' | 'reject'; note?: string }) =>
+export const reviewDocument = (id: string, data: { action: string; note?: string }) =>
   request.post(`/admin/knowledge/${id}/review`, data)
+
+export const batchReviewDocuments = (data: { ids: string[]; action: string; note?: string }) =>
+  request.post('/admin/knowledge/batch-review', data)
 
 export const deleteDocument = (id: string) =>
   request.delete(`/admin/knowledge/${id}`)

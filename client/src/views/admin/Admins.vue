@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus } from '@element-plus/icons-vue'
 import * as adminApi from '@/api/admin/admin'
@@ -11,6 +11,13 @@ const admins = ref<AdminItem[]>([])
 const total = ref(0)
 const currentPage = ref(1)
 const pageSize = ref(20)
+
+const activeStatus = ref<string>('all')
+const selectedAdmins = ref<AdminItem[]>([])
+const batchLoading = ref(false)
+const tableRef = ref()
+
+const batchEnabled = computed(() => activeStatus.value !== 'all')
 
 const createDialogVisible = ref(false)
 const editDialogVisible = ref(false)
@@ -89,6 +96,7 @@ async function fetchAdmins() {
     const res = await adminApi.getAdmins({
       page: currentPage.value,
       pageSize: pageSize.value,
+      status: activeStatus.value === 'all' ? undefined : activeStatus.value,
     })
     admins.value = res.data.items
     total.value = res.data.total
@@ -101,7 +109,74 @@ async function fetchAdmins() {
 
 function handlePageChange(page: number) {
   currentPage.value = page
+  tableRef.value?.clearSelection()
   fetchAdmins()
+}
+
+function handleStatusTabChange(status: string) {
+  activeStatus.value = status
+  currentPage.value = 1
+  selectedAdmins.value = []
+  tableRef.value?.clearSelection()
+  fetchAdmins()
+}
+
+function handleSelectionChange(selection: AdminItem[]) {
+  selectedAdmins.value = selection
+}
+
+async function handleBatchStatus(status: 'active' | 'disabled') {
+  if (selectedAdmins.value.length === 0) return
+  const label = status === 'active' ? '启用' : '禁用'
+  try {
+    await ElMessageBox.confirm(
+      `确定要批量${label}选中的 ${selectedAdmins.value.length} 个管理员吗？`,
+      '批量操作确认',
+      { confirmButtonText: '确定', cancelButtonText: '取消', type: 'warning' }
+    )
+    batchLoading.value = true
+    const res = await adminApi.batchUpdateAdminStatus({
+      ids: selectedAdmins.value.map(a => a.id),
+      status,
+    })
+    const data = res.data as any
+    ElMessage.success(`批量${label}完成，成功 ${data.success_count} 项`)
+    if (data.errors?.length) {
+      ElMessage.warning(`${data.errors.length} 项操作失败`)
+    }
+    selectedAdmins.value = []
+    fetchAdmins()
+  } catch {
+    // cancelled
+  } finally {
+    batchLoading.value = false
+  }
+}
+
+async function handleBatchDelete() {
+  if (selectedAdmins.value.length === 0) return
+  try {
+    await ElMessageBox.confirm(
+      `确定要批量删除选中的 ${selectedAdmins.value.length} 个管理员吗？此操作不可撤销。`,
+      '批量删除确认',
+      { confirmButtonText: '确定删除', cancelButtonText: '取消', type: 'error' }
+    )
+    batchLoading.value = true
+    const res = await adminApi.batchDeleteAdmins({
+      ids: selectedAdmins.value.map(a => a.id),
+    })
+    const data = res.data as any
+    ElMessage.success(`批量删除完成，成功 ${data.success_count} 项`)
+    if (data.errors?.length) {
+      ElMessage.warning(`${data.errors.length} 项操作失败`)
+    }
+    selectedAdmins.value = []
+    fetchAdmins()
+  } catch {
+    // cancelled
+  } finally {
+    batchLoading.value = false
+  }
 }
 
 function openCreate() {
@@ -203,11 +278,52 @@ onMounted(() => {
     </div>
 
     <div class="content-card">
+      <el-tabs :model-value="activeStatus" @update:model-value="handleStatusTabChange">
+        <el-tab-pane label="全部" name="all" />
+        <el-tab-pane label="启用" name="active" />
+        <el-tab-pane label="禁用" name="disabled" />
+      </el-tabs>
+
+      <div v-if="batchEnabled && selectedAdmins.length > 0" class="batch-bar">
+        <span class="batch-count">已选 {{ selectedAdmins.length }} 项</span>
+        <el-button
+          v-if="activeStatus === 'disabled'"
+          type="success"
+          size="small"
+          :loading="batchLoading"
+          @click="handleBatchStatus('active')"
+        >
+          批量启用
+        </el-button>
+        <el-button
+          v-if="activeStatus === 'active'"
+          type="warning"
+          size="small"
+          :loading="batchLoading"
+          @click="handleBatchStatus('disabled')"
+        >
+          批量禁用
+        </el-button>
+        <el-button
+          type="danger"
+          size="small"
+          :loading="batchLoading"
+          @click="handleBatchDelete"
+        >
+          批量删除
+        </el-button>
+      </div>
+
       <el-table
+        ref="tableRef"
         v-loading="loading"
         :data="admins"
         stripe
+        height="100%"
+        class="admin-table"
+        @selection-change="handleSelectionChange"
       >
+        <el-table-column v-if="batchEnabled" type="selection" width="50" />
         <el-table-column prop="username" label="用户名" min-width="140" />
         <el-table-column prop="real_name" label="姓名" min-width="120" show-overflow-tooltip />
         <el-table-column prop="phone" label="手机号" min-width="140" />
@@ -340,6 +456,9 @@ onMounted(() => {
 
 <style lang="scss" scoped>
 .admins-page {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
 }
 
 .page-header {
@@ -363,11 +482,15 @@ onMounted(() => {
 }
 
 .content-card {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
   background: var(--bg-primary, #ffffff);
   border-radius: 12px;
   border: 1px solid var(--border-color, #E2E6ED);
   padding: 20px;
   overflow: hidden;
+  min-height: 0;
 }
 
 .pagination-wrapper {
@@ -376,8 +499,30 @@ onMounted(() => {
   margin-top: 16px;
 }
 
+:deep(.el-table) {
+  flex: 1;
+  overflow: hidden;
+  height: 100% !important;
+}
+
 :deep(.el-table__header th) {
   background: var(--bg-secondary, #F4F6FA) !important;
   font-weight: 600;
+}
+
+.batch-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  background: var(--el-color-primary-light-9, #ECF5FF);
+  border-radius: 8px;
+  margin-bottom: 12px;
+}
+
+.batch-count {
+  font-size: 13px;
+  color: var(--text-primary, #1A1A2E);
+  font-weight: 500;
 }
 </style>

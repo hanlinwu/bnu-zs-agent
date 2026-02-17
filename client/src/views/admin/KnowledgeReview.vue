@@ -2,9 +2,10 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { ArrowLeft, Check, Close, Download, Loading } from '@element-plus/icons-vue'
+import { ArrowLeft, Download, Loading } from '@element-plus/icons-vue'
 import * as knowledgeApi from '@/api/admin/knowledge'
 import * as wfApi from '@/api/admin/workflow'
+import type { WorkflowNode, WorkflowAction, WorkflowTransition, ReviewHistoryRecord } from '@/api/admin/workflow'
 import type { KnowledgeDocument, KnowledgeChunk } from '@/types/knowledge'
 import ReviewHistory from '@/components/admin/ReviewHistory.vue'
 
@@ -20,12 +21,44 @@ const chunkPage = ref(1)
 const chunkPageSize = ref(20)
 const reviewNote = ref('')
 const submitting = ref(false)
-const reviewHistory = ref<any[]>([])
+const reviewHistory = ref<ReviewHistoryRecord[]>([])
 let pollTimer: ReturnType<typeof setInterval> | null = null
+
+// Workflow data
+const workflowNodes = ref<WorkflowNode[]>([])
+const workflowActions = ref<WorkflowAction[]>([])
+const workflowTransitions = ref<WorkflowTransition[]>([])
 
 const isProcessing = computed(() => doc.value?.status === 'processing')
 
+const currentNode = computed(() => doc.value?.currentNode || doc.value?.status || 'pending')
+
+const availableActions = computed(() => {
+  const node = currentNode.value
+  // Find transitions from current node
+  const actionIds = new Set(
+    workflowTransitions.value
+      .filter(t => t.from_node === node)
+      .map(t => t.action)
+  )
+  return workflowActions.value.filter(a => actionIds.has(a.id))
+})
+
+function actionButtonType(actionId: string) {
+  if (actionId.includes('approve')) return 'success'
+  if (actionId.includes('reject')) return 'danger'
+  return 'primary'
+}
+
+function getNodeName(nodeId: string) {
+  const node = workflowNodes.value.find(n => n.id === nodeId)
+  return node?.name || nodeId
+}
+
 function statusLabel(status: string) {
+  const node = workflowNodes.value.find(n => n.id === status)
+  if (node) return node.name
+
   const map: Record<string, string> = {
     pending: '待审核',
     reviewing: '审核中',
@@ -67,6 +100,17 @@ function formatFileSize(bytes: number) {
   return (bytes / (1024 * 1024)).toFixed(1) + ' MB'
 }
 
+async function fetchWorkflow() {
+  try {
+    const res = await wfApi.getWorkflowForResource('knowledge')
+    workflowNodes.value = res.data.nodes || []
+    workflowActions.value = res.data.actions || []
+    workflowTransitions.value = res.data.transitions || []
+  } catch {
+    // fallback
+  }
+}
+
 async function fetchDocument() {
   if (!documentId.value) return
   loading.value = true
@@ -91,7 +135,7 @@ async function fetchChunks() {
     chunks.value = data.items || []
     chunkTotal.value = data.total || 0
   } catch {
-    // Silently fail during polling; only show error on initial load
+    // Silently fail during polling
   }
 }
 
@@ -110,24 +154,27 @@ async function fetchReviewHistory() {
   }
 }
 
-async function handleReview(approved: boolean) {
+async function handleAction(actionId: string) {
   if (!doc.value) return
   submitting.value = true
   try {
     const res = await knowledgeApi.reviewDocument(doc.value.id, {
-      action: approved ? 'approve' : 'reject',
+      action: actionId,
       note: reviewNote.value || undefined,
     })
-    if (approved) {
-      doc.value = res.data as any
+    doc.value = res.data as any
+    fetchReviewHistory()
+
+    if (doc.value?.status === 'processing') {
       ElMessage.success('已通过审核，正在切片...')
       startPolling()
-      fetchReviewHistory()
-    } else {
+    } else if (actionId.includes('reject')) {
       ElMessage.success('已拒绝')
-      fetchReviewHistory()
       router.push('/admin/knowledge')
+    } else {
+      ElMessage.success('操作成功')
     }
+    reviewNote.value = ''
   } catch {
     ElMessage.error('审核操作失败')
   } finally {
@@ -160,14 +207,14 @@ function goBack() {
   router.push('/admin/knowledge')
 }
 
-onMounted(() => {
-  fetchDocument().then(() => {
-    fetchChunks()
-    fetchReviewHistory()
-    if (doc.value?.status === 'processing') {
-      startPolling()
-    }
-  })
+onMounted(async () => {
+  await fetchWorkflow()
+  await fetchDocument()
+  fetchChunks()
+  fetchReviewHistory()
+  if (doc.value?.status === 'processing') {
+    startPolling()
+  }
 })
 
 onUnmounted(() => {
@@ -212,9 +259,9 @@ onUnmounted(() => {
             <span class="info-value">{{ formatDate(doc.createdAt) }}</span>
           </div>
           <div class="info-item">
-            <span class="info-label">当前状态</span>
-            <el-tag size="small" :type="(statusTagType(doc.status) as any)">
-              {{ statusLabel(doc.status) }}
+            <span class="info-label">当前节点</span>
+            <el-tag size="small" :type="(statusTagType(currentNode) as any)">
+              {{ statusLabel(currentNode) }}
             </el-tag>
           </div>
           <div class="info-item">
@@ -269,7 +316,7 @@ onUnmounted(() => {
       </div>
 
       <div
-        v-if="doc.status === 'pending' || doc.status === 'reviewing'"
+        v-if="availableActions.length > 0"
         class="review-panel"
       >
         <h3 class="panel-title">审核操作</h3>
@@ -282,20 +329,13 @@ onUnmounted(() => {
         />
         <div class="review-actions">
           <el-button
-            type="success"
-            :icon="Check"
+            v-for="action in availableActions"
+            :key="action.id"
+            :type="actionButtonType(action.id)"
             :loading="submitting"
-            @click="handleReview(true)"
+            @click="handleAction(action.id)"
           >
-            通过
-          </el-button>
-          <el-button
-            type="danger"
-            :icon="Close"
-            :loading="submitting"
-            @click="handleReview(false)"
-          >
-            拒绝
+            {{ action.name }}
           </el-button>
         </div>
       </div>

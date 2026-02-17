@@ -1,18 +1,12 @@
 <script setup lang="ts">
 /**
  * Unified review history display component.
- * Used across KnowledgeReview and Media pages for consistent review record display.
+ * Shows workflow action records with from_node → action → to_node.
  */
+import type { ReviewHistoryRecord } from '@/api/admin/workflow'
 
 defineProps<{
-  records: {
-    id: string
-    step: number
-    action: string
-    reviewer_name: string
-    created_at: string
-    note?: string
-  }[]
+  records: ReviewHistoryRecord[]
 }>()
 
 function formatDate(date: string) {
@@ -24,6 +18,12 @@ function formatDate(date: string) {
     minute: '2-digit',
   })
 }
+
+function actionTagType(action: string): '' | 'success' | 'danger' | 'warning' | 'info' {
+  if (action === 'approve') return 'success'
+  if (action === 'reject') return 'danger'
+  return 'warning'
+}
 </script>
 
 <template>
@@ -34,12 +34,19 @@ function formatDate(date: string) {
       class="review-record"
     >
       <div class="review-record-header">
-        <el-tag size="small" :type="record.action === 'approve' ? 'success' : 'danger'">
-          {{ record.action === 'approve' ? '通过' : '拒绝' }}
-        </el-tag>
-        <span class="review-record-step">第{{ record.step }}步</span>
-        <span class="review-record-reviewer">{{ record.reviewer_name }}</span>
-        <span class="review-record-time">{{ formatDate(record.created_at) }}</span>
+        <span class="review-record-flow">
+          <el-tag size="small" type="info">{{ record.from_node_name || record.from_node }}</el-tag>
+          <span class="flow-arrow">&rarr;</span>
+          <el-tag size="small" :type="actionTagType(record.action)">
+            {{ record.action_name || record.action }}
+          </el-tag>
+          <span class="flow-arrow">&rarr;</span>
+          <el-tag size="small" type="info">{{ record.to_node_name || record.to_node }}</el-tag>
+        </span>
+        <span class="review-record-meta">
+          <span class="review-record-reviewer">{{ record.reviewer_name }}</span>
+          <span class="review-record-time">{{ formatDate(record.created_at) }}</span>
+        </span>
       </div>
       <p v-if="record.note" class="review-record-note">{{ record.note }}</p>
     </div>
@@ -62,13 +69,27 @@ function formatDate(date: string) {
 .review-record-header {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 8px;
+  flex-wrap: wrap;
 }
 
-.review-record-step {
+.review-record-flow {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.flow-arrow {
+  color: var(--text-secondary, #9E9EB3);
   font-size: 12px;
-  color: var(--text-secondary, #5A5A72);
-  font-weight: 500;
+}
+
+.review-record-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
 }
 
 .review-record-reviewer {
@@ -80,7 +101,6 @@ function formatDate(date: string) {
 .review-record-time {
   font-size: 12px;
   color: var(--text-secondary, #5A5A72);
-  margin-left: auto;
 }
 
 .review-record-note {

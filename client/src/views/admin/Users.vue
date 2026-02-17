@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Search } from '@element-plus/icons-vue'
 import * as userApi from '@/api/admin/user'
@@ -13,6 +13,13 @@ const pageSize = ref(20)
 const searchKeyword = ref('')
 const detailDialogVisible = ref(false)
 const selectedUser = ref<AdminUser | null>(null)
+
+const activeStatus = ref<string>('all')
+const selectedUsers = ref<any[]>([])
+const batchLoading = ref(false)
+const tableRef = ref()
+
+const batchEnabled = computed(() => activeStatus.value !== 'all')
 
 function roleLabel(role: string) {
   const map: Record<string, string> = {
@@ -42,6 +49,7 @@ async function fetchUsers() {
       page: currentPage.value,
       pageSize: pageSize.value,
       keyword: searchKeyword.value || undefined,
+      status: activeStatus.value === 'all' ? undefined : activeStatus.value,
     })
     users.value = res.data.items
     total.value = res.data.total
@@ -54,12 +62,51 @@ async function fetchUsers() {
 
 function handleSearch() {
   currentPage.value = 1
+  tableRef.value?.clearSelection()
   fetchUsers()
 }
 
 function handlePageChange(page: number) {
   currentPage.value = page
+  tableRef.value?.clearSelection()
   fetchUsers()
+}
+
+function handleStatusTabChange(status: string) {
+  activeStatus.value = status
+  currentPage.value = 1
+  selectedUsers.value = []
+  tableRef.value?.clearSelection()
+  fetchUsers()
+}
+
+function handleSelectionChange(selection: any[]) {
+  selectedUsers.value = selection
+}
+
+async function handleBatchAction(action: 'ban' | 'unban') {
+  if (selectedUsers.value.length === 0) return
+  const label = action === 'ban' ? '封禁' : '解封'
+  try {
+    await ElMessageBox.confirm(
+      `确定要批量${label}选中的 ${selectedUsers.value.length} 个用户吗？`,
+      '批量操作确认',
+      { confirmButtonText: '确定', cancelButtonText: '取消', type: 'warning' }
+    )
+    batchLoading.value = true
+    const res = await userApi.batchBanUsers({
+      ids: selectedUsers.value.map((u: any) => u.id),
+      action,
+    })
+    const data = res.data as any
+    ElMessage.success(`批量${label}完成，成功 ${data.success_count} 项`)
+    selectedUsers.value = []
+    fetchUsers()
+  } catch {
+    // cancelled
+  } finally {
+    batchLoading.value = false
+  }
 }
 
 function viewDetail(user: AdminUser) {
@@ -115,12 +162,44 @@ onMounted(() => {
         <el-button type="primary" @click="handleSearch">搜索</el-button>
       </div>
 
+      <el-tabs :model-value="activeStatus" @update:model-value="handleStatusTabChange">
+        <el-tab-pane label="全部" name="all" />
+        <el-tab-pane label="正常" name="active" />
+        <el-tab-pane label="封禁" name="banned" />
+      </el-tabs>
+
+      <div v-if="batchEnabled && selectedUsers.length > 0" class="batch-bar">
+        <span class="batch-count">已选 {{ selectedUsers.length }} 项</span>
+        <el-button
+          v-if="activeStatus === 'active'"
+          type="danger"
+          size="small"
+          :loading="batchLoading"
+          @click="handleBatchAction('ban')"
+        >
+          批量封禁
+        </el-button>
+        <el-button
+          v-if="activeStatus === 'banned'"
+          type="success"
+          size="small"
+          :loading="batchLoading"
+          @click="handleBatchAction('unban')"
+        >
+          批量解封
+        </el-button>
+      </div>
+
       <el-table
+        ref="tableRef"
         v-loading="loading"
         :data="users"
         stripe
+        height="100%"
         class="user-table"
+        @selection-change="handleSelectionChange"
       >
+        <el-table-column v-if="batchEnabled" type="selection" width="50" />
         <el-table-column prop="phone" label="手机号" min-width="140" />
         <el-table-column prop="nickname" label="昵称" min-width="140" show-overflow-tooltip />
         <el-table-column prop="province" label="省份" min-width="100" show-overflow-tooltip />
@@ -208,6 +287,9 @@ onMounted(() => {
 
 <style lang="scss" scoped>
 .users-page {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
 }
 
 .page-header {
@@ -231,11 +313,15 @@ onMounted(() => {
 }
 
 .content-card {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
   background: var(--bg-primary, #ffffff);
   border-radius: 12px;
   border: 1px solid var(--border-color, #E2E6ED);
   padding: 20px;
   overflow: hidden;
+  min-height: 0;
 }
 
 .toolbar {
@@ -244,7 +330,30 @@ onMounted(() => {
   margin-bottom: 16px;
 }
 
+.batch-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  background: var(--el-color-primary-light-9, #ECF5FF);
+  border-radius: 8px;
+  margin-bottom: 12px;
+}
+
+.batch-count {
+  font-size: 13px;
+  color: var(--text-primary, #1A1A2E);
+  font-weight: 500;
+}
+
 .user-table {
+  flex: 1;
+  overflow: hidden;
+
+  :deep(.el-table) {
+    height: 100%;
+  }
+
   :deep(.el-table__header th) {
     background: var(--bg-secondary, #F4F6FA) !important;
     font-weight: 600;

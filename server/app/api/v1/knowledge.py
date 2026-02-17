@@ -6,7 +6,7 @@ import os
 from datetime import datetime, timezone
 from urllib.parse import quote
 
-from fastapi import APIRouter, BackgroundTasks, Depends, Query, UploadFile, File
+from fastapi import APIRouter, BackgroundTasks, Depends, Query, UploadFile, File, Form
 from fastapi.responses import FileResponse
 from sqlalchemy import select, func, delete as sql_delete
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -63,12 +63,14 @@ async def _doc_to_response(doc: KnowledgeDocument, db: AsyncSession) -> Knowledg
         fileHash=doc.file_hash or "",
         fileSize=file_size,
         status=doc.status,
+        currentNode=doc.current_node or doc.status or "pending",
         uploaderId=str(doc.uploaded_by),
         uploaderName=uploader_name,
         reviewerId=str(doc.reviewed_by) if doc.reviewed_by else None,
         reviewerName=reviewer_name,
         reviewNote=doc.review_note,
         chunkCount=chunk_count,
+        kbId=str(doc.kb_id) if doc.kb_id else None,
         createdAt=doc.created_at.isoformat(),
         updatedAt=doc.updated_at.isoformat(),
     )
@@ -78,6 +80,7 @@ async def _doc_to_response(doc: KnowledgeDocument, db: AsyncSession) -> Knowledg
              dependencies=[Depends(require_permission("knowledge:create"))])
 async def upload_document(
     file: UploadFile = File(...),
+    kb_id: str = Form(...),
     admin: AdminUser = Depends(get_current_admin),
     db: AsyncSession = Depends(get_db),
 ):
@@ -103,7 +106,9 @@ async def upload_document(
         file_path=file_path,
         file_hash=file_hash,
         status="pending",
+        current_node="pending",
         uploaded_by=admin.id,
+        kb_id=kb_id,
     )
     db.add(doc)
 
@@ -125,6 +130,7 @@ async def upload_document(
             dependencies=[Depends(require_permission("knowledge:read"))])
 async def list_documents(
     status: str | None = None,
+    kb_id: str | None = None,
     page: int = Query(1, ge=1),
     pageSize: int = Query(20, ge=1, le=100, alias="pageSize"),
     admin: AdminUser = Depends(get_current_admin),
@@ -135,8 +141,12 @@ async def list_documents(
     count_stmt = select(func.count()).select_from(KnowledgeDocument)
 
     if status:
-        stmt = stmt.where(KnowledgeDocument.status == status)
-        count_stmt = count_stmt.where(KnowledgeDocument.status == status)
+        stmt = stmt.where(KnowledgeDocument.current_node == status)
+        count_stmt = count_stmt.where(KnowledgeDocument.current_node == status)
+
+    if kb_id:
+        stmt = stmt.where(KnowledgeDocument.kb_id == kb_id)
+        count_stmt = count_stmt.where(KnowledgeDocument.kb_id == kb_id)
 
     total = (await db.execute(count_stmt)).scalar() or 0
     stmt = stmt.order_by(KnowledgeDocument.created_at.desc()).offset((page - 1) * pageSize).limit(pageSize)
@@ -234,27 +244,29 @@ async def review_document(
     """审核通过/拒绝"""
     doc = await _get_document(doc_id, db)
 
-    if doc.status not in ("pending", "reviewing"):
-        raise BizError(code=400, message=f"当前状态 '{doc.status}' 不允许审核操作")
+    current_node = doc.current_node or doc.status or "pending"
 
-    # Use workflow service for multi-step review
+    # Use workflow service for state-machine action
     from app.services import review_workflow_service as wf_svc
-    review_result = await wf_svc.submit_review(
-        resource_type="knowledge",
-        resource_id=doc.id,
-        current_step=doc.current_step,
-        action=body.action,
-        reviewer_id=admin.id,
-        note=body.note,
-        db=db,
-    )
+    try:
+        action_result = await wf_svc.execute_action(
+            resource_type="knowledge",
+            resource_id=doc.id,
+            current_node=current_node,
+            action=body.action,
+            reviewer_id=admin.id,
+            note=body.note,
+            db=db,
+        )
+    except ValueError as e:
+        raise BizError(code=400, message=str(e))
 
     doc.reviewed_by = admin.id
     doc.review_note = body.note
     doc.updated_at = datetime.now(timezone.utc)
-    doc.current_step = review_result["new_step"]
+    doc.current_node = action_result["new_node"]
 
-    if review_result["new_status"] == "approved" or (body.action == "approve" and review_result["is_final"]):
+    if action_result["new_node"] == "approved":
         doc.status = "processing"
         doc.effective_from = datetime.now(timezone.utc)
         await db.commit()
@@ -266,7 +278,7 @@ async def review_document(
             str(doc.id), doc.file_path, doc.file_type,
         )
     else:
-        doc.status = review_result["new_status"]
+        doc.status = action_result["new_status"]
         await db.commit()
         await db.refresh(doc)
 
@@ -330,6 +342,69 @@ async def _background_chunk_document(doc_id: str, file_path: str, file_type: str
                 await db.commit()
             except Exception:
                 logger.error("Failed to update document status after chunk error")
+
+
+from pydantic import BaseModel as _PydanticBaseModel
+
+
+class BatchReviewRequest(_PydanticBaseModel):
+    ids: list[str]
+    action: str
+    note: str | None = None
+
+
+@router.post("/batch-review", dependencies=[Depends(require_permission("knowledge:approve"))])
+async def batch_review_documents(
+    body: BatchReviewRequest,
+    background_tasks: BackgroundTasks,
+    admin: AdminUser = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """批量审核知识文档"""
+    from app.services import review_workflow_service as wf_svc
+
+    success_count = 0
+    errors: list[str] = []
+
+    for doc_id in body.ids:
+        result = await db.execute(select(KnowledgeDocument).where(KnowledgeDocument.id == doc_id))
+        doc = result.scalar_one_or_none()
+        if not doc:
+            errors.append(f"{doc_id}: 文档不存在")
+            continue
+
+        current_node = doc.current_node or doc.status or "pending"
+        try:
+            action_result = await wf_svc.execute_action(
+                resource_type="knowledge",
+                resource_id=doc.id,
+                current_node=current_node,
+                action=body.action,
+                reviewer_id=admin.id,
+                note=body.note,
+                db=db,
+            )
+            doc.reviewed_by = admin.id
+            doc.review_note = body.note
+            doc.updated_at = datetime.now(timezone.utc)
+            doc.current_node = action_result["new_node"]
+
+            if action_result["new_node"] == "approved":
+                doc.status = "processing"
+                doc.effective_from = datetime.now(timezone.utc)
+                background_tasks.add_task(
+                    _background_chunk_document,
+                    str(doc.id), doc.file_path, doc.file_type,
+                )
+            else:
+                doc.status = action_result["new_status"]
+
+            success_count += 1
+        except ValueError as e:
+            errors.append(f"{doc.title}: {str(e)}")
+
+    await db.commit()
+    return {"success": True, "success_count": success_count, "errors": errors}
 
 
 @router.delete("/{doc_id}", dependencies=[Depends(require_permission("knowledge:delete"))])

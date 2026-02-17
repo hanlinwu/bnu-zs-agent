@@ -36,6 +36,7 @@ class AdminUpdateRequest(BaseModel):
 @router.get("", dependencies=[Depends(require_permission("admin:read"))])
 async def list_admins(
     keyword: str | None = None,
+    status: str | None = None,
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
     admin: AdminUser = Depends(get_current_admin),
@@ -57,6 +58,10 @@ async def list_admins(
             | (AdminUser.real_name.ilike(like_pattern))
             | (AdminUser.phone.like(like_pattern))
         )
+
+    if status:
+        stmt = stmt.where(AdminUser.status == status)
+        count_stmt = count_stmt.where(AdminUser.status == status)
 
     total = (await db.execute(count_stmt)).scalar() or 0
     stmt = (
@@ -170,6 +175,75 @@ async def update_admin(
     await db.commit()
 
     return {"success": True, "message": "管理员信息已更新"}
+
+
+class BatchStatusRequest(BaseModel):
+    ids: list[str]
+    status: str  # "active" or "disabled"
+
+
+class BatchDeleteRequest(BaseModel):
+    ids: list[str]
+
+
+@router.put("/batch-status", dependencies=[Depends(require_permission("admin:update"))])
+async def batch_update_admin_status(
+    body: BatchStatusRequest,
+    admin: AdminUser = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """批量启用/禁用管理员"""
+    if body.status not in ("active", "disabled"):
+        raise BizError(code=400, message="status 必须为 active 或 disabled")
+
+    success_count = 0
+    errors: list[str] = []
+
+    for admin_id in body.ids:
+        if str(admin.id) == admin_id:
+            errors.append(f"{admin_id}: 不能修改自己的状态")
+            continue
+        result = await db.execute(select(AdminUser).where(AdminUser.id == admin_id))
+        target = result.scalar_one_or_none()
+        if not target:
+            errors.append(f"{admin_id}: 管理员不存在")
+            continue
+        target.status = body.status
+        target.updated_at = datetime.now(timezone.utc)
+        success_count += 1
+
+    await db.commit()
+    label = "启用" if body.status == "active" else "禁用"
+    return {"success": True, "success_count": success_count, "message": f"批量{label}完成", "errors": errors}
+
+
+@router.post("/batch-delete", dependencies=[Depends(require_permission("admin:delete"))])
+async def batch_delete_admins(
+    body: BatchDeleteRequest,
+    admin: AdminUser = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """批量删除管理员"""
+    from sqlalchemy import delete
+
+    success_count = 0
+    errors: list[str] = []
+
+    for admin_id in body.ids:
+        if str(admin.id) == admin_id:
+            errors.append(f"{admin_id}: 不能删除自己的账号")
+            continue
+        result = await db.execute(select(AdminUser).where(AdminUser.id == admin_id))
+        target = result.scalar_one_or_none()
+        if not target:
+            errors.append(f"{admin_id}: 管理员不存在")
+            continue
+        await db.execute(delete(AdminRole).where(AdminRole.admin_id == target.id))
+        await db.delete(target)
+        success_count += 1
+
+    await db.commit()
+    return {"success": True, "success_count": success_count, "message": "批量删除完成", "errors": errors}
 
 
 @router.delete("/{admin_id}", dependencies=[Depends(require_permission("admin:delete"))])

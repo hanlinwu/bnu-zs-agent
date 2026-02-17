@@ -268,6 +268,12 @@ onMounted(async () => {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 16px;
+  min-width: 0;
+}
+
+.chart-section {
+  min-width: 0;
+  overflow: hidden;
 }
 
 .section-card {
@@ -275,6 +281,7 @@ onMounted(async () => {
   border-radius: 12px;
   border: 1px solid var(--border-color, #E2E6ED);
   overflow: hidden;
+  min-width: 0;
 }
 
 .card-header {
@@ -304,18 +311,23 @@ onMounted(async () => {
   padding: 20px;
   display: flex;
   align-items: flex-end;
+  overflow-x: auto;
+  min-width: 0;
 }
 
 .chart-bars {
   display: flex;
   align-items: flex-end;
-  gap: 16px;
+  gap: 12px;
   width: 100%;
+  min-width: 100%;
   height: 100%;
 }
 
 .chart-bar-group {
-  flex: 1;
+  flex: 1 1 0;
+  min-width: 32px;
+  max-width: none;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -327,6 +339,7 @@ onMounted(async () => {
 .chart-bar {
   width: 100%;
   max-width: 48px;
+  min-width: 24px;
   background: linear-gradient(180deg, var(--bnu-blue, #003DA5), #1A5FBF);
   border-radius: 6px 6px 0 0;
   display: flex;

@@ -71,7 +71,7 @@ export const adminRoutes: RouteRecordRaw[] = [
         path: 'workflows',
         name: 'AdminWorkflows',
         component: () => import('@/views/admin/Workflows.vue'),
-        meta: { title: '审核流程' },
+        meta: { title: '工作流管理' },
       },
       {
         path: 'media',

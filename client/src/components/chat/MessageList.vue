@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch, nextTick, computed, onUnmounted } from 'vue'
+import { ref, watch, nextTick, computed, onUnmounted, onMounted } from 'vue'
 import { useChatStore } from '@/stores/chat'
 import MessageBubble from './MessageBubble.vue'
 import StreamingText from './StreamingText.vue'
@@ -12,8 +12,17 @@ const emit = defineEmits<{
 
 const chatStore = useChatStore()
 const scrollContainerRef = ref<HTMLElement | null>(null)
-
+const lastUserMessageRef = ref<HTMLElement | null>(null)
 const isEmpty = computed(() => chatStore.messages.length === 0 && !chatStore.isStreaming)
+
+// Track if user has manually scrolled up (to disable auto-scroll)
+const isUserScrolledUp = ref(false)
+const lastScrollTop = ref(0)
+
+// 无限滚动状态
+const isLoadingHistory = computed(() => chatStore.isLoadingHistory)
+const hasMoreHistory = computed(() => chatStore.hasMoreHistory)
+const LOAD_THRESHOLD = 100 // 距离顶部多少像素时触发加载
 
 const THINKING_HINTS = [
   '我正在思考你的问题',
@@ -45,6 +54,7 @@ onUnmounted(() => {
 })
 
 const displayMessages = computed<Message[]>(() => {
+  // chatStore.messages 已经是按时间排序的
   return chatStore.messages.map((msg) => ({
     id: msg.id,
     conversationId: chatStore.currentConversationId || '',
@@ -73,27 +83,144 @@ const nonStreamingMessages = computed<Message[]>(() => {
   return displayMessages.value
 })
 
-function scrollToBottom() {
+// Check if scroll is near bottom (within 100px)
+function isNearBottom(): boolean {
+  const el = scrollContainerRef.value
+  if (!el) return true
+  const threshold = 100
+  return el.scrollHeight - el.scrollTop - el.clientHeight < threshold
+}
+
+// Check if scroll is near top (触发加载历史)
+function isNearTop(): boolean {
+  const el = scrollContainerRef.value
+  if (!el) return false
+  return el.scrollTop < LOAD_THRESHOLD
+}
+
+// 保存当前滚动位置（用于加载历史后恢复）
+function saveScrollPosition(): number {
+  const el = scrollContainerRef.value
+  if (!el) return 0
+  return el.scrollHeight - el.scrollTop
+}
+
+// 恢复滚动位置（加载历史后）
+function restoreScrollPosition(oldScrollHeight: number) {
+  const el = scrollContainerRef.value
+  if (!el) return
+  const newScrollHeight = el.scrollHeight
+  el.scrollTop = newScrollHeight - oldScrollPosition.value
+}
+
+const oldScrollPosition = ref(0)
+
+// Handle scroll events to detect user manual scrolling and trigger history loading
+async function handleScroll() {
+  const el = scrollContainerRef.value
+  if (!el) return
+
+  const scrollTop = el.scrollTop
+
+  // 检测是否滚动到顶部附近，触发加载历史
+  if (scrollTop < LOAD_THRESHOLD && !isLoadingHistory.value && hasMoreHistory.value) {
+    oldScrollPosition.value = saveScrollPosition()
+    const loaded = await chatStore.loadMoreHistory(20)
+    if (loaded) {
+      nextTick(() => restoreScrollPosition(oldScrollPosition.value))
+    }
+  }
+
+  // User scrolled up if scrollTop decreased or if not near bottom
+  if (scrollTop < lastScrollTop.value || !isNearBottom()) {
+    isUserScrolledUp.value = true
+  } else if (isNearBottom()) {
+    isUserScrolledUp.value = false
+  }
+  lastScrollTop.value = scrollTop
+}
+
+// Scroll element to top of visible area
+function scrollElementToTop(element: HTMLElement) {
+  const container = scrollContainerRef.value
+  if (!container || !element) return
+
+  // Use scrollIntoView with block: 'start' to scroll element to top
+  element.scrollIntoView({ behavior: 'smooth', block: 'start' })
+}
+
+// Auto-scroll to bottom during streaming
+function autoScrollToBottom() {
+  // Only auto-scroll if user hasn't manually scrolled up
+  if (isUserScrolledUp.value) return
+
   nextTick(() => {
     const el = scrollContainerRef.value
     if (el) {
-      el.scrollTop = el.scrollHeight
+      el.scrollTo({
+        top: el.scrollHeight,
+        behavior: 'smooth'
+      })
     }
   })
 }
 
-watch(
-  () => chatStore.messages.length,
-  () => scrollToBottom()
-)
+// Watch for new messages - scroll user message to top when ref is set
+watch(lastUserMessageRef, (el) => {
+  if (el) {
+    // Reset user scroll flag for new user message
+    isUserScrolledUp.value = false
+    // Small delay to ensure DOM is ready
+    setTimeout(() => scrollElementToTop(el), 50)
+  }
+})
 
+// Watch streaming content - auto-scroll if near bottom
 watch(
   () => streamingMessage.value?.content,
-  () => scrollToBottom()
+  () => {
+    autoScrollToBottom()
+  }
 )
+
+// Reset scroll state when conversation changes
+watch(
+  () => chatStore.currentConversationId,
+  () => {
+    isUserScrolledUp.value = false
+    lastScrollTop.value = 0
+    lastUserMessageRef.value = null
+    oldScrollPosition.value = 0
+  }
+)
+
+onMounted(() => {
+  const container = scrollContainerRef.value
+  if (container) {
+    container.addEventListener('scroll', handleScroll, { passive: true })
+  }
+})
+
+onUnmounted(() => {
+  const container = scrollContainerRef.value
+  if (container) {
+    container.removeEventListener('scroll', handleScroll)
+  }
+})
 
 function handleSelectQuestion(question: string) {
   emit('selectQuestion', question)
+}
+
+// Set ref for the last user message
+function setMessageRef(el: HTMLElement | null, msg: Message) {
+  if (el && msg.role === 'user') {
+    // 找最后一个用户消息
+    const lastUserMsg = [...chatStore.messages].reverse().find(m => m.role === 'user')
+    if (lastUserMsg && lastUserMsg.id === msg.id) {
+      lastUserMessageRef.value = el
+    }
+  }
 }
 </script>
 
@@ -103,11 +230,25 @@ function handleSelectQuestion(question: string) {
 
     <template v-else>
       <div class="messages-wrapper">
-        <MessageBubble
+        <!-- 加载历史指示器 -->
+        <div v-if="isLoadingHistory || (hasMoreHistory && displayMessages.length > 0)" class="history-loader">
+          <div v-if="isLoadingHistory" class="loading-indicator">
+            <el-icon class="loading-icon" :size="16"><Loading /></el-icon>
+            <span>加载历史消息...</span>
+          </div>
+          <div v-else-if="hasMoreHistory && displayMessages.length > 0" class="load-more-hint">
+            <span>向上滚动加载更多</span>
+          </div>
+        </div>
+
+        <div
           v-for="msg in nonStreamingMessages"
           :key="msg.id"
-          :message="msg"
-        />
+          :ref="(el) => setMessageRef(el as HTMLElement, msg)"
+          class="message-item"
+        >
+          <MessageBubble :message="msg" />
+        </div>
 
         <div v-if="streamingMessage" class="message-bubble is-assistant">
           <div class="avatar-wrapper">
@@ -140,6 +281,9 @@ function handleSelectQuestion(question: string) {
             </div>
           </div>
         </div>
+
+        <!-- Bottom anchor for scrolling -->
+        <div ref="bottomAnchor" class="bottom-anchor"></div>
       </div>
     </template>
   </div>
@@ -151,6 +295,7 @@ function handleSelectQuestion(question: string) {
   overflow-y: auto;
   overflow-x: hidden;
   padding: 16px;
+  scroll-behavior: smooth;
 
   &::-webkit-scrollbar {
     width: 6px;
@@ -171,6 +316,46 @@ function handleSelectQuestion(question: string) {
   margin: 0 auto;
   display: flex;
   flex-direction: column;
+}
+
+// 历史消息加载器
+.history-loader {
+  display: flex;
+  justify-content: center;
+  padding: 16px 0;
+  min-height: 48px;
+}
+
+.loading-indicator {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--text-secondary, #5a5a72);
+
+  .loading-icon {
+    animation: spin 1s linear infinite;
+    color: var(--bnu-blue, #003DA5);
+  }
+}
+
+.load-more-hint {
+  font-size: 12px;
+  color: var(--text-secondary, #9e9eb3);
+  padding: 4px 12px;
+  background: var(--bg-secondary, #f4f6fa);
+  border-radius: 12px;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.message-item {
+  display: flex;
+  flex-direction: column;
+  scroll-margin-top: 20px;
 }
 
 .message-bubble {
@@ -255,5 +440,10 @@ function handleSelectQuestion(question: string) {
 
 .thinking-text {
   transition: opacity 0.3s;
+}
+
+.bottom-anchor {
+  height: 1px;
+  flex-shrink: 0;
 }
 </style>

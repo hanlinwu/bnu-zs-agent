@@ -73,6 +73,43 @@ async def list_users(
     }
 
 
+from pydantic import BaseModel
+
+
+class BatchBanRequest(BaseModel):
+    ids: list[str]
+    action: str  # "ban" or "unban"
+
+
+@router.put("/batch-ban", dependencies=[Depends(require_permission("user:ban"))])
+async def batch_ban_users(
+    body: BatchBanRequest,
+    admin: AdminUser = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """批量封禁/解封用户"""
+    if body.action not in ("ban", "unban"):
+        raise BizError(code=400, message="action 必须为 ban 或 unban")
+
+    target_status = "banned" if body.action == "ban" else "active"
+    success_count = 0
+    errors: list[str] = []
+
+    for user_id in body.ids:
+        result = await db.execute(select(User).where(User.id == user_id))
+        user = result.scalar_one_or_none()
+        if not user:
+            errors.append(f"{user_id}: 用户不存在")
+            continue
+        user.status = target_status
+        user.updated_at = datetime.now(timezone.utc)
+        success_count += 1
+
+    await db.commit()
+    label = "封禁" if body.action == "ban" else "解封"
+    return {"success": True, "success_count": success_count, "message": f"批量{label}完成", "errors": errors}
+
+
 @router.put("/{user_id}/ban", dependencies=[Depends(require_permission("user:ban"))])
 async def toggle_ban_user(
     user_id: str,

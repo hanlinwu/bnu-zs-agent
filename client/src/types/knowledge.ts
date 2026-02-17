@@ -1,3 +1,15 @@
+/** 知识库 */
+export interface KnowledgeBase {
+  id: string
+  name: string
+  description: string
+  enabled: boolean
+  sort_order: number
+  doc_count: number
+  created_at: string
+  updated_at: string
+}
+
 /** 文档状态 */
 export type DocumentStatus = 'pending' | 'reviewing' | 'approved' | 'rejected' | 'processing' | 'active' | 'archived'
 
@@ -13,12 +25,14 @@ export interface KnowledgeDocument {
   fileHash: string
   fileSize: number
   status: DocumentStatus
+  currentNode: string
   uploaderId: string
   uploaderName: string
   reviewerId?: string
   reviewerName?: string
   reviewNote?: string
   chunkCount: number
+  kbId?: string
   effectiveAt?: string
   expiredAt?: string
   createdAt: string

@@ -3,7 +3,7 @@
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, Query
-from sqlalchemy import select, func, and_
+from sqlalchemy import select, func, and_, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
@@ -164,11 +164,17 @@ async def delete_conversation(
 async def list_messages(
     conv_id: str,
     page: int = Query(1, ge=1),
-    page_size: int = Query(50, ge=1, le=200),
+    page_size: int = Query(20, ge=1, le=100),
+    before: str | None = Query(None, description="加载此ID之前的消息（更早的消息）"),
+    after: str | None = Query(None, description="加载此ID之后的消息（更新的消息）"),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """消息列表（分页）"""
+    """消息列表（分页）- 支持游标分页优化聊天历史加载
+
+    常规分页: page + page_size
+    游标分页: before 或 after + page_size（用于无限滚动）
+    """
     conv = await _get_user_conversation(conv_id, current_user.id, db)
 
     base_filter = and_(
@@ -176,18 +182,93 @@ async def list_messages(
         Message.is_deleted == False,
     )
 
+    # 获取总数（用于首次加载显示）
     count_stmt = select(func.count()).select_from(Message).where(base_filter)
     total = (await db.execute(count_stmt)).scalar() or 0
 
-    stmt = (
-        select(Message)
-        .where(base_filter)
-        .order_by(Message.created_at.asc())
-        .offset((page - 1) * page_size)
-        .limit(page_size)
-    )
-    result = await db.execute(stmt)
-    messages = result.scalars().all()
+    # 游标分页逻辑
+    if before:
+        # 加载更早的消息（向上滚动）
+        # 先获取游标消息（时间+ID 作为联合游标，避免同时间戳乱序/漏数）
+        cursor_msg = await db.execute(
+            select(Message).where(and_(
+                Message.id == before,
+                Message.conversation_id == conv.id,
+                Message.is_deleted == False,
+            ))
+        )
+        cursor_msg = cursor_msg.scalar_one_or_none()
+        if cursor_msg:
+            stmt = (
+                select(Message)
+                .where(and_(
+                    base_filter,
+                    or_(
+                        Message.created_at < cursor_msg.created_at,
+                        and_(
+                            Message.created_at == cursor_msg.created_at,
+                            Message.id < cursor_msg.id,
+                        ),
+                    ),
+                ))
+                .order_by(Message.created_at.desc(), Message.id.desc())  # 降序取最新的旧消息
+                .limit(page_size)
+            )
+            result = await db.execute(stmt)
+            messages = result.scalars().all()
+            # 反转为正序（从早到晚）
+            messages = list(reversed(messages))
+        else:
+            messages = []
+    elif after:
+        # 加载更新的消息（向下滚动/新消息）
+        cursor_msg = await db.execute(
+            select(Message).where(and_(
+                Message.id == after,
+                Message.conversation_id == conv.id,
+                Message.is_deleted == False,
+            ))
+        )
+        cursor_msg = cursor_msg.scalar_one_or_none()
+        if cursor_msg:
+            stmt = (
+                select(Message)
+                .where(and_(
+                    base_filter,
+                    or_(
+                        Message.created_at > cursor_msg.created_at,
+                        and_(
+                            Message.created_at == cursor_msg.created_at,
+                            Message.id > cursor_msg.id,
+                        ),
+                    ),
+                ))
+                .order_by(Message.created_at.asc(), Message.id.asc())
+                .limit(page_size)
+            )
+            result = await db.execute(stmt)
+            messages = result.scalars().all()
+        else:
+            messages = []
+    else:
+        # 常规分页或首次加载（默认加载最新的消息）
+        # 计算偏移：从最新的消息开始
+        offset = (page - 1) * page_size
+        # 先按时间降序获取，再反转成正序
+        stmt = (
+            select(Message)
+            .where(base_filter)
+            .order_by(Message.created_at.desc(), Message.id.desc())
+            .offset(offset)
+            .limit(page_size)
+        )
+        result = await db.execute(stmt)
+        messages = result.scalars().all()
+        # 反转为正序（从早到晚显示）
+        messages = list(reversed(messages))
+
+    # 确保稳定正序（从早到晚，同时间戳按 ID）
+    sorted_messages = sorted(messages, key=lambda m: (m.created_at, m.id))
 
     items = [
         MessageResponse(
@@ -200,7 +281,7 @@ async def list_messages(
             sources=m.sources,
             created_at=m.created_at.isoformat(),
         )
-        for m in messages
+        for m in sorted_messages
     ]
 
     return MessageListResponse(items=items, total=total, page=page, page_size=page_size)

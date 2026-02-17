@@ -27,11 +27,21 @@ RISK_ORDER = case(
 
 RISK_LABELS = {4: "blocked", 3: "high", 2: "medium", 1: "low", 0: None}
 
+SENSITIVE_ORDER = case(
+    (Message.sensitive_level == "block", 3),
+    (Message.sensitive_level == "review", 2),
+    (Message.sensitive_level == "warn", 1),
+    else_=0,
+)
+
+SENSITIVE_LABELS = {3: "block", 2: "review", 1: "warn", 0: None}
+
 
 @router.get("", dependencies=[Depends(require_permission("conversation:read"))])
 async def list_conversations(
     keyword: str | None = None,
     risk_level: str | None = None,
+    sensitive_level: str | None = None,
     start_time: datetime | None = None,
     end_time: datetime | None = None,
     page: int = Query(1, ge=1),
@@ -53,6 +63,7 @@ async def list_conversations(
                 func.sum(case((Message.role == "assistant", func.length(Message.content)), else_=0)), 0
             ).label("assistant_char_count"),
             func.max(RISK_ORDER).label("risk_order"),
+            func.max(SENSITIVE_ORDER).label("sensitive_order"),
         )
         .where(Message.is_deleted == False)
         .group_by(Message.conversation_id)
@@ -86,6 +97,19 @@ async def list_conversations(
             )
         )
 
+    if sensitive_level:
+        base_filter.append(
+            exists(
+                select(Message.id).where(
+                    and_(
+                        Message.conversation_id == Conversation.id,
+                        Message.is_deleted == False,
+                        Message.sensitive_level == sensitive_level,
+                    )
+                )
+            )
+        )
+
     # Count query
     count_stmt = (
         select(func.count())
@@ -107,6 +131,7 @@ async def list_conversations(
             func.coalesce(msg_stats.c.user_char_count, 0).label("user_char_count"),
             func.coalesce(msg_stats.c.assistant_char_count, 0).label("assistant_char_count"),
             msg_stats.c.risk_order,
+            msg_stats.c.sensitive_order,
             Conversation.created_at,
             Conversation.updated_at,
         )
@@ -132,6 +157,7 @@ async def list_conversations(
                 "user_char_count": row.user_char_count,
                 "assistant_char_count": row.assistant_char_count,
                 "max_risk_level": RISK_LABELS.get(row.risk_order or 0),
+                "max_sensitive_level": SENSITIVE_LABELS.get(row.sensitive_order or 0),
                 "created_at": row.created_at.isoformat() if row.created_at else None,
                 "updated_at": row.updated_at.isoformat() if row.updated_at else None,
             }
@@ -186,6 +212,8 @@ async def get_conversation_messages(
                 "risk_level": msg.risk_level,
                 "review_passed": msg.review_passed,
                 "sources": msg.sources,
+                "sensitive_words": msg.sensitive_words,
+                "sensitive_level": msg.sensitive_level,
                 "created_at": msg.created_at.isoformat() if msg.created_at else None,
             }
             for msg in messages

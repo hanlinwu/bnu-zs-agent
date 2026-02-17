@@ -6,6 +6,7 @@ export interface ConversationQuery {
   page_size: number
   keyword?: string
   risk_level?: string
+  sensitive_level?: string
   start_time?: string
   end_time?: string
 }

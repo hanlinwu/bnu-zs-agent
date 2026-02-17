@@ -22,7 +22,7 @@ ALLOWED_MEDIA_TYPES = {"image/jpeg", "image/png", "image/webp", "image/gif", "vi
 ALLOWED_EXTENSIONS = {"jpg", "jpeg", "png", "webp", "gif", "mp4"}
 
 
-def _media_to_dict(m: MediaResource) -> dict:
+def _media_to_dict(m: MediaResource, uploader_name: str | None = None) -> dict:
     """Build response dict for a media resource."""
     file_url = ""
     if m.file_path:
@@ -36,15 +36,24 @@ def _media_to_dict(m: MediaResource) -> dict:
         "file_size": m.file_size,
         "thumbnail_url": m.thumbnail_url,
         "tags": m.tags or [],
-        "source": m.source,
+        "description": m.description,
         "status": m.status,
+        "current_node": m.current_node or m.status or "pending",
         "current_step": m.current_step,
         "is_approved": m.is_approved,
         "uploaded_by": str(m.uploaded_by) if m.uploaded_by else None,
+        "uploader_name": uploader_name,
         "reviewed_by": str(m.reviewed_by) if m.reviewed_by else None,
         "review_note": m.review_note,
         "created_at": m.created_at.isoformat(),
     }
+
+
+async def _get_uploader_name(resource: MediaResource, db: AsyncSession) -> str | None:
+    if not resource.uploaded_by:
+        return None
+    u = await db.execute(select(AdminUser.real_name).where(AdminUser.id == resource.uploaded_by))
+    return u.scalar_one_or_none()
 
 
 @router.get("", dependencies=[Depends(require_permission("media:read"))])
@@ -57,15 +66,18 @@ async def list_media(
     db: AsyncSession = Depends(get_db),
 ):
     """媒体资源列表（分页、筛选）"""
-    stmt = select(MediaResource)
+    stmt = (
+        select(MediaResource, AdminUser.real_name)
+        .outerjoin(AdminUser, MediaResource.uploaded_by == AdminUser.id)
+    )
     count_stmt = select(func.count()).select_from(MediaResource)
 
     if media_type:
         stmt = stmt.where(MediaResource.media_type == media_type)
         count_stmt = count_stmt.where(MediaResource.media_type == media_type)
     if status:
-        stmt = stmt.where(MediaResource.status == status)
-        count_stmt = count_stmt.where(MediaResource.status == status)
+        stmt = stmt.where(MediaResource.current_node == status)
+        count_stmt = count_stmt.where(MediaResource.current_node == status)
 
     total = (await db.execute(count_stmt)).scalar() or 0
     stmt = (
@@ -74,10 +86,10 @@ async def list_media(
         .limit(page_size)
     )
     result = await db.execute(stmt)
-    items = result.scalars().all()
+    rows = result.all()
 
     return {
-        "items": [_media_to_dict(m) for m in items],
+        "items": [_media_to_dict(m, uploader_name) for m, uploader_name in rows],
         "total": total,
         "page": page,
         "page_size": page_size,
@@ -88,7 +100,7 @@ async def list_media(
 async def upload_media(
     file: UploadFile = File(...),
     title: str = Form(...),
-    source: str = Form(None),
+    description: str = Form(None),
     tags: str = Form(None),
     admin: AdminUser = Depends(get_current_admin),
     db: AsyncSession = Depends(get_db),
@@ -122,8 +134,9 @@ async def upload_media(
         file_path=file_path,
         file_size=len(content),
         tags=tag_list,
-        source=source,
+        description=description or None,
         status="pending",
+        current_node="pending",
         is_approved=False,
         uploaded_by=admin.id,
     )
@@ -131,12 +144,45 @@ async def upload_media(
     await db.commit()
     await db.refresh(resource)
 
-    return _media_to_dict(resource)
+    return _media_to_dict(resource, admin.real_name)
+
+
+class MediaUpdateRequest(BaseModel):
+    title: str | None = None
+    description: str | None = None
+    tags: list[str] | None = None
 
 
 class MediaReviewRequest(BaseModel):
     action: str  # "approve" | "reject"
     note: str | None = None
+
+
+@router.put("/{media_id}", dependencies=[Depends(require_permission("media:create"))])
+async def update_media(
+    media_id: str,
+    body: MediaUpdateRequest,
+    admin: AdminUser = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """编辑媒体资源信息（标题、描述、标签）"""
+    result = await db.execute(select(MediaResource).where(MediaResource.id == media_id))
+    resource = result.scalar_one_or_none()
+    if not resource:
+        raise NotFoundError("媒体资源不存在")
+
+    if body.title is not None:
+        resource.title = body.title
+    if body.description is not None:
+        resource.description = body.description
+    if body.tags is not None:
+        resource.tags = body.tags if body.tags else None
+
+    await db.commit()
+    await db.refresh(resource)
+
+    uploader_name = await _get_uploader_name(resource, db)
+    return _media_to_dict(resource, uploader_name)
 
 
 @router.post("/{media_id}/review", dependencies=[Depends(require_permission("media:approve"))])
@@ -146,40 +192,89 @@ async def review_media(
     admin: AdminUser = Depends(get_current_admin),
     db: AsyncSession = Depends(get_db),
 ):
-    """审核媒体资源（通过/拒绝）"""
+    """审核媒体资源（执行工作流动作）"""
     result = await db.execute(select(MediaResource).where(MediaResource.id == media_id))
     resource = result.scalar_one_or_none()
     if not resource:
         raise NotFoundError("媒体资源不存在")
 
-    if resource.status not in ("pending", "reviewing"):
-        raise BizError(code=400, message=f"当前状态 '{resource.status}' 不允许审核操作")
+    current_node = resource.current_node or resource.status or "pending"
 
-    if body.action not in ("approve", "reject"):
-        raise BizError(code=400, message="action 必须为 approve 或 reject")
-
-    # Use workflow service for multi-step review
+    # Use workflow service for state-machine action
     from app.services import review_workflow_service as wf_svc
-    review_result = await wf_svc.submit_review(
-        resource_type="media",
-        resource_id=resource.id,
-        current_step=resource.current_step,
-        action=body.action,
-        reviewer_id=admin.id,
-        note=body.note,
-        db=db,
-    )
+    try:
+        action_result = await wf_svc.execute_action(
+            resource_type="media",
+            resource_id=resource.id,
+            current_node=current_node,
+            action=body.action,
+            reviewer_id=admin.id,
+            note=body.note,
+            db=db,
+        )
+    except ValueError as e:
+        raise BizError(code=400, message=str(e))
 
-    resource.status = review_result["new_status"]
-    resource.current_step = review_result["new_step"]
+    resource.current_node = action_result["new_node"]
+    resource.status = action_result["new_status"]
     resource.reviewed_by = admin.id
     resource.review_note = body.note
-    resource.is_approved = review_result["new_status"] == "approved"
+    resource.is_approved = action_result["new_node"] == "approved"
 
     await db.commit()
     await db.refresh(resource)
 
-    return _media_to_dict(resource)
+    uploader_name = await _get_uploader_name(resource, db)
+    return _media_to_dict(resource, uploader_name)
+
+
+class BatchReviewRequest(BaseModel):
+    ids: list[str]
+    action: str
+    note: str | None = None
+
+
+@router.post("/batch-review", dependencies=[Depends(require_permission("media:approve"))])
+async def batch_review_media(
+    body: BatchReviewRequest,
+    admin: AdminUser = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """批量审核媒体资源"""
+    from app.services import review_workflow_service as wf_svc
+
+    success_count = 0
+    errors: list[str] = []
+
+    for media_id in body.ids:
+        result = await db.execute(select(MediaResource).where(MediaResource.id == media_id))
+        resource = result.scalar_one_or_none()
+        if not resource:
+            errors.append(f"{media_id}: 资源不存在")
+            continue
+
+        current_node = resource.current_node or resource.status or "pending"
+        try:
+            action_result = await wf_svc.execute_action(
+                resource_type="media",
+                resource_id=resource.id,
+                current_node=current_node,
+                action=body.action,
+                reviewer_id=admin.id,
+                note=body.note,
+                db=db,
+            )
+            resource.current_node = action_result["new_node"]
+            resource.status = action_result["new_status"]
+            resource.reviewed_by = admin.id
+            resource.review_note = body.note
+            resource.is_approved = action_result["new_node"] == "approved"
+            success_count += 1
+        except ValueError as e:
+            errors.append(f"{resource.title}: {str(e)}")
+
+    await db.commit()
+    return {"success": True, "success_count": success_count, "errors": errors}
 
 
 @router.delete("/{media_id}", dependencies=[Depends(require_permission("media:delete"))])

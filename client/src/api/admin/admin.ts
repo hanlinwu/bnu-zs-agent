@@ -14,7 +14,7 @@ export interface AdminItem {
   created_at: string
 }
 
-export const getAdmins = (params: { page: number; pageSize: number; keyword?: string }) =>
+export const getAdmins = (params: { page: number; pageSize: number; keyword?: string; status?: string }) =>
   request.get<PaginatedResult<AdminItem>>('/admin/admins', { params })
 
 export const createAdmin = (data: {
@@ -34,3 +34,9 @@ export const updateAdmin = (id: string, data: {
 
 export const deleteAdmin = (id: string) =>
   request.delete(`/admin/admins/${id}`)
+
+export const batchUpdateAdminStatus = (data: { ids: string[]; status: 'active' | 'disabled' }) =>
+  request.put('/admin/admins/batch-status', data)
+
+export const batchDeleteAdmins = (data: { ids: string[] }) =>
+  request.post('/admin/admins/batch-delete', data)

@@ -213,7 +213,7 @@ onMounted(() => {
     </div>
 
     <div class="content-card">
-      <el-table v-loading="loading" :data="roles" stripe>
+      <el-table v-loading="loading" :data="roles" stripe height="100%">
         <el-table-column prop="name" label="角色名称" width="160" />
         <el-table-column prop="code" label="角色编码" width="160" />
         <el-table-column prop="description" label="描述" min-width="200" show-overflow-tooltip />
@@ -326,6 +326,9 @@ onMounted(() => {
 
 <style lang="scss" scoped>
 .roles-page {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
 }
 
 .page-header {
@@ -349,16 +352,24 @@ onMounted(() => {
 }
 
 .content-card {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
   background: var(--bg-primary, #ffffff);
   border-radius: 12px;
   border: 1px solid var(--border-color, #E2E6ED);
   padding: 20px;
   overflow: hidden;
+  min-height: 0;
 }
 
 :deep(.el-table__header th) {
   background: var(--bg-secondary, #F4F6FA) !important;
   font-weight: 600;
+}
+
+:deep(.el-table) {
+  height: 100%;
 }
 
 .perm-groups {

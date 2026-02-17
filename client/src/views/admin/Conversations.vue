@@ -12,6 +12,7 @@ const currentPage = ref(1)
 const pageSize = ref(20)
 const searchKeyword = ref('')
 const riskLevelFilter = ref('')
+const sensitiveLevelFilter = ref('')
 const dateRange = ref<[string, string] | null>(null)
 
 const detailDialogVisible = ref(false)
@@ -26,6 +27,15 @@ function riskTag(level: string | null): { type: '' | 'success' | 'warning' | 'da
     case 'high': return { type: 'danger', label: '高风险' }
     case 'blocked': return { type: 'danger', label: '已拦截' }
     default: return { type: 'info', label: '无' }
+  }
+}
+
+function sensitiveTag(level: string | null): { type: '' | 'success' | 'warning' | 'danger' | 'info'; label: string } {
+  switch (level) {
+    case 'block': return { type: 'danger', label: '屏蔽级' }
+    case 'warn': return { type: 'warning', label: '警告级' }
+    case 'review': return { type: 'info', label: '审查级' }
+    default: return { type: '', label: '无' }
   }
 }
 
@@ -56,6 +66,7 @@ async function fetchConversations() {
       page_size: pageSize.value,
       keyword: searchKeyword.value || undefined,
       risk_level: riskLevelFilter.value || undefined,
+      sensitive_level: sensitiveLevelFilter.value || undefined,
     }
     if (dateRange.value) {
       params.start_time = dateRange.value[0]
@@ -133,6 +144,17 @@ onMounted(() => {
           <el-option label="高风险" value="high" />
           <el-option label="已拦截" value="blocked" />
         </el-select>
+        <el-select
+          v-model="sensitiveLevelFilter"
+          placeholder="敏感词级别"
+          clearable
+          style="width: 140px"
+          @change="handleSearch"
+        >
+          <el-option label="屏蔽级" value="block" />
+          <el-option label="警告级" value="warn" />
+          <el-option label="审查级" value="review" />
+        </el-select>
         <el-date-picker
           v-model="dateRange"
           type="daterange"
@@ -150,6 +172,7 @@ onMounted(() => {
         v-loading="loading"
         :data="conversations"
         stripe
+        height="100%"
         class="conv-table"
       >
         <el-table-column label="用户" min-width="160">
@@ -169,6 +192,14 @@ onMounted(() => {
             <el-tag size="small" :type="riskTag(row.max_risk_level).type">
               {{ riskTag(row.max_risk_level).label }}
             </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column label="敏感词" width="100" align="center">
+          <template #default="{ row }">
+            <el-tag v-if="row.max_sensitive_level" size="small" :type="sensitiveTag(row.max_sensitive_level).type">
+              {{ sensitiveTag(row.max_sensitive_level).label }}
+            </el-tag>
+            <span v-else class="sub-text">-</span>
           </template>
         </el-table-column>
         <el-table-column label="创建时间" width="160">
@@ -217,6 +248,12 @@ onMounted(() => {
             <el-tag v-if="msg.risk_level" size="small" :type="riskTag(msg.risk_level).type">
               {{ riskTag(msg.risk_level).label }}
             </el-tag>
+            <el-tag v-if="msg.sensitive_level" size="small" :type="sensitiveTag(msg.sensitive_level).type">
+              {{ sensitiveTag(msg.sensitive_level).label }}
+              <template v-if="msg.sensitive_words && msg.sensitive_words.length">
+                ({{ msg.sensitive_words.join(', ') }})
+              </template>
+            </el-tag>
             <el-tag v-if="msg.review_passed === false" size="small" type="danger">
               审核未通过
             </el-tag>
@@ -235,6 +272,9 @@ onMounted(() => {
 
 <style lang="scss" scoped>
 .conversations-page {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
 }
 
 .page-header {
@@ -258,11 +298,15 @@ onMounted(() => {
 }
 
 .content-card {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
   background: var(--bg-primary, #ffffff);
   border-radius: 12px;
   border: 1px solid var(--border-color, #E2E6ED);
   padding: 20px;
   overflow: hidden;
+  min-height: 0;
 }
 
 .toolbar {
@@ -273,6 +317,13 @@ onMounted(() => {
 }
 
 .conv-table {
+  flex: 1;
+  overflow: hidden;
+
+  :deep(.el-table) {
+    height: 100%;
+  }
+
   :deep(.el-table__header th) {
     background: var(--bg-secondary, #F4F6FA) !important;
     font-weight: 600;

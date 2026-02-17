@@ -58,7 +58,7 @@ const menuGroups: MenuGroup[] = [
       { index: '/admin/users', title: '用户管理', icon: markRaw(User), permission: 'user:read' },
       { index: '/admin/admins', title: '管理员管理', icon: markRaw(UserFilled), permission: 'admin:read' },
       { index: '/admin/roles', title: '角色权限', icon: markRaw(Key), permission: 'role:read' },
-      { index: '/admin/workflows', title: '审核流程', icon: markRaw(SetUp), permission: 'role:read' },
+      { index: '/admin/workflows', title: '工作流管理', icon: markRaw(SetUp), permission: 'role:read' },
     ],
   },
   {

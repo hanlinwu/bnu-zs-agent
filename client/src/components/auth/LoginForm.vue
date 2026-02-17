@@ -214,8 +214,14 @@ async function handleLogin() {
       router.push('/')
     }
   } catch (error: any) {
-    const msg = error?.response?.data?.message || '登录失败，请检查验证码是否正确'
-    ElMessage.error(msg)
+    // 403 表示账号被禁用，直接显示后端返回的消息
+    if (error?.response?.status === 403) {
+      const msg = error?.response?.data?.detail?.message || '账号暂时无法使用，如有疑问请联系客服'
+      ElMessage.error(msg)
+    } else {
+      const msg = error?.response?.data?.message || '登录失败，请检查验证码是否正确'
+      ElMessage.error(msg)
+    }
     smsCodeRef.value?.clear()
   } finally {
     loginLoading.value = false

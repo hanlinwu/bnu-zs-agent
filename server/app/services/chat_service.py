@@ -57,6 +57,8 @@ async def process_message(
 
     # Step 1: Sensitive word pre-filter
     filter_result = await check_sensitive(user_message, db)
+    sensitive_level = filter_result.highest_level if filter_result.matched_words else None
+
     if filter_result.action == "block":
         # Save blocked message
         msg = Message(
@@ -64,6 +66,8 @@ async def process_message(
             role="user",
             content=user_message,
             risk_level="blocked",
+            sensitive_words=filter_result.matched_words,
+            sensitive_level=sensitive_level,
         )
         db.add(msg)
         assistant_msg = Message(
@@ -134,6 +138,8 @@ async def process_message(
         role="user",
         content=user_message,
         risk_level=risk_level,
+        sensitive_words=filter_result.matched_words if filter_result.matched_words else None,
+        sensitive_level=sensitive_level,
     )
     db.add(user_msg)
 

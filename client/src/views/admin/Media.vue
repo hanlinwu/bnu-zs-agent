@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Plus, Delete, Upload, Picture, VideoCamera, Check, Close } from '@element-plus/icons-vue'
+import { Plus, Delete, Upload, Picture, VideoCamera, Edit } from '@element-plus/icons-vue'
 import * as mediaApi from '@/api/admin/media'
 import * as wfApi from '@/api/admin/workflow'
 import type { MediaResource } from '@/types/admin'
+import type { WorkflowNode, WorkflowAction, WorkflowTransition, ReviewHistoryRecord, ResourceWorkflowInfo } from '@/api/admin/workflow'
 import ReviewHistory from '@/components/admin/ReviewHistory.vue'
 
 const loading = ref(false)
@@ -13,22 +14,94 @@ const total = ref(0)
 const currentPage = ref(1)
 const pageSize = ref(12)
 const typeFilter = ref<string>('')
-const activeTab = ref<string>('all')
+const activeNodeFilter = ref<string>('all')
+
+// Workflow definition for this resource type
+const workflowNodes = ref<WorkflowNode[]>([])
+const workflowActions = ref<WorkflowAction[]>([])
+const workflowTransitions = ref<WorkflowTransition[]>([])
 
 // Upload dialog
 const uploadDialogVisible = ref(false)
 const uploading = ref(false)
 const uploadTitle = ref('')
-const uploadSource = ref('')
+const uploadDescription = ref('')
 const uploadTags = ref('')
 const uploadFileList = ref<File[]>([])
+
+// Edit dialog
+const editDialogVisible = ref(false)
+const editSaving = ref(false)
+const editTarget = ref<MediaResource | null>(null)
+const editForm = ref({ title: '', description: '', tags: '' })
+
+// Batch selection
+const selectedIds = ref<Set<string>>(new Set())
+const batchLoading = ref(false)
+
+const batchEnabled = computed(() => activeNodeFilter.value !== 'all')
+const batchActions = computed(() => {
+  if (!batchEnabled.value) return []
+  return getActionsForNode(activeNodeFilter.value)
+})
+const allSelected = computed(() => {
+  if (mediaList.value.length === 0) return false
+  return mediaList.value.every(m => selectedIds.value.has(m.id))
+})
+
+function toggleSelect(id: string) {
+  const s = new Set(selectedIds.value)
+  if (s.has(id)) s.delete(id)
+  else s.add(id)
+  selectedIds.value = s
+}
+
+function toggleSelectAll() {
+  if (allSelected.value) {
+    selectedIds.value = new Set()
+  } else {
+    selectedIds.value = new Set(mediaList.value.map(m => m.id))
+  }
+}
+
+function clearSelection() {
+  selectedIds.value = new Set()
+}
+
+async function handleBatchAction(actionId: string) {
+  if (selectedIds.value.size === 0) return
+  const actionName = workflowActions.value.find(a => a.id === actionId)?.name || actionId
+  try {
+    await ElMessageBox.confirm(
+      `确定要对选中的 ${selectedIds.value.size} 项执行「${actionName}」操作吗？`,
+      '批量操作确认',
+      { confirmButtonText: '确定', cancelButtonText: '取消', type: 'warning' }
+    )
+    batchLoading.value = true
+    const res = await mediaApi.batchReviewMedia({
+      ids: Array.from(selectedIds.value),
+      action: actionId,
+    })
+    const data = res.data as any
+    ElMessage.success(`批量操作完成，成功 ${data.success_count} 项`)
+    if (data.errors?.length) {
+      ElMessage.warning(`${data.errors.length} 项操作失败`)
+    }
+    selectedIds.value = new Set()
+    fetchMedia()
+  } catch {
+    // cancelled
+  } finally {
+    batchLoading.value = false
+  }
+}
 
 // Review dialog
 const reviewDialogVisible = ref(false)
 const reviewTarget = ref<MediaResource | null>(null)
 const reviewNote = ref('')
 const reviewLoading = ref(false)
-const reviewHistory = ref<any[]>([])
+const reviewHistory = ref<ReviewHistoryRecord[]>([])
 
 const typeOptions = [
   { label: '全部', value: '' },
@@ -36,25 +109,45 @@ const typeOptions = [
   { label: '视频', value: 'video' },
 ]
 
-const statusTabs = [
-  { label: '全部', value: 'all' },
-  { label: '待审核', value: 'pending' },
-  { label: '已通过', value: 'approved' },
-  { label: '已拒绝', value: 'rejected' },
-]
-
 const statusFilter = computed<string | undefined>(() =>
-  activeTab.value === 'all' ? undefined : activeTab.value
+  activeNodeFilter.value === 'all' ? undefined : activeNodeFilter.value
 )
 
-function statusTag(status: string): { type: '' | 'success' | 'warning' | 'danger' | 'info'; label: string } {
-  switch (status) {
-    case 'pending': return { type: 'warning', label: '待审核' }
-    case 'approved': return { type: 'success', label: '已通过' }
-    case 'rejected': return { type: 'danger', label: '已拒绝' }
-    case 'reviewing': return { type: 'info', label: '审核中' }
-    default: return { type: 'info', label: status }
+// Get available actions for a given node
+function getActionsForNode(nodeId: string): WorkflowAction[] {
+  const actionIds = new Set<string>()
+  for (const t of workflowTransitions.value) {
+    if (t.from_node === nodeId) actionIds.add(t.action)
   }
+  return workflowActions.value.filter(a => actionIds.has(a.id))
+}
+
+function getNodeName(nodeId: string): string {
+  const node = workflowNodes.value.find(n => n.id === nodeId)
+  return node?.name || nodeId
+}
+
+function nodeIsTerminal(nodeId: string): boolean {
+  const node = workflowNodes.value.find(n => n.id === nodeId)
+  return node?.type === 'terminal'
+}
+
+function nodeTagType(nodeId: string): '' | 'success' | 'danger' | 'warning' | 'info' {
+  const node = workflowNodes.value.find(n => n.id === nodeId)
+  if (!node) return 'info'
+  if (node.type === 'start') return 'warning'
+  if (node.type === 'terminal') {
+    if (nodeId.includes('approved')) return 'success'
+    if (nodeId.includes('rejected')) return 'danger'
+    return 'info'
+  }
+  return 'info'
+}
+
+function actionButtonType(actionId: string): 'success' | 'danger' | 'warning' | 'primary' {
+  if (actionId.includes('approve')) return 'success'
+  if (actionId.includes('reject')) return 'danger'
+  return 'primary'
 }
 
 function typeIcon(type: string) {
@@ -85,6 +178,20 @@ function thumbnailUrl(media: MediaResource) {
   return ''
 }
 
+async function fetchWorkflow() {
+  try {
+    const res = await wfApi.getWorkflowForResource('media')
+    const info = res.data as ResourceWorkflowInfo
+    workflowNodes.value = info.nodes || []
+    workflowActions.value = info.actions || []
+    workflowTransitions.value = info.transitions || []
+  } catch {
+    workflowNodes.value = []
+    workflowActions.value = []
+    workflowTransitions.value = []
+  }
+}
+
 async function fetchMedia() {
   loading.value = true
   try {
@@ -105,16 +212,19 @@ async function fetchMedia() {
 
 function handleFilterChange() {
   currentPage.value = 1
+  clearSelection()
   fetchMedia()
 }
 
-function handleTabChange() {
+function handleNodeFilterChange() {
   currentPage.value = 1
+  clearSelection()
   fetchMedia()
 }
 
 function handlePageChange(page: number) {
   currentPage.value = page
+  clearSelection()
   fetchMedia()
 }
 
@@ -135,7 +245,7 @@ async function handleDelete(media: MediaResource) {
 
 function openUploadDialog() {
   uploadTitle.value = ''
-  uploadSource.value = ''
+  uploadDescription.value = ''
   uploadTags.value = ''
   uploadFileList.value = []
   uploadDialogVisible.value = true
@@ -169,8 +279,8 @@ async function handleUploadSubmit() {
     const formData = new FormData()
     formData.append('file', uploadFileList.value[0])
     formData.append('title', uploadTitle.value.trim())
-    if (uploadSource.value.trim()) {
-      formData.append('source', uploadSource.value.trim())
+    if (uploadDescription.value.trim()) {
+      formData.append('description', uploadDescription.value.trim())
     }
     if (uploadTags.value.trim()) {
       formData.append('tags', uploadTags.value.trim())
@@ -183,6 +293,42 @@ async function handleUploadSubmit() {
     ElMessage.error('上传失败')
   } finally {
     uploading.value = false
+  }
+}
+
+function openEditDialog(media: MediaResource) {
+  editTarget.value = media
+  editForm.value = {
+    title: media.title,
+    description: media.description || '',
+    tags: (media.tags || []).join(', '),
+  }
+  editDialogVisible.value = true
+}
+
+async function handleEditSubmit() {
+  if (!editTarget.value) return
+  if (!editForm.value.title.trim()) {
+    ElMessage.warning('请输入资源标题')
+    return
+  }
+  editSaving.value = true
+  try {
+    const tagList = editForm.value.tags
+      ? editForm.value.tags.split(',').map(t => t.trim()).filter(Boolean)
+      : []
+    await mediaApi.updateMedia(editTarget.value.id, {
+      title: editForm.value.title.trim(),
+      description: editForm.value.description.trim() || '',
+      tags: tagList,
+    })
+    ElMessage.success('保存成功')
+    editDialogVisible.value = false
+    fetchMedia()
+  } catch {
+    ElMessage.error('保存失败')
+  } finally {
+    editSaving.value = false
   }
 }
 
@@ -203,25 +349,27 @@ async function fetchReviewHistory(mediaId: string) {
   }
 }
 
-async function handleReview(action: 'approve' | 'reject') {
+async function handleReviewAction(actionId: string) {
   if (!reviewTarget.value) return
   reviewLoading.value = true
   try {
     await mediaApi.reviewMedia(reviewTarget.value.id, {
-      action,
+      action: actionId,
       note: reviewNote.value || undefined,
     })
-    ElMessage.success(action === 'approve' ? '审核通过' : '已拒绝')
+    const actionName = workflowActions.value.find(a => a.id === actionId)?.name || actionId
+    ElMessage.success(`操作成功: ${actionName}`)
     reviewDialogVisible.value = false
     fetchMedia()
   } catch {
-    ElMessage.error('审核操作失败')
+    ElMessage.error('操作失败')
   } finally {
     reviewLoading.value = false
   }
 }
 
-onMounted(() => {
+onMounted(async () => {
+  await fetchWorkflow()
   fetchMedia()
 })
 </script>
@@ -239,12 +387,14 @@ onMounted(() => {
     </div>
 
     <div class="content-card">
-      <el-tabs v-model="activeTab" @tab-change="handleTabChange">
+      <!-- Dynamic workflow node tabs -->
+      <el-tabs v-model="activeNodeFilter" @tab-change="handleNodeFilterChange">
+        <el-tab-pane label="全部" name="all" />
         <el-tab-pane
-          v-for="tab in statusTabs"
-          :key="tab.value"
-          :label="tab.label"
-          :name="tab.value"
+          v-for="node in workflowNodes"
+          :key="node.id"
+          :label="node.name"
+          :name="node.id"
         />
       </el-tabs>
 
@@ -260,6 +410,23 @@ onMounted(() => {
         </el-radio-group>
       </div>
 
+      <!-- Batch action bar -->
+      <div v-if="batchEnabled && selectedIds.size > 0" class="batch-bar">
+        <el-checkbox :model-value="allSelected" @change="toggleSelectAll">全选</el-checkbox>
+        <span class="batch-count">已选 {{ selectedIds.size }} 项</span>
+        <el-button
+          v-for="action in batchActions"
+          :key="action.id"
+          :type="actionButtonType(action.id)"
+          size="small"
+          :loading="batchLoading"
+          @click="handleBatchAction(action.id)"
+        >
+          批量{{ action.name }}
+        </el-button>
+        <el-button size="small" @click="clearSelection">取消选择</el-button>
+      </div>
+
       <div v-loading="loading" class="media-grid">
         <div
           v-for="media in mediaList"
@@ -267,6 +434,17 @@ onMounted(() => {
           class="media-card"
         >
           <div class="media-thumbnail">
+            <div
+              v-if="batchEnabled"
+              class="card-checkbox"
+              @click.stop="toggleSelect(media.id)"
+            >
+              <el-checkbox
+                :model-value="selectedIds.has(media.id)"
+                @change="toggleSelect(media.id)"
+                @click.stop
+              />
+            </div>
             <img
               v-if="media.media_type === 'image' && thumbnailUrl(media)"
               :src="thumbnailUrl(media)"
@@ -278,8 +456,8 @@ onMounted(() => {
             </div>
             <div class="media-badges">
               <el-tag size="small" type="info">{{ typeLabel(media.media_type) }}</el-tag>
-              <el-tag size="small" :type="statusTag(media.status).type">
-                {{ statusTag(media.status).label }}
+              <el-tag size="small" :type="nodeTagType(media.current_node)">
+                {{ getNodeName(media.current_node) }}
               </el-tag>
             </div>
           </div>
@@ -287,6 +465,7 @@ onMounted(() => {
             <h4 class="media-name" :title="media.title">{{ media.title }}</h4>
             <div class="media-meta">
               <span>{{ formatFileSize(media.file_size) }}</span>
+              <span v-if="media.uploader_name">{{ media.uploader_name }}</span>
               <span>{{ formatDate(media.created_at) }}</span>
             </div>
             <div v-if="media.tags && media.tags.length" class="media-tags">
@@ -302,18 +481,20 @@ onMounted(() => {
             </div>
           </div>
           <div class="media-actions">
+            <el-button type="primary" text size="small" :icon="Edit" @click="openEditDialog(media)">
+              编辑
+            </el-button>
             <el-button
-              v-if="media.status === 'pending' || media.status === 'reviewing'"
-              type="primary"
+              v-if="!nodeIsTerminal(media.current_node)"
+              type="success"
               text
               size="small"
-              :icon="Check"
               @click="openReviewDialog(media)"
             >
               审核
             </el-button>
             <el-button
-              v-else-if="media.status === 'approved' || media.status === 'rejected'"
+              v-else
               type="info"
               text
               size="small"
@@ -331,7 +512,7 @@ onMounted(() => {
         <p>暂无资源</p>
       </div>
 
-      <div class="pagination-wrapper" v-if="total > pageSize">
+      <div class="pagination-wrapper" v-if="total > 0">
         <el-pagination
           v-model:current-page="currentPage"
           :page-size="pageSize"
@@ -371,8 +552,8 @@ onMounted(() => {
             </template>
           </el-upload>
         </el-form-item>
-        <el-form-item label="来源">
-          <el-input v-model="uploadSource" placeholder="资源来源（选填）" />
+        <el-form-item label="描述">
+          <el-input v-model="uploadDescription" type="textarea" :rows="2" placeholder="资源描述，用于检索（选填）" />
         </el-form-item>
         <el-form-item label="标签">
           <el-input v-model="uploadTags" placeholder="多个标签用逗号分隔（选填）" />
@@ -386,11 +567,37 @@ onMounted(() => {
       </template>
     </el-dialog>
 
+    <!-- Edit Dialog -->
+    <el-dialog
+      v-model="editDialogVisible"
+      title="编辑资源信息"
+      width="520px"
+      destroy-on-close
+    >
+      <el-form label-width="80px">
+        <el-form-item label="资源标题" required>
+          <el-input v-model="editForm.title" placeholder="请输入资源标题" />
+        </el-form-item>
+        <el-form-item label="描述">
+          <el-input v-model="editForm.description" type="textarea" :rows="3" placeholder="资源描述，用于检索（选填）" />
+        </el-form-item>
+        <el-form-item label="标签">
+          <el-input v-model="editForm.tags" placeholder="多个标签用逗号分隔（选填）" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="editDialogVisible = false">取消</el-button>
+        <el-button type="primary" :loading="editSaving" @click="handleEditSubmit">
+          保存
+        </el-button>
+      </template>
+    </el-dialog>
+
     <!-- Review Dialog -->
     <el-dialog
       v-model="reviewDialogVisible"
       title="审核媒体资源"
-      width="520px"
+      width="580px"
       destroy-on-close
     >
       <div v-if="reviewTarget" class="review-info">
@@ -408,8 +615,8 @@ onMounted(() => {
         <div class="review-meta">
           <h4>{{ reviewTarget.title }}</h4>
           <p>类型：{{ typeLabel(reviewTarget.media_type) }} · {{ formatFileSize(reviewTarget.file_size) }}</p>
-          <el-tag size="small" :type="statusTag(reviewTarget.status).type" style="margin-top: 4px;">
-            {{ statusTag(reviewTarget.status).label }}
+          <el-tag size="small" :type="nodeTagType(reviewTarget.current_node)" style="margin-top: 4px;">
+            {{ getNodeName(reviewTarget.current_node) }}
           </el-tag>
         </div>
       </div>
@@ -417,7 +624,7 @@ onMounted(() => {
         <h4 class="review-section-title">审核记录</h4>
         <ReviewHistory :records="reviewHistory" />
       </div>
-      <el-form v-if="reviewTarget && (reviewTarget.status === 'pending' || reviewTarget.status === 'reviewing')" label-width="80px" style="margin-top: 16px;">
+      <el-form v-if="reviewTarget && !nodeIsTerminal(reviewTarget.current_node)" label-width="80px" style="margin-top: 16px;">
         <el-form-item label="审核备注">
           <el-input
             v-model="reviewNote"
@@ -428,23 +635,16 @@ onMounted(() => {
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="reviewDialogVisible = false">取消</el-button>
-        <template v-if="reviewTarget && (reviewTarget.status === 'pending' || reviewTarget.status === 'reviewing')">
+        <el-button @click="reviewDialogVisible = false">关闭</el-button>
+        <template v-if="reviewTarget && !nodeIsTerminal(reviewTarget.current_node)">
           <el-button
-            type="danger"
-            :icon="Close"
+            v-for="action in getActionsForNode(reviewTarget.current_node)"
+            :key="action.id"
+            :type="actionButtonType(action.id)"
             :loading="reviewLoading"
-            @click="handleReview('reject')"
+            @click="handleReviewAction(action.id)"
           >
-            拒绝
-          </el-button>
-          <el-button
-            type="success"
-            :icon="Check"
-            :loading="reviewLoading"
-            @click="handleReview('approve')"
-          >
-            通过
+            {{ action.name }}
           </el-button>
         </template>
       </template>
@@ -454,6 +654,9 @@ onMounted(() => {
 
 <style lang="scss" scoped>
 .media-page {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
 }
 
 .page-header {
@@ -477,11 +680,15 @@ onMounted(() => {
 }
 
 .content-card {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
   background: var(--bg-primary, #ffffff);
   border-radius: 12px;
   border: 1px solid var(--border-color, #E2E6ED);
   padding: 20px;
   overflow: hidden;
+  min-height: 0;
 }
 
 .toolbar {
@@ -495,6 +702,8 @@ onMounted(() => {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
   gap: 16px;
+  max-height: calc(100vh - 300px);
+  overflow-y: auto;
 }
 
 .media-card {
@@ -592,7 +801,9 @@ onMounted(() => {
 .pagination-wrapper {
   display: flex;
   justify-content: flex-end;
-  margin-top: 16px;
+  margin-top: auto;
+  padding-top: 16px;
+  border-top: 1px solid var(--border-color, #E2E6ED);
 }
 
 .upload-icon {
@@ -666,6 +877,29 @@ onMounted(() => {
   font-weight: 600;
   color: var(--text-primary, #1A1A2E);
   margin: 0 0 8px;
+}
+
+.batch-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  background: var(--el-color-primary-light-9, #ECF5FF);
+  border-radius: 8px;
+  margin-bottom: 16px;
+}
+
+.batch-count {
+  font-size: 13px;
+  color: var(--text-primary, #1A1A2E);
+  font-weight: 500;
+}
+
+.card-checkbox {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  z-index: 2;
 }
 
 @media (max-width: 768px) {

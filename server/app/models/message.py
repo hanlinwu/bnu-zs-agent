@@ -22,6 +22,8 @@ class Message(Base):
     risk_level: Mapped[str | None] = mapped_column(String(10))
     review_passed: Mapped[bool | None] = mapped_column(Boolean)
     sources: Mapped[dict | None] = mapped_column(JSONB)
+    sensitive_words: Mapped[list[str] | None] = mapped_column(JSONB)  # 匹配的敏感词列表
+    sensitive_level: Mapped[str | None] = mapped_column(String(10))  # block/warn/review
     is_deleted: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=text("NOW()"))

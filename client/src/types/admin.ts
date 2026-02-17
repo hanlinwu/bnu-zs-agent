@@ -23,10 +23,12 @@ export interface Role {
 export interface SensitiveWordGroup {
   id: string
   name: string
-  words: string[]
-  enabled: boolean
-  createdAt: string
-  updatedAt: string
+  description: string | null
+  level: 'block' | 'warn' | 'review'
+  word_list: string
+  word_count: number
+  is_active: boolean
+  created_at: string
 }
 
 /** 媒体资源 */
@@ -38,11 +40,13 @@ export interface MediaResource {
   file_size: number | null
   thumbnail_url: string | null
   tags: string[]
-  source: string | null
-  status: 'pending' | 'approved' | 'rejected' | 'reviewing'
+  description: string | null
+  status: string
+  current_node: string
   current_step: number
   is_approved: boolean
   uploaded_by: string | null
+  uploader_name: string | null
   reviewed_by: string | null
   review_note: string | null
   created_at: string
@@ -144,6 +148,7 @@ export interface AdminConversation {
   user_char_count: number
   assistant_char_count: number
   max_risk_level: string | null
+  max_sensitive_level: string | null
   created_at: string
   updated_at: string
 }
@@ -157,6 +162,8 @@ export interface AdminMessage {
   risk_level: string | null
   review_passed: boolean | null
   sources: Record<string, unknown> | null
+  sensitive_words: string[] | null
+  sensitive_level: string | null
   created_at: string
 }
 

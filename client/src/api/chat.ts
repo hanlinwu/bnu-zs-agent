@@ -29,3 +29,22 @@ export const deleteConversation = (id: string) =>
 /** 获取对话消息列表 */
 export const getMessages = (conversationId: string, page: number, pageSize: number) =>
   request.get<PaginatedResult<Message>>(`/conversations/${conversationId}/messages`, { params: { page, pageSize } })
+
+/** 获取对话消息列表（游标分页，用于无限滚动）
+ * @param conversationId 对话ID
+ * @param params 分页参数
+ *   - before: 加载此ID之前的消息（更早的消息，向上滚动）
+ *   - after: 加载此ID之后的消息（更新的消息，向下滚动）
+ *   - pageSize: 每页数量，默认20
+ */
+export const getMessagesPaginated = (
+  conversationId: string,
+  params: { before?: string; after?: string; pageSize?: number }
+) =>
+  request.get<PaginatedResult<Message>>(`/conversations/${conversationId}/messages`, {
+    params: {
+      before: params.before,
+      after: params.after,
+      page_size: params.pageSize || 20,
+    },
+  })

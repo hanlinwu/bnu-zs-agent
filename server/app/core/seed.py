@@ -268,17 +268,50 @@ async def seed_model_config() -> None:
         await session.commit()
 
 
-# Default review workflow templates
+# Default workflow templates with state-machine definitions
 DEFAULT_WORKFLOWS = [
     {
         "name": "单级审核",
         "code": "single",
+        "definition": {
+            "nodes": [
+                {"id": "pending", "name": "待审核", "type": "start", "view_roles": ["reviewer", "admin", "super_admin"], "edit_roles": ["reviewer", "admin", "super_admin"]},
+                {"id": "approved", "name": "已通过", "type": "terminal", "view_roles": ["reviewer", "admin", "super_admin"], "edit_roles": []},
+                {"id": "rejected", "name": "不通过", "type": "terminal", "view_roles": ["reviewer", "admin", "super_admin"], "edit_roles": []},
+            ],
+            "actions": [
+                {"id": "approve", "name": "通过"},
+                {"id": "reject", "name": "拒绝"},
+            ],
+            "transitions": [
+                {"from_node": "pending", "action": "approve", "to_node": "approved"},
+                {"from_node": "pending", "action": "reject", "to_node": "rejected"},
+            ],
+        },
         "steps": [{"step": 1, "name": "审核", "role_code": "reviewer"}],
         "is_system": True,
     },
     {
         "name": "双级审核",
         "code": "double",
+        "definition": {
+            "nodes": [
+                {"id": "pending", "name": "待审核", "type": "start", "view_roles": ["reviewer", "admin", "super_admin"], "edit_roles": ["reviewer", "super_admin"]},
+                {"id": "reviewing", "name": "复审中", "type": "intermediate", "view_roles": ["admin", "super_admin"], "edit_roles": ["admin", "super_admin"]},
+                {"id": "approved", "name": "已通过", "type": "terminal", "view_roles": ["reviewer", "admin", "super_admin"], "edit_roles": []},
+                {"id": "rejected", "name": "不通过", "type": "terminal", "view_roles": ["reviewer", "admin", "super_admin"], "edit_roles": []},
+            ],
+            "actions": [
+                {"id": "approve", "name": "通过"},
+                {"id": "reject", "name": "拒绝"},
+            ],
+            "transitions": [
+                {"from_node": "pending", "action": "approve", "to_node": "reviewing"},
+                {"from_node": "pending", "action": "reject", "to_node": "rejected"},
+                {"from_node": "reviewing", "action": "approve", "to_node": "approved"},
+                {"from_node": "reviewing", "action": "reject", "to_node": "rejected"},
+            ],
+        },
         "steps": [
             {"step": 1, "name": "初审", "role_code": "reviewer"},
             {"step": 2, "name": "终审", "role_code": "admin"},
@@ -305,6 +338,11 @@ async def seed_review_workflows() -> None:
                 wf = ReviewWorkflow(**wf_data)
                 session.add(wf)
                 existing_wf[wf_data["code"]] = wf
+            else:
+                # Update existing workflow with definition if missing
+                existing = existing_wf[wf_data["code"]]
+                if not existing.definition and wf_data.get("definition"):
+                    existing.definition = wf_data["definition"]
 
         await session.flush()
 
@@ -323,3 +361,46 @@ async def seed_review_workflows() -> None:
                     session.add(binding)
 
         await session.commit()
+
+
+async def seed_default_knowledge_base():
+    """Ensure a default knowledge base exists and all orphan documents are assigned to it."""
+    from app.models.knowledge import KnowledgeBase, KnowledgeDocument
+
+    session_factory = get_session_factory()
+    async with session_factory() as db:
+        count = (await db.execute(select(func.count()).select_from(KnowledgeBase))).scalar() or 0
+        if count == 0:
+            default_kb = KnowledgeBase(
+                name="默认知识库",
+                description="系统默认知识库",
+                enabled=True,
+                sort_order=0,
+            )
+            db.add(default_kb)
+            await db.flush()
+
+            from sqlalchemy import update
+            await db.execute(
+                update(KnowledgeDocument)
+                .where(KnowledgeDocument.kb_id.is_(None))
+                .values(kb_id=default_kb.id)
+            )
+            await db.commit()
+        else:
+            first_kb = (await db.execute(
+                select(KnowledgeBase).order_by(KnowledgeBase.sort_order, KnowledgeBase.created_at).limit(1)
+            )).scalar_one_or_none()
+            if first_kb:
+                orphan_count = (await db.execute(
+                    select(func.count()).select_from(KnowledgeDocument)
+                    .where(KnowledgeDocument.kb_id.is_(None))
+                )).scalar() or 0
+                if orphan_count > 0:
+                    from sqlalchemy import update
+                    await db.execute(
+                        update(KnowledgeDocument)
+                        .where(KnowledgeDocument.kb_id.is_(None))
+                        .values(kb_id=first_kb.id)
+                    )
+                    await db.commit()

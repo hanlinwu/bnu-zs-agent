@@ -33,7 +33,9 @@ const request = axios.create({
 /** 请求拦截：注入 Bearer token */
 request.interceptors.request.use((config) => {
   // Admin endpoints use admin_token, user endpoints use token
-  const isAdmin = config.url?.startsWith('/admin')
+  // 检查完整 URL 路径，确保匹配 /admin/* 路由
+  const fullPath = (config.baseURL || '') + (config.url || '')
+  const isAdmin = fullPath.includes('/admin')
   const token = localStorage.getItem(isAdmin ? 'admin_token' : 'token')
   if (token) {
     config.headers.Authorization = `Bearer ${token}`

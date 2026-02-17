@@ -6,6 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
+from app.core.exceptions import ForbiddenError
 from app.core.security import create_access_token
 from app.models.user import User
 from app.models.role import UserRole, Role
@@ -31,7 +32,7 @@ async def login_or_register(
 
     if user:
         if user.status != "active":
-            return {"success": False, "message": "账号已被禁用"}
+            raise ForbiddenError("账号已被禁用，请联系客服")
     else:
         # Register new user
         if not nickname:

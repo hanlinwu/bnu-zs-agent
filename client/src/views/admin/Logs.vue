@@ -207,6 +207,7 @@ onMounted(() => {
         :data="logs"
         stripe
         class="log-table"
+        height="100%"
       >
         <el-table-column prop="createdAt" label="时间" width="170">
           <template #default="{ row }">
@@ -248,6 +249,9 @@ onMounted(() => {
 
 <style lang="scss" scoped>
 .logs-page {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
 }
 
 .page-header {
@@ -271,11 +275,15 @@ onMounted(() => {
 }
 
 .content-card {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
   background: var(--bg-primary, #ffffff);
   border-radius: 12px;
   border: 1px solid var(--border-color, #E2E6ED);
   padding: 20px;
   overflow: hidden;
+  min-height: 0;
 }
 
 .toolbar {
@@ -286,6 +294,13 @@ onMounted(() => {
 }
 
 .log-table {
+  flex: 1;
+  overflow: hidden;
+
+  :deep(.el-table) {
+    height: 100%;
+  }
+
   :deep(.el-table__header th) {
     background: var(--bg-secondary, #F4F6FA);
     font-weight: 600;

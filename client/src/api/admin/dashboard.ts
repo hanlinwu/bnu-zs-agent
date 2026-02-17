@@ -22,8 +22,13 @@ export interface HotQuestion {
 export const getDashboardStats = () =>
   request.get<DashboardStats>('/admin/dashboard/stats')
 
-export const getDashboardTrends = (days: number = 7) =>
-  request.get<{ items: TrendItem[] }>('/admin/dashboard/trends', { params: { days } })
+export const getDashboardTrends = (days: number = 7) => {
+  // Get timezone offset in hours (positive for east, negative for west)
+  const timezoneOffset = -new Date().getTimezoneOffset() / 60
+  return request.get<{ items: TrendItem[] }>('/admin/dashboard/trends', {
+    params: { days, timezone_offset: timezoneOffset }
+  })
+}
 
 export const getDashboardHot = (limit: number = 8, days: number = 7) =>
   request.get<{ items: HotQuestion[] }>('/admin/dashboard/hot', { params: { limit, days } })

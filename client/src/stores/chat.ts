@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia'
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import { handleUnauthorized } from '@/api/request'
-import request from '@/api/request'
+import * as chatApi from '@/api/chat'
 import { useConversationStore } from '@/stores/conversation'
 
 export interface ChatMessage {
@@ -13,31 +13,173 @@ export interface ChatMessage {
   loading?: boolean
 }
 
+const rolePriority: Record<ChatMessage['role'], number> = {
+  user: 0,
+  assistant: 1,
+  system: 2,
+}
+
+function compareMessages(a: ChatMessage, b: ChatMessage): number {
+  if (a.timestamp !== b.timestamp) {
+    return a.timestamp - b.timestamp
+  }
+
+  const priorityDiff = rolePriority[a.role] - rolePriority[b.role]
+  if (priorityDiff !== 0) {
+    return priorityDiff
+  }
+
+  return a.id.localeCompare(b.id)
+}
+
 export const useChatStore = defineStore('chat', () => {
-  const messages = ref<ChatMessage[]>([])
+  // 使用 Map 存储消息，支持 O(1) 查找和去重
+  const messageMap = ref<Map<string, ChatMessage>>(new Map())
   const isStreaming = ref(false)
   const isLoadingMessages = ref(false)
+  const isLoadingHistory = ref(false) // 加载历史消息中
   const currentConversationId = ref<string | null>(null)
+
+  // 分页状态
+  const hasMoreHistory = ref(true) // 是否还有更多历史消息
+  const oldestMessageId = ref<string | null>(null) // 最旧的消息ID（用于游标）
+  const newestMessageId = ref<string | null>(null) // 最新的消息ID
+  const totalMessageCount = ref(0) // 消息总数
+
   let abortController: AbortController | null = null
 
-  async function loadMessages(conversationId: string) {
+  // 计算属性：按时间排序的消息列表
+  const messages = computed(() => {
+    return Array.from(messageMap.value.values())
+      .sort(compareMessages)
+  })
+
+  // 获取最新消息（用于初始加载）
+  async function loadMessages(conversationId: string, pageSize: number = 20) {
     isLoadingMessages.value = true
+    messageMap.value.clear()
+    hasMoreHistory.value = true
+    oldestMessageId.value = null
+    newestMessageId.value = null
+
     try {
-      const res = await request.get(`/conversations/${conversationId}/messages`, {
-        params: { page: 1, page_size: 200 },
+      const res = await chatApi.getMessagesPaginated(conversationId, {
+        pageSize,
       })
-      const items = res.data.items || []
-      messages.value = items.map((m: any) => ({
-        id: m.id,
-        role: m.role,
-        content: m.content,
-        timestamp: new Date(m.created_at).getTime(),
-        sources: m.sources || undefined,
-      }))
+
+      let items = res.data.items || []
+      totalMessageCount.value = res.data.total || 0
+
+      // 稳定排序：时间 -> 角色 -> ID（避免问答同时间戳导致乱序）
+      items = items.sort((a: any, b: any) => {
+        const timeDiff = new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+        if (timeDiff !== 0) {
+          return timeDiff
+        }
+
+        const roleDiff = (rolePriority[(a.role as ChatMessage['role']) || 'assistant'] ?? 99)
+          - (rolePriority[(b.role as ChatMessage['role']) || 'assistant'] ?? 99)
+        if (roleDiff !== 0) {
+          return roleDiff
+        }
+
+        return String(a.id ?? '').localeCompare(String(b.id ?? ''))
+      })
+
+      // 添加到 Map
+      items.forEach((m: any) => {
+        messageMap.value.set(m.id, {
+          id: m.id,
+          role: m.role,
+          content: m.content,
+          timestamp: new Date(m.created_at).getTime(),
+          sources: m.sources || undefined,
+        })
+      })
+
+      // 更新游标
+      if (items.length > 0) {
+        oldestMessageId.value = items[0]?.id || null
+        newestMessageId.value = items[items.length - 1]?.id || null
+      }
+
+      // 如果加载的数量少于请求的，说明没有更多历史了
+      hasMoreHistory.value = items.length >= pageSize && items.length < totalMessageCount.value
     } catch {
-      messages.value = []
+      messageMap.value.clear()
+      hasMoreHistory.value = false
     } finally {
       isLoadingMessages.value = false
+    }
+  }
+
+  // 加载更多历史消息（向上滚动时调用）
+  async function loadMoreHistory(pageSize: number = 20): Promise<boolean> {
+    if (!currentConversationId.value || !oldestMessageId.value || isLoadingHistory.value) {
+      return false
+    }
+
+    // 如果已经没有更多历史，直接返回
+    if (!hasMoreHistory.value) {
+      return false
+    }
+
+    isLoadingHistory.value = true
+
+    try {
+      const res = await chatApi.getMessagesPaginated(currentConversationId.value, {
+        before: oldestMessageId.value,
+        pageSize,
+      })
+
+      const items = res.data.items || []
+
+      if (items.length === 0) {
+        hasMoreHistory.value = false
+        return false
+      }
+
+      // 稳定排序：时间 -> 角色 -> ID（避免问答同时间戳导致乱序）
+      const sortedItems = items.sort((a: any, b: any) => {
+        const timeDiff = new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+        if (timeDiff !== 0) {
+          return timeDiff
+        }
+
+        const roleDiff = (rolePriority[(a.role as ChatMessage['role']) || 'assistant'] ?? 99)
+          - (rolePriority[(b.role as ChatMessage['role']) || 'assistant'] ?? 99)
+        if (roleDiff !== 0) {
+          return roleDiff
+        }
+
+        return String(a.id ?? '').localeCompare(String(b.id ?? ''))
+      })
+
+      // 添加到 Map（自动去重）
+      sortedItems.forEach((m: any) => {
+        if (!messageMap.value.has(m.id)) {
+          messageMap.value.set(m.id, {
+            id: m.id,
+            role: m.role,
+            content: m.content,
+            timestamp: new Date(m.created_at).getTime(),
+            sources: m.sources || undefined,
+          })
+        }
+      })
+
+      // 更新最旧消息游标
+      oldestMessageId.value = sortedItems[0]?.id || oldestMessageId.value
+
+      // 检查是否还有更多
+      hasMoreHistory.value = items.length >= pageSize
+
+      return items.length > 0
+    } catch (error) {
+      console.error('Failed to load history:', error)
+      return false
+    } finally {
+      isLoadingHistory.value = false
     }
   }
 
@@ -50,27 +192,31 @@ export const useChatStore = defineStore('chat', () => {
       setConversationId(conv.id)
     }
 
+    const now = Date.now()
     const userMsg: ChatMessage = {
-      id: `msg-${Date.now()}`,
+      id: `msg-${now}`,
       role: 'user',
       content,
-      timestamp: Date.now(),
+      timestamp: now,
     }
-    messages.value.push(userMsg)
+    messageMap.value.set(userMsg.id, userMsg)
+    newestMessageId.value = userMsg.id
 
-    messages.value.push({
-      id: `msg-${Date.now()}-reply`,
+    // AI消息时间戳+1，确保排序时用户消息在前
+    const assistantMsg: ChatMessage = {
+      id: `msg-${now + 1}-reply`,
       role: 'assistant',
       content: '',
-      timestamp: Date.now(),
+      timestamp: now + 1,
       loading: true,
-    })
+    }
+    messageMap.value.set(assistantMsg.id, assistantMsg)
+
     isStreaming.value = true
 
-    // Reference the reactive proxy in the array (not a plain local object)
-    const assistantIdx = messages.value.length - 1
+    // Reference the reactive proxy in the Map
     const getAssistantMessage = () => {
-      const msg = messages.value[assistantIdx]
+      const msg = messageMap.value.get(assistantMsg.id)
       if (!msg) {
         throw new Error('assistant message missing')
       }
@@ -153,7 +299,11 @@ export const useChatStore = defineStore('chat', () => {
   }
 
   function clearMessages() {
-    messages.value = []
+    messageMap.value.clear()
+    oldestMessageId.value = null
+    newestMessageId.value = null
+    hasMoreHistory.value = true
+    totalMessageCount.value = 0
   }
 
   async function stopGeneration() {
@@ -186,17 +336,29 @@ export const useChatStore = defineStore('chat', () => {
     } else {
       localStorage.removeItem('currentConversationId')
     }
+    // 重置分页状态，等待 loadMessages 设置正确值
+    hasMoreHistory.value = false
   }
 
   return {
+    // State
     messages,
+    messageMap,
     isStreaming,
     isLoadingMessages,
+    isLoadingHistory,
     currentConversationId,
+    hasMoreHistory,
+    oldestMessageId,
+    newestMessageId,
+    totalMessageCount,
+
+    // Actions
     sendMessage,
     stopGeneration,
     clearMessages,
     setConversationId,
     loadMessages,
+    loadMoreHistory,
   }
 })

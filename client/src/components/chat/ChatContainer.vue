@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { Loading } from '@element-plus/icons-vue'
 import { useChatStore } from '@/stores/chat'
 import MessageList from './MessageList.vue'
 import MessageInput from './MessageInput.vue'
+import MessageSkeleton from './MessageSkeleton.vue'
 
 const chatStore = useChatStore()
 
@@ -25,9 +25,11 @@ function handleStop() {
 
 <template>
   <div class="chat-container">
-    <div v-if="isLoadingMessages" class="loading-overlay">
-      <el-icon class="loading-icon" :size="24"><Loading /></el-icon>
-      <span>加载消息中...</span>
+    <!-- 骨架屏：切换会话时显示 -->
+    <div v-if="isLoadingMessages" class="skeleton-wrapper">
+      <div class="skeleton-content">
+        <MessageSkeleton v-for="i in 4" :key="i" :index="i" />
+      </div>
     </div>
     <template v-else>
       <MessageList @select-question="handleSelectQuestion" />
@@ -45,28 +47,18 @@ function handleStop() {
   overflow: hidden;
 }
 
-@keyframes spin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
+.skeleton-wrapper {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 16px;
 }
 
-.loading-overlay {
+.skeleton-content {
+  max-width: 800px;
+  margin: 0 auto;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  flex: 1;
-  gap: 12px;
-  font-size: 14px;
-  color: var(--text-secondary, #5a5a72);
-
-  .loading-icon {
-    animation: spin 1.2s linear infinite;
-    color: var(--bnu-blue, #003DA5);
-  }
+  gap: 16px;
 }
 </style>

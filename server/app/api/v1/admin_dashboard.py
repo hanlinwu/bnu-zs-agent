@@ -79,33 +79,44 @@ async def get_stats(
 @router.get("/trends", dependencies=[Depends(require_permission("dashboard:read"))])
 async def get_trends(
     days: int = Query(30, ge=1, le=90),
+    timezone_offset: int = Query(8, ge=-12, le=14, description="时区偏移，默认东八区(北京时间)"),
     admin: AdminUser = Depends(get_current_admin),
     db: AsyncSession = Depends(get_db),
 ):
-    """对话量趋势（最近 N 天）"""
-    start_date = datetime.now(timezone.utc) - timedelta(days=days)
+    """对话量趋势（最近 N 天，包含无数据的日期补零，支持时区偏移）"""
+    from sqlalchemy import text
 
-    stmt = (
-        select(
-            cast(Conversation.created_at, Date).label("date"),
-            func.count().label("count"),
-        )
-        .where(
-            Conversation.is_deleted == False,
-            Conversation.created_at >= start_date,
-        )
-        .group_by(cast(Conversation.created_at, Date))
-        .order_by(cast(Conversation.created_at, Date))
-    )
+    # Use SQL to convert UTC to local timezone for grouping
+    # PostgreSQL: (created_at + interval 'hours')::date
+    offset_hours = timezone_offset
+    stmt = text(f"""
+        SELECT
+            DATE(created_at + INTERVAL '{offset_hours} hours') AS date,
+            COUNT(*) AS count
+        FROM conversations
+        WHERE is_deleted = FALSE
+          AND created_at >= NOW() AT TIME ZONE 'UTC' - INTERVAL '{days} days'
+        GROUP BY DATE(created_at + INTERVAL '{offset_hours} hours')
+        ORDER BY date
+    """)
+
     result = await db.execute(stmt)
     rows = result.all()
 
-    return {
-        "items": [
-            {"date": row.date.isoformat(), "count": row.count}
-            for row in rows
-        ]
-    }
+    # Build a dict of existing data
+    data_map = {row.date: row.count for row in rows}
+
+    # Generate complete date sequence
+    now = datetime.now(timezone.utc) + timedelta(hours=offset_hours)
+    items = []
+    for i in range(days - 1, -1, -1):
+        date_obj = (now - timedelta(days=i)).date()
+        items.append({
+            "date": date_obj.isoformat(),
+            "count": data_map.get(date_obj, 0),
+        })
+
+    return {"items": items}
 
 
 @router.get("/hot", dependencies=[Depends(require_permission("dashboard:read"))])

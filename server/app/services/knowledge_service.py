@@ -46,7 +46,9 @@ async def search(query: str, db: AsyncSession, top_k: int = 5) -> list[SearchRes
             1 - (kc.embedding <=> CAST(:query_vec AS vector)) as score
         FROM knowledge_chunks kc
         JOIN knowledge_documents kd ON kd.id = kc.document_id
+        JOIN knowledge_bases kb ON kb.id = kd.kb_id
         WHERE kd.status = 'approved'
+          AND kb.enabled = true
           AND kc.embedding IS NOT NULL
         ORDER BY kc.embedding <=> CAST(:query_vec AS vector)
         LIMIT :top_k

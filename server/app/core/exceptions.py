@@ -23,6 +23,11 @@ class NotFoundError(BizError):
         super().__init__(code=404, message=message, status_code=404)
 
 
+class BadRequestError(BizError):
+    def __init__(self, message: str = "请求参数错误"):
+        super().__init__(code=400, message=message, status_code=400)
+
+
 class RateLimitError(BizError):
     def __init__(self, message: str = "请求过于频繁，请稍后再试"):
         super().__init__(code=429, message=message, status_code=429)

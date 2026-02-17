@@ -16,11 +16,47 @@ async def lifespan(app: FastAPI):
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
 
-    from app.core.seed import seed_roles_and_permissions, seed_calendar_periods, seed_model_config, seed_review_workflows
+    # Ensure schema migrations for workflow state-machine columns
+    from sqlalchemy import text as _text
+    async with engine.begin() as conn:
+        # review_records.step may still be NOT NULL from old schema
+        await conn.execute(_text(
+            "ALTER TABLE review_records ALTER COLUMN step DROP NOT NULL"
+        ))
+        await conn.execute(_text(
+            "ALTER TABLE review_records ALTER COLUMN step SET DEFAULT 0"
+        ))
+
+    # Ensure kb_id column on knowledge_documents
+    async with engine.begin() as conn:
+        await conn.execute(_text("""
+            DO $$ BEGIN
+                ALTER TABLE knowledge_documents ADD COLUMN kb_id UUID REFERENCES knowledge_bases(id);
+            EXCEPTION WHEN duplicate_column THEN NULL;
+            END $$;
+        """))
+
+    # Ensure level and word_list columns on sensitive_word_groups
+    async with engine.begin() as conn:
+        await conn.execute(_text("""
+            DO $$ BEGIN
+                ALTER TABLE sensitive_word_groups ADD COLUMN level VARCHAR(10) DEFAULT 'block';
+            EXCEPTION WHEN duplicate_column THEN NULL;
+            END $$;
+        """))
+        await conn.execute(_text("""
+            DO $$ BEGIN
+                ALTER TABLE sensitive_word_groups ADD COLUMN word_list TEXT;
+            EXCEPTION WHEN duplicate_column THEN NULL;
+            END $$;
+        """))
+
+    from app.core.seed import seed_roles_and_permissions, seed_calendar_periods, seed_model_config, seed_review_workflows, seed_default_knowledge_base
     await seed_roles_and_permissions()
     await seed_calendar_periods()
     await seed_model_config()
     await seed_review_workflows()
+    await seed_default_knowledge_base()
 
     # Initialize LLM router from DB config
     from app.core.database import get_session_factory

@@ -2,7 +2,7 @@ import request from '../request'
 import type { AdminUser } from '@/types/user'
 import type { PaginatedResult } from '@/types/admin'
 
-export const getUsers = (params: { page: number; pageSize: number; keyword?: string }) =>
+export const getUsers = (params: { page: number; pageSize: number; keyword?: string; status?: string }) =>
   request.get<PaginatedResult<AdminUser>>('/admin/users', { params })
 
 export const getUser = (id: string) =>
@@ -19,6 +19,9 @@ export const deleteUser = (id: string) =>
 
 export const toggleUserBan = (id: string) =>
   request.put(`/admin/users/${id}/ban`)
+
+export const batchBanUsers = (data: { ids: string[]; action: 'ban' | 'unban' }) =>
+  request.put('/admin/users/batch-ban', data)
 
 /** @deprecated Use toggleUserBan instead */
 export const toggleUserStatus = (_id: string, _enabled: boolean) =>

@@ -19,6 +19,7 @@ from app.api.v1 import (
     admin_log,
     admin_dashboard,
     admin_workflow,
+    admin_knowledge_base,
 )
 
 api_router = APIRouter(prefix="/api/v1")
@@ -31,6 +32,7 @@ api_router.include_router(conversation.router, prefix="/conversations", tags=["�
 # Admin routes
 api_router.include_router(admin_auth.router, prefix="/admin/auth", tags=["管理员认证"])
 api_router.include_router(knowledge.router, prefix="/admin/knowledge", tags=["知识库管理"])
+api_router.include_router(admin_knowledge_base.router, prefix="/admin/knowledge-bases", tags=["知识库"])
 api_router.include_router(media.router, prefix="/admin/media", tags=["多媒体资源"])
 api_router.include_router(admin_user.router, prefix="/admin/users", tags=["用户管理"])
 api_router.include_router(admin_admin.router, prefix="/admin/admins", tags=["管理员管理"])
