@@ -1,5 +1,6 @@
 import request from '../request'
 import type { SensitiveWordGroup } from '@/types/admin'
+import type { AxiosProgressEvent } from 'axios'
 
 export interface GroupListItem {
   id: string
@@ -39,6 +40,7 @@ export const uploadWordFile = (data: {
   level: string
   description?: string
   file: File
+  onProgress?: (percent: number) => void
 }) => {
   const formData = new FormData()
   formData.append('name', data.name)
@@ -49,5 +51,12 @@ export const uploadWordFile = (data: {
   formData.append('file', data.file)
 
   // 不要手动设置 Content-Type，让 axios 自动设置（包含 boundary）
-  return request.post<GroupListItem>('/admin/sensitive/groups/upload', formData)
+  return request.post<GroupListItem>('/admin/sensitive/groups/upload', formData, {
+    timeout: 0,
+    onUploadProgress: (evt: AxiosProgressEvent) => {
+      if (!evt.total) return
+      const percent = Math.min(100, Math.max(0, Math.round((evt.loaded / evt.total) * 100)))
+      data.onProgress?.(percent)
+    },
+  })
 }

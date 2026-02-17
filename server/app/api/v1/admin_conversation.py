@@ -42,6 +42,7 @@ async def list_conversations(
     keyword: str | None = None,
     risk_level: str | None = None,
     sensitive_level: str | None = None,
+    include_deleted: bool = Query(True, description="是否包含用户侧已删除对话"),
     start_time: datetime | None = None,
     end_time: datetime | None = None,
     page: int = Query(1, ge=1),
@@ -71,7 +72,9 @@ async def list_conversations(
     )
 
     # Base query: join conversation + user + stats
-    base_filter = [Conversation.is_deleted == False]
+    base_filter = []
+    if not include_deleted:
+        base_filter.append(Conversation.is_deleted == False)
 
     if keyword:
         like_pattern = f"%{keyword}%"
@@ -127,6 +130,8 @@ async def list_conversations(
             User.phone.label("user_phone"),
             User.nickname.label("user_nickname"),
             Conversation.title,
+            Conversation.is_deleted,
+            Conversation.deleted_at,
             func.coalesce(msg_stats.c.message_count, 0).label("message_count"),
             func.coalesce(msg_stats.c.user_char_count, 0).label("user_char_count"),
             func.coalesce(msg_stats.c.assistant_char_count, 0).label("assistant_char_count"),
@@ -158,6 +163,8 @@ async def list_conversations(
                 "assistant_char_count": row.assistant_char_count,
                 "max_risk_level": RISK_LABELS.get(row.risk_order or 0),
                 "max_sensitive_level": SENSITIVE_LABELS.get(row.sensitive_order or 0),
+                "is_deleted": bool(row.is_deleted),
+                "deleted_at": row.deleted_at.isoformat() if row.deleted_at else None,
                 "created_at": row.created_at.isoformat() if row.created_at else None,
                 "updated_at": row.updated_at.isoformat() if row.updated_at else None,
             }

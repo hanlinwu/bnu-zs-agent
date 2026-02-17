@@ -51,10 +51,27 @@ async def lifespan(app: FastAPI):
             END $$;
         """))
 
-    from app.core.seed import seed_roles_and_permissions, seed_calendar_periods, seed_model_config, seed_review_workflows, seed_default_knowledge_base
+    # Ensure additional_prompt column on admission_calendar
+    async with engine.begin() as conn:
+        await conn.execute(_text("""
+            DO $$ BEGIN
+                ALTER TABLE admission_calendar ADD COLUMN additional_prompt TEXT;
+            EXCEPTION WHEN duplicate_column THEN NULL;
+            END $$;
+        """))
+
+    from app.core.seed import (
+        seed_roles_and_permissions,
+        seed_calendar_periods,
+        seed_model_config,
+        seed_review_workflows,
+        seed_default_knowledge_base,
+        seed_system_configs,
+    )
     await seed_roles_and_permissions()
     await seed_calendar_periods()
     await seed_model_config()
+    await seed_system_configs()
     await seed_review_workflows()
     await seed_default_knowledge_base()
 

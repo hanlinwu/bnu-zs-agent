@@ -182,7 +182,10 @@ onMounted(() => {
           </template>
         </el-table-column>
         <el-table-column prop="title" label="对话标题" min-width="180" show-overflow-tooltip>
-          <template #default="{ row }">{{ row.title || '未命名对话' }}</template>
+          <template #default="{ row }">
+            <span>{{ row.title || '未命名对话' }}</span>
+            <el-tag v-if="row.is_deleted" size="small" type="info" class="deleted-tag">用户已删除</el-tag>
+          </template>
         </el-table-column>
         <el-table-column prop="message_count" label="消息数" width="80" align="center" />
         <el-table-column prop="user_char_count" label="提问字数" width="100" align="center" />
@@ -333,6 +336,10 @@ onMounted(() => {
 .sub-text {
   font-size: 12px;
   color: var(--text-secondary, #5A5A72);
+}
+
+.deleted-tag {
+  margin-left: 8px;
 }
 
 .pagination-wrapper {

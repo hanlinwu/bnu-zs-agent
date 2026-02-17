@@ -123,6 +123,27 @@ export interface ModelConfigOverview {
   groups: ModelGroup[]
 }
 
+export interface ChatGuardrailRiskConfig {
+  high_keywords: string[]
+  medium_keywords: string[]
+  medium_topics: string[]
+  medium_specific_hints: string[]
+}
+
+export interface ChatGuardrailPromptConfig {
+  medium_system_prompt: string
+  low_system_prompt: string
+  medium_citation_hint: string
+  medium_knowledge_instructions: string
+  high_risk_response: string
+  no_knowledge_response: string
+}
+
+export interface ChatGuardrailConfig {
+  risk: ChatGuardrailRiskConfig
+  prompts: ChatGuardrailPromptConfig
+}
+
 /** 分页参数 */
 export interface PaginationParams {
   page: number
@@ -144,6 +165,8 @@ export interface AdminConversation {
   user_phone: string
   user_nickname: string
   title: string | null
+  is_deleted: boolean
+  deleted_at: string | null
   message_count: number
   user_char_count: number
   assistant_char_count: number

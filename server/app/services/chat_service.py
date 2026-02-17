@@ -14,6 +14,7 @@ from app.services.risk_service import classify_risk
 from app.services.emotion_service import detect_emotion
 from app.services.calendar_service import get_current_tone
 from app.services.knowledge_service import search as knowledge_search, format_sources_for_prompt, format_sources_for_citation
+from app.services.system_config_service import get_chat_guardrail_config
 from app.services.llm_service import llm_router
 
 logger = logging.getLogger(__name__)
@@ -25,18 +26,6 @@ ROLE_PROMPTS = {
     "international": "用户是一名国际学生。请用清晰、友好的口吻回答，如有需要可用中英双语，侧重国际招生政策和留学生支持。",
     "parent": "用户是一名考生家长。请用耐心、温和、详细的口吻回答，侧重家长关心的就业前景、校园安全和学费。",
 }
-
-BASE_SYSTEM_PROMPT = """你是北京师范大学招生智能助手"京师小智"。你的职责是基于北京师范大学官方资料，为考生和家长提供准确、友好的招生咨询服务。
-
-核心规则：
-1. 所有回答必须基于知识库中的官方资料，不得编造信息
-2. 涉及具体数字（分数线、学费、招生人数等）时必须引用来源
-3. 不确定的信息请建议用户联系招生办（电话：010-58807962）
-4. 保持北京师范大学"学为人师，行为世范"的校训精神
-5. 严禁做出任何录取承诺或保证"""
-
-HIGH_RISK_RESPONSE = "这个问题涉及具体的招生政策和录取标准，为确保信息准确，建议您直接联系北京师范大学招生办：\n\n📞 电话：010-58807962\n🌐 官网：admission.bnu.edu.cn\n\n招生老师会为您提供最权威的解答。"
-
 
 async def process_message(
     user: User,
@@ -82,18 +71,28 @@ async def process_message(
         return
 
     # Step 2: Risk classification
-    risk_level = classify_risk(user_message)
+    guardrail_config = await get_chat_guardrail_config(db)
+    prompts_cfg = guardrail_config.get("prompts", {})
+
+    high_risk_response = prompts_cfg.get("high_risk_response", "")
+    no_knowledge_response = prompts_cfg.get("no_knowledge_response", "")
+    medium_system_prompt = prompts_cfg.get("medium_system_prompt", "")
+    low_system_prompt = prompts_cfg.get("low_system_prompt", "")
+    medium_citation_hint_cfg = prompts_cfg.get("medium_citation_hint", "")
+    medium_knowledge_instructions = prompts_cfg.get("medium_knowledge_instructions", "")
+
+    risk_level = classify_risk(user_message, config=guardrail_config)
 
     if risk_level == "high":
         msg = Message(conversation_id=conversation.id, role="user", content=user_message, risk_level="high")
         db.add(msg)
         assistant_msg = Message(
             conversation_id=conversation.id, role="assistant",
-            content=HIGH_RISK_RESPONSE, risk_level="high",
+            content=high_risk_response, risk_level="high",
         )
         db.add(assistant_msg)
         await db.commit()
-        yield {"type": "high_risk", "content": HIGH_RISK_RESPONSE}
+        yield {"type": "high_risk", "content": high_risk_response}
         return
 
     # Step 3: Time-aware tone injection
@@ -106,21 +105,68 @@ async def process_message(
     if emotion.comfort_prefix:
         emotion_hint = f"\n用户可能感到{emotion.emotion}，请在回答开头适当加入安慰和鼓励。"
 
-    # Step 5: Knowledge base search
-    search_results = await knowledge_search(user_message, db, top_k=5)
-    knowledge_context = format_sources_for_prompt(search_results)
-    sources_citation = format_sources_for_citation(search_results)
+    # Step 5: Risk-driven knowledge retrieval
+    search_results = []
+    knowledge_context = ""
+    sources_citation = []
+    if risk_level == "medium":
+        search_results = await knowledge_search(
+            user_message,
+            db,
+            top_k=5,
+            recall_k=30,
+            min_vector_score=0.18,
+            min_hybrid_score=0.22,
+        )
+        knowledge_context = format_sources_for_prompt(search_results)
+        sources_citation = format_sources_for_citation(search_results)
+
+        # 中风险：无有效来源时不进入自由生成
+        if not search_results:
+            user_msg = Message(
+                conversation_id=conversation.id,
+                role="user",
+                content=user_message,
+                risk_level=risk_level,
+                sensitive_words=filter_result.matched_words if filter_result.matched_words else None,
+                sensitive_level=sensitive_level,
+            )
+            db.add(user_msg)
+
+            assistant_msg = Message(
+                conversation_id=conversation.id,
+                role="assistant",
+                content=no_knowledge_response,
+                risk_level=risk_level,
+                review_passed=True,
+                sources=None,
+            )
+            db.add(assistant_msg)
+            await db.commit()
+
+            yield {"type": "token", "content": no_knowledge_response}
+            yield {
+                "type": "done",
+                "sources": [],
+                "risk_level": risk_level,
+                "review_passed": True,
+            }
+            return
 
     # Step 6: Prompt assembly
     role_hint = ROLE_PROMPTS.get(user_role or "", "")
     citation_hint = ""
     if risk_level == "medium":
-        citation_hint = '\n重要：本次回答必须引用知识库来源，使用"根据《xxx》…"格式。'
+        citation_hint = f"\n{medium_citation_hint_cfg}" if medium_citation_hint_cfg else ""
 
-    system_prompt = f"{BASE_SYSTEM_PROMPT}\n\n{role_hint}\n{tone_hint}\n{emotion_hint}\n{citation_hint}"
+    base_prompt = medium_system_prompt if risk_level == "medium" else low_system_prompt
+    system_prompt = f"{base_prompt}\n\n{role_hint}\n{tone_hint}\n{emotion_hint}\n{citation_hint}"
 
-    if knowledge_context:
-        system_prompt += f"\n\n以下是相关知识库内容，请基于这些内容回答：\n\n{knowledge_context}"
+    if risk_level == "medium" and knowledge_context:
+        system_prompt += (
+            f"\n\n{medium_knowledge_instructions}"
+            f"\n\n{knowledge_context}"
+        )
 
     # Build message history (last 10 messages from conversation)
     messages = [{"role": "system", "content": system_prompt}]

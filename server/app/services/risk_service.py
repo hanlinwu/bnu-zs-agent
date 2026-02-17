@@ -1,25 +1,16 @@
 """Risk classification service for user questions."""
 
 import logging
+import re
+
+from app.services.system_config_service import get_chat_guardrail_config_cached
 
 logger = logging.getLogger(__name__)
 
-# Keywords that indicate high-risk questions (specific numbers, policies, guarantees)
-HIGH_RISK_KEYWORDS = [
-    "保证录取", "一定能上", "包过", "内部名额", "走后门", "关系户",
-    "最低分数线", "确切分数", "保底", "承诺", "100%",
-    "退学费", "违约金", "法律", "投诉", "举报",
-]
-
-# Keywords that indicate medium-risk questions (specific data that needs sourcing)
-MEDIUM_RISK_KEYWORDS = [
-    "分数线", "录取率", "学费", "奖学金金额", "就业率", "薪资",
-    "排名", "招生人数", "报录比", "调剂", "复试线",
-    "宿舍费", "住宿", "报名时间", "截止日期",
-]
+_DIGIT_RE = re.compile(r"\d")
 
 
-def classify_risk(message: str, context: list[dict] | None = None) -> str:
+def classify_risk(message: str, context: list[dict] | None = None, config: dict | None = None) -> str:
     """Classify question risk level.
 
     Returns:
@@ -28,13 +19,26 @@ def classify_risk(message: str, context: list[dict] | None = None) -> str:
         "low" - Normal generation
     """
     text = message.lower()
+    cfg = config or get_chat_guardrail_config_cached()
+    risk_cfg = cfg.get("risk", {})
 
-    for kw in HIGH_RISK_KEYWORDS:
+    high_keywords = [str(kw).lower() for kw in risk_cfg.get("high_keywords", [])]
+    medium_keywords = [str(kw).lower() for kw in risk_cfg.get("medium_keywords", [])]
+    medium_topics = [str(kw).lower() for kw in risk_cfg.get("medium_topics", [])]
+    medium_specific_hints = [str(kw).lower() for kw in risk_cfg.get("medium_specific_hints", [])]
+
+    for kw in high_keywords:
         if kw in text:
             return "high"
 
-    for kw in MEDIUM_RISK_KEYWORDS:
+    for kw in medium_keywords:
         if kw in text:
             return "medium"
+
+    # Topic + specificity => medium risk (for concrete/key policy questions)
+    has_topic = any(kw in text for kw in medium_topics)
+    has_specific_hint = any(kw in text for kw in medium_specific_hints) or bool(_DIGIT_RE.search(text))
+    if has_topic and has_specific_hint:
+        return "medium"
 
     return "low"

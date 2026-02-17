@@ -44,6 +44,12 @@ export const adminRoutes: RouteRecordRaw[] = [
         meta: { title: '模型管理' },
       },
       {
+        path: 'system-config',
+        name: 'AdminSystemConfig',
+        component: () => import('@/views/admin/SystemConfig.vue'),
+        meta: { title: '系统配置' },
+      },
+      {
         path: 'users',
         name: 'AdminUsers',
         component: () => import('@/views/admin/Users.vue'),

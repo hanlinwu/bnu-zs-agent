@@ -16,6 +16,7 @@ from app.api.v1 import (
     admin_sensitive,
     admin_model,
     admin_calendar,
+    admin_system_config,
     admin_log,
     admin_dashboard,
     admin_workflow,
@@ -40,6 +41,7 @@ api_router.include_router(admin_role.router, prefix="/admin", tags=["角色权�
 api_router.include_router(admin_sensitive.router, prefix="/admin/sensitive", tags=["敏感词库"])
 api_router.include_router(admin_model.router, prefix="/admin/models", tags=["模型配置"])
 api_router.include_router(admin_calendar.router, prefix="/admin/calendar", tags=["招生日历"])
+api_router.include_router(admin_system_config.router, prefix="/admin/system-configs", tags=["系统配置"])
 api_router.include_router(admin_log.router, prefix="/admin/logs", tags=["审计日志"])
 api_router.include_router(admin_dashboard.router, prefix="/admin/dashboard", tags=["仪表盘"])
 api_router.include_router(admin_conversation.router, prefix="/admin/conversations", tags=["对话审核"])

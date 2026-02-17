@@ -12,7 +12,12 @@ export interface ConversationQuery {
 }
 
 export function getConversations(params: ConversationQuery) {
-  return request.get<PaginatedResult<AdminConversation>>('/admin/conversations', { params })
+  return request.get<PaginatedResult<AdminConversation>>('/admin/conversations', {
+    params: {
+      include_deleted: true,
+      ...params,
+    },
+  })
 }
 
 export function getConversationMessages(conversationId: string) {

@@ -2,7 +2,7 @@
 
 from fastapi import APIRouter, Depends, Query, UploadFile, File, Form
 from pydantic import BaseModel
-from sqlalchemy import select, func, delete
+from sqlalchemy import select, func, delete, insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
@@ -14,6 +14,23 @@ from app.models.sensitive_word import SensitiveWordGroup, SensitiveWord
 from app.services.sensitive_service import invalidate_cache
 
 router = APIRouter()
+
+
+def _parse_word_list(word_list: str | None) -> list[str]:
+    """Parse word_list text into deduplicated words (keep original order)."""
+    if not word_list:
+        return []
+
+    words: list[str] = []
+    seen: set[str] = set()
+    for line in word_list.splitlines():
+        word = line.strip()
+        if not word or word.startswith("#"):
+            continue
+        if word not in seen:
+            seen.add(word)
+            words.append(word)
+    return words
 
 
 class GroupCreateRequest(BaseModel):
@@ -45,27 +62,13 @@ async def _sync_word_list_to_records(
         delete(SensitiveWord).where(SensitiveWord.group_id == group_id)
     )
 
-    count = 0
-    if word_list:
-        # 解析词列表（按行分割，去重、去空）
-        words = []
-        seen = set()
-        for line in word_list.split("\n"):
-            word = line.strip()
-            if word and word not in seen:
-                words.append(word)
-                seen.add(word)
+    words = _parse_word_list(word_list)
+    if not words:
+        return 0
 
-        # 批量插入新记录
-        for word in words:
-            db.add(SensitiveWord(
-                group_id=group_id,
-                word=word,
-                level=level,
-            ))
-            count += 1
-
-    return count
+    rows = [{"group_id": group_id, "word": word, "level": level} for word in words]
+    await db.execute(insert(SensitiveWord), rows)
+    return len(words)
 
 
 @router.get("/groups", dependencies=[Depends(require_permission("sensitive:read"))])
@@ -117,12 +120,12 @@ async def create_group(
         is_active=body.is_active,
     )
     db.add(group)
-    await db.commit()
-    await db.refresh(group)
+    await db.flush()
 
     # 同步到 SensitiveWord 表（用于兼容现有服务）
     await _sync_word_list_to_records(db, str(group.id), body.word_list, body.level)
     await db.commit()
+    await db.refresh(group)
 
     # 清除缓存
     await invalidate_cache()
@@ -196,12 +199,10 @@ async def update_group(
     if body.is_active is not None:
         group.is_active = body.is_active
 
-    await db.commit()
-    await db.refresh(group)
-
     # 同步到 SensitiveWord 表
     await _sync_word_list_to_records(db, group_id, group.word_list, group.level)
     await db.commit()
+    await db.refresh(group)
 
     # 清除缓存
     await invalidate_cache()
@@ -274,17 +275,17 @@ async def upload_word_file(
         is_active=True,
     )
     db.add(group)
-    await db.commit()
-    await db.refresh(group)
+    await db.flush()
 
     # 同步到 SensitiveWord 表
     await _sync_word_list_to_records(db, str(group.id), word_list, level)
     await db.commit()
+    await db.refresh(group)
 
     # 清除缓存
     await invalidate_cache()
 
-    word_count = len([w for w in word_list.split("\n") if w.strip()])
+    word_count = len(_parse_word_list(word_list))
 
     return {
         "id": str(group.id),

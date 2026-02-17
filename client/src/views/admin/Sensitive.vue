@@ -42,6 +42,8 @@ const uploadForm = reactive({
 })
 const uploadFormRef = ref<FormInstance>()
 const uploading = ref(false)
+const uploadProgress = ref(0)
+const uploadProcessing = ref(false)
 
 const fileInputRef = ref<HTMLInputElement>()
 
@@ -212,6 +214,8 @@ function openUploadDialog() {
   uploadForm.description = ''
   uploadForm.level = 'block'
   uploadForm.file = null
+  uploadProgress.value = 0
+  uploadProcessing.value = false
   uploadDialogVisible.value = true
 }
 
@@ -232,17 +236,28 @@ async function handleUpload() {
   }
 
   uploading.value = true
+  uploadProgress.value = 0
+  uploadProcessing.value = false
   try {
     await sensitiveApi.uploadWordFile({
       name: uploadForm.name,
       description: uploadForm.description,
       level: uploadForm.level,
       file: uploadForm.file,
+      onProgress: (percent) => {
+        uploadProgress.value = percent
+        if (percent >= 100) {
+          uploadProcessing.value = true
+        }
+      },
     })
+    uploadProgress.value = 100
+    uploadProcessing.value = false
     ElMessage.success('上传成功')
     uploadDialogVisible.value = false
     fetchGroups()
   } catch {
+    uploadProcessing.value = false
     ElMessage.error('上传失败')
   } finally {
     uploading.value = false
@@ -508,6 +523,18 @@ onMounted(() => {
             <span v-else class="file-hint">支持 UTF-8 或 GBK 编码的txt文件</span>
           </div>
         </el-form-item>
+        <el-form-item v-if="uploading || uploadProgress > 0" label="上传进度">
+          <div class="upload-progress-wrap">
+            <el-progress
+              :percentage="uploadProgress"
+              :stroke-width="10"
+              :show-text="false"
+              :indeterminate="uploadProcessing"
+              :duration="2"
+            />
+            <span class="progress-text">{{ uploadProcessing ? '文件已上传，服务器处理中...' : `${uploadProgress}%` }}</span>
+          </div>
+        </el-form-item>
         <el-form-item>
           <div class="upload-help">
             <p>文件格式要求：</p>
@@ -523,7 +550,9 @@ onMounted(() => {
       </el-form>
       <template #footer>
         <el-button @click="uploadDialogVisible = false">取消</el-button>
-        <el-button type="primary" :loading="uploading" @click="handleUpload">上传</el-button>
+        <el-button type="primary" :loading="uploading" @click="handleUpload">
+          {{ uploadProcessing ? '处理中...' : '上传' }}
+        </el-button>
       </template>
     </el-dialog>
   </div>
@@ -749,6 +778,20 @@ onMounted(() => {
   li {
     margin-bottom: 4px;
   }
+}
+
+.upload-progress-wrap {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.progress-text {
+  min-width: 48px;
+  text-align: right;
+  font-size: 12px;
+  color: var(--text-secondary, #5A5A72);
 }
 
 @media (max-width: 992px) {

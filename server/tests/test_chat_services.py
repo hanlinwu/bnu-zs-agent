@@ -18,6 +18,12 @@ def test_medium_risk_classification():
 def test_low_risk_classification():
     assert classify_risk("心理学专业怎么样") == "low"
     assert classify_risk("校园环境好吗") == "low"
+    assert classify_risk("你好") == "low"
+
+
+def test_medium_risk_specific_key_question():
+    assert classify_risk("研究生招生报名截止时间是什么时候") == "medium"
+    assert classify_risk("国际生申请需要什么材料") == "medium"
 
 
 def test_emotion_anxious():

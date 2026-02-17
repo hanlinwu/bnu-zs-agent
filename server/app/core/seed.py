@@ -18,6 +18,7 @@ from app.models.role import Role, Permission, RolePermission, AdminRole
 from app.models.admin import AdminUser
 from app.models.calendar import AdmissionCalendar
 from app.models.review_workflow import ReviewWorkflow, ResourceWorkflowBinding
+from app.models.system_config import SystemConfig
 
 # 8 preset roles
 ROLES = [
@@ -46,6 +47,7 @@ RESOURCES = [
     "role",
     "dashboard",
     "conversation",
+    "system_config",
 ]
 ACTIONS = ["create", "read", "update", "delete", "approve", "export", "ban"]
 
@@ -64,6 +66,7 @@ ROLE_PERMISSIONS = {
         "knowledge": ["read", "create"],
         "user": ["read"],
         "model": ["read"],
+        "system_config": ["read", "update"],
         "log": ["read"],
         "media": ["read", "create"],
         "sensitive": ["read"],
@@ -265,6 +268,25 @@ async def seed_model_config() -> None:
                 enabled=True, weight=1, max_tokens=8192, temperature=0.0, priority=0,
             ))
 
+        await session.commit()
+
+
+async def seed_system_configs() -> None:
+    """Seed default system configs when missing."""
+    from app.services.system_config_service import CHAT_GUARDRAIL_CONFIG_KEY, DEFAULT_CHAT_GUARDRAIL_CONFIG
+
+    session_factory = get_session_factory()
+    async with session_factory() as session:
+        result = await session.execute(select(SystemConfig).where(SystemConfig.key == CHAT_GUARDRAIL_CONFIG_KEY))
+        existing = result.scalar_one_or_none()
+        if existing:
+            return
+
+        session.add(SystemConfig(
+            key=CHAT_GUARDRAIL_CONFIG_KEY,
+            value=DEFAULT_CHAT_GUARDRAIL_CONFIG,
+            description="聊天风险判定与分级提示词配置",
+        ))
         await session.commit()
 
 
