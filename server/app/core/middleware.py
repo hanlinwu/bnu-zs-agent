@@ -9,9 +9,8 @@ from starlette.requests import Request
 from starlette.responses import Response, JSONResponse
 
 from app.config import settings
-from app.core.database import get_session_factory
 from app.core.security import verify_token
-from app.models.audit_log import AuditLog
+from app.services.audit_sqlite_service import append_audit_log
 
 
 class AuditLogMiddleware(BaseHTTPMiddleware):
@@ -90,20 +89,18 @@ class AuditLogMiddleware(BaseHTTPMiddleware):
             "query": query_params,
         }
 
-        session_factory = get_session_factory()
-        async with session_factory() as session:
-            log = AuditLog(
-                user_id=user_id,
-                admin_id=admin_id,
-                action=action,
-                resource=resource,
-                resource_id=None,
-                ip_address=request.client.host if request.client else None,
-                user_agent=request.headers.get("user-agent"),
-                detail=detail,
-            )
-            session.add(log)
-            await session.commit()
+        await append_audit_log(
+            {
+                "user_id": user_id,
+                "admin_id": admin_id,
+                "action": action,
+                "resource": resource,
+                "resource_id": None,
+                "ip_address": request.client.host if request.client else None,
+                "user_agent": request.headers.get("user-agent"),
+                "detail": detail,
+            }
+        )
 
     async def dispatch(self, request: Request, call_next):
         request.state.request_id = str(uuid.uuid4())

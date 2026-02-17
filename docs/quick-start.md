@@ -50,7 +50,13 @@ JWT_SECRET_KEY=your-random-secret-string
 
 # 关闭短信 mock（接入真实短信服务时）
 SMS_MOCK=false
+
+# 审计日志 SQLite 分片目录（建议挂载持久卷）
+# 默认 /data/audit_logs，若不可写会自动回退到可写目录
+AUDIT_SQLITE_DIR=/data/audit_logs
 ```
+
+> 生产环境建议将 `AUDIT_SQLITE_DIR` 挂载到独立持久化磁盘（例如 Docker Volume），避免容器重建导致审计文件丢失。
 
 ### 前端
 

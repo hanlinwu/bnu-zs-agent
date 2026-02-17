@@ -46,6 +46,9 @@ class Settings(BaseSettings):
     CELERY_BROKER_URL: str = "redis://redis:6379/1"
     CELERY_RESULT_BACKEND: str = "redis://redis:6379/2"
 
+    # Audit (daily sqlite shards)
+    AUDIT_SQLITE_DIR: str = "/data/audit_logs"
+
 
 
 settings = Settings()
