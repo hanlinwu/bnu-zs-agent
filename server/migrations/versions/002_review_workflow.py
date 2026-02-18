@@ -18,7 +18,7 @@ depends_on = None
 def upgrade() -> None:
     conn = op.get_bind()
     inspector = sa.inspect(conn)
-    existing_tables = inspector.get_table_names()
+    existing_tables = set(inspector.get_table_names())
 
     if "review_workflows" not in existing_tables:
         op.create_table(
@@ -54,11 +54,28 @@ def upgrade() -> None:
             sa.Column("note", sa.Text(), nullable=True),
             sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("NOW()")),
         )
-        op.create_index("ix_review_records_resource", "review_records", ["resource_type", "resource_id"])
+
+    if "review_records" in set(inspector.get_table_names()):
+        indexes = {idx["name"] for idx in inspector.get_indexes("review_records")}
+        if "ix_review_records_resource" not in indexes:
+            op.create_index("ix_review_records_resource", "review_records", ["resource_type", "resource_id"])
 
 
 def downgrade() -> None:
-    op.drop_index("ix_review_records_resource", table_name="review_records")
-    op.drop_table("review_records")
-    op.drop_table("resource_workflow_bindings")
-    op.drop_table("review_workflows")
+    conn = op.get_bind()
+    inspector = sa.inspect(conn)
+    existing_tables = set(inspector.get_table_names())
+
+    if "review_records" in existing_tables:
+        indexes = {idx["name"] for idx in inspector.get_indexes("review_records")}
+        if "ix_review_records_resource" in indexes:
+            op.drop_index("ix_review_records_resource", table_name="review_records")
+        op.drop_table("review_records")
+
+    existing_tables = set(sa.inspect(conn).get_table_names())
+    if "resource_workflow_bindings" in existing_tables:
+        op.drop_table("resource_workflow_bindings")
+
+    existing_tables = set(sa.inspect(conn).get_table_names())
+    if "review_workflows" in existing_tables:
+        op.drop_table("review_workflows")

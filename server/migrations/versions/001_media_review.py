@@ -46,8 +46,24 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.drop_column("media_resources", "review_note")
-    op.drop_column("media_resources", "reviewed_by")
-    op.drop_column("media_resources", "current_step")
-    op.drop_column("media_resources", "status")
-    op.drop_column("media_resources", "file_size")
+    conn = op.get_bind()
+    inspector = sa.inspect(conn)
+    existing_tables = set(inspector.get_table_names())
+
+    if "media_resources" in existing_tables:
+        existing = {c["name"] for c in inspector.get_columns("media_resources")}
+        if "review_note" in existing:
+            op.drop_column("media_resources", "review_note")
+        if "reviewed_by" in existing:
+            op.drop_column("media_resources", "reviewed_by")
+        if "current_step" in existing:
+            op.drop_column("media_resources", "current_step")
+        if "status" in existing:
+            op.drop_column("media_resources", "status")
+        if "file_size" in existing:
+            op.drop_column("media_resources", "file_size")
+
+    if "knowledge_documents" in existing_tables:
+        kd_existing = {c["name"] for c in inspector.get_columns("knowledge_documents")}
+        if "current_step" in kd_existing:
+            op.drop_column("knowledge_documents", "current_step")

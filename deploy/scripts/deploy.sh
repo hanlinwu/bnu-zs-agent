@@ -85,12 +85,29 @@ wait_for_service_healthy redis 120
 echo "[deploy] ensure pgvector extension"
 compose exec -T db bash -lc 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "CREATE EXTENSION IF NOT EXISTS vector;"'
 
-echo "[deploy] bootstrap base schema via app startup"
-compose up -d app
-wait_for_service_healthy app 180
+echo "[deploy] bootstrap base schema via SQLAlchemy metadata"
+if ! compose run --rm app sh -lc 'cd /app && PYTHONPATH=/app python - <<"PY"
+import asyncio
+
+from app.core.database import get_engine, Base
+import app.models  # noqa: F401
+
+
+async def main():
+    engine = get_engine()
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+
+
+asyncio.run(main())
+PY'; then
+  echo "[deploy] base schema bootstrap failed" >&2
+  rollback_to_previous || true
+  exit 1
+fi
 
 echo "[deploy] running migrations"
-if ! compose exec -T app sh -lc 'cd /app && PYTHONPATH=/app alembic -c /app/alembic.ini upgrade head'; then
+if ! compose run --rm app sh -lc 'cd /app && PYTHONPATH=/app alembic -c /app/alembic.ini upgrade head'; then
   echo "[deploy] migration failed" >&2
   rollback_to_previous || true
   exit 1
