@@ -1,6 +1,7 @@
 """Alembic migrations environment."""
 
 from logging.config import fileConfig
+import os
 
 from alembic import context
 from sqlalchemy import engine_from_config, pool
@@ -13,6 +14,16 @@ from app.models import *  # noqa: F401, F403
 config = context.config
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
+
+
+def _get_sync_database_url() -> str:
+    db_url = os.getenv("DATABASE_URL") or config.get_main_option("sqlalchemy.url")
+    if db_url.startswith("postgresql+asyncpg://"):
+        return db_url.replace("postgresql+asyncpg://", "postgresql+psycopg2://", 1)
+    return db_url
+
+
+config.set_main_option("sqlalchemy.url", _get_sync_database_url().replace("%", "%%"))
 
 target_metadata = Base.metadata
 

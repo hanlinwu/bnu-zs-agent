@@ -7,6 +7,15 @@ ENV_FILE="${ROOT_DIR}/.env"
 CURRENT_RELEASE_FILE="${ROOT_DIR}/.current_release"
 PREVIOUS_RELEASE_FILE="${ROOT_DIR}/.previous_release"
 
+if [[ ! -f "${ENV_FILE}" ]]; then
+  echo "[deploy] ${ENV_FILE} not found. Copy deploy/.env.example to deploy/.env and fill real values." >&2
+  exit 1
+fi
+
+set -a
+source "${ENV_FILE}"
+set +a
+
 required_vars=(GHCR_USERNAME GHCR_TOKEN APP_IMAGE NGINX_IMAGE IMAGE_TAG)
 for name in "${required_vars[@]}"; do
   if [[ -z "${!name:-}" ]]; then
@@ -14,11 +23,6 @@ for name in "${required_vars[@]}"; do
     exit 1
   fi
 done
-
-if [[ ! -f "${ENV_FILE}" ]]; then
-  echo "[deploy] ${ENV_FILE} not found. Copy deploy/.env.example to deploy/.env and fill real values." >&2
-  exit 1
-fi
 
 if [[ -f "${CURRENT_RELEASE_FILE}" ]]; then
   PREVIOUS_TAG="$(cat "${CURRENT_RELEASE_FILE}")"
@@ -82,7 +86,7 @@ echo "[deploy] ensure pgvector extension"
 compose exec -T db bash -lc 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "CREATE EXTENSION IF NOT EXISTS vector;"'
 
 echo "[deploy] running migrations"
-if ! compose run --rm app alembic upgrade head; then
+if ! compose run --rm -e PYTHONPATH=/app app sh -lc 'cd /app && alembic -c /app/alembic.ini upgrade head'; then
   echo "[deploy] migration failed" >&2
   rollback_to_previous || true
   exit 1
