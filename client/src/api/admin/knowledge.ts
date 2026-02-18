@@ -1,5 +1,5 @@
 import request from '../request'
-import type { KnowledgeDocument, KnowledgeChunk } from '@/types/knowledge'
+import type { KnowledgeDocument, KnowledgeChunk, KnowledgeChunkDetail } from '@/types/knowledge'
 import type { PaginatedResult } from '@/types/admin'
 
 export const getDocuments = (params: { page: number; pageSize: number; status?: string; kb_id?: string }) =>
@@ -24,6 +24,12 @@ export const deleteDocument = (id: string) =>
 
 export const getChunks = (documentId: string, params: { page: number; pageSize: number }) =>
   request.get<PaginatedResult<KnowledgeChunk>>(`/admin/knowledge/${documentId}/chunks`, { params })
+
+export const getChunkDetail = (chunkId: string) =>
+  request.get<KnowledgeChunkDetail>(`/admin/knowledge/chunks/${chunkId}/detail`)
+
+export const reembedMissingChunks = (data: { documentId?: string; limit?: number }) =>
+  request.post('/admin/knowledge/re-embed-missing', data)
 
 export function downloadDocument(id: string) {
   const token = localStorage.getItem('admin_token')

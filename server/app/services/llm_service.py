@@ -123,9 +123,26 @@ class LLMRouter:
         # Default: failover — return first provider
         return self.providers[0]
 
+    def _get_provider_sequence(self) -> list[LLMProvider]:
+        if not self.providers:
+            raise RuntimeError("No LLM providers configured")
+
+        if self.strategy == "round_robin":
+            start = self._current_index % len(self.providers)
+            self._current_index += 1
+            return self.providers[start:] + self.providers[:start]
+
+        if self.strategy == "weighted":
+            weights = [getattr(p, "weight", 1) for p in self.providers]
+            first = random.choices(self.providers, weights=weights, k=1)[0]
+            rest = [provider for provider in self.providers if provider is not first]
+            return [first] + rest
+
+        return self.providers
+
     async def chat(self, messages: list[dict], stream: bool = False) -> AsyncGenerator[str, None] | str:
         last_error = None
-        for i, provider in enumerate(self.providers):
+        for i, provider in enumerate(self._get_provider_sequence()):
             try:
                 self.last_model_name = getattr(provider, "model", None)
                 result = await provider.chat(messages, stream=stream)

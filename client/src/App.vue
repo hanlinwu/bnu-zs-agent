@@ -11,7 +11,7 @@ useThemeStore()
   <div v-if="routeLoading" class="route-progress-bar" />
 
   <router-view v-slot="{ Component }">
-    <transition name="page-fade">
+    <transition name="page-switch" appear>
       <suspense>
         <template #default>
           <div class="route-page-root">
@@ -66,18 +66,25 @@ useThemeStore()
   }
 }
 
-/* Page fade transition */
-.page-fade-enter-active {
-  transition: opacity 0.2s ease;
+/* Route switch transition: lightweight fade + micro translate */
+.page-switch-enter-active,
+.page-switch-leave-active {
+  transition: opacity 0.16s ease, transform 0.16s ease;
+  will-change: opacity, transform;
 }
 
-.page-fade-leave-active {
-  transition: opacity 0.15s ease;
-}
-
-.page-fade-enter-from,
-.page-fade-leave-to {
+.page-switch-enter-from,
+.page-switch-leave-to {
   opacity: 0;
+  transform: translateY(4px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .page-switch-enter-active,
+  .page-switch-leave-active {
+    transition: opacity 0.01ms linear;
+    transform: none !important;
+  }
 }
 
 /* Suspense loading fallback */

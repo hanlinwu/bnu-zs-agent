@@ -27,6 +27,22 @@ RISK_ORDER = case(
 
 RISK_LABELS = {4: "blocked", 3: "high", 2: "medium", 1: "low", 0: None}
 
+
+def extract_media_items(sources: dict | None) -> list[dict]:
+    """从 sources 字段中提取媒体项目列表"""
+    if not sources:
+        return []
+    # sources 可以是以下格式之一:
+    # 1. {"citations": [...], "media_items": [...]}
+    # 2. {"media_items": [...]}
+    # 3. [...] (citations only)
+    if isinstance(sources, dict):
+        media_items = sources.get("media_items")
+        if isinstance(media_items, list):
+            return media_items
+    return []
+
+
 SENSITIVE_ORDER = case(
     (Message.sensitive_level == "block", 3),
     (Message.sensitive_level == "review", 2),
@@ -223,6 +239,7 @@ async def get_conversation_messages(
                 "sensitive_words": msg.sensitive_words,
                 "sensitive_level": msg.sensitive_level,
                 "created_at": msg.created_at.isoformat() if msg.created_at else None,
+                "media_items": extract_media_items(msg.sources),
             }
             for msg in messages
         ],

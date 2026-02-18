@@ -109,6 +109,7 @@ const previewVisible = ref(false)
 const previewType = ref<'image' | 'video'>('image')
 const previewSrc = ref('')
 const previewTitle = ref('')
+const imageLoadState = ref<Record<string, boolean>>({})
 
 const typeOptions = [
   { label: '全部', value: '' },
@@ -196,6 +197,24 @@ function thumbnailUrl(media: MediaResource) {
   return ''
 }
 
+function isImageLoaded(mediaId: string) {
+  return imageLoadState.value[mediaId] === true
+}
+
+function markImageLoaded(mediaId: string) {
+  imageLoadState.value = {
+    ...imageLoadState.value,
+    [mediaId]: true,
+  }
+}
+
+function markImageError(mediaId: string) {
+  imageLoadState.value = {
+    ...imageLoadState.value,
+    [mediaId]: true,
+  }
+}
+
 async function fetchWorkflow() {
   try {
     const res = await wfApi.getWorkflowForResource('media')
@@ -220,6 +239,7 @@ async function fetchMedia() {
       status: statusFilter.value || undefined,
     })
     mediaList.value = res.data.items
+    imageLoadState.value = {}
     total.value = res.data.total
   } catch {
     ElMessage.error('加载资源列表失败')
@@ -459,28 +479,23 @@ onMounted(async () => {
         >
           <div class="media-thumbnail">
             <div
-              v-if="batchEnabled"
-              class="card-checkbox"
-              @click.stop="toggleSelect(media.id)"
-            >
-              <el-checkbox
-                :model-value="selectedIds.has(media.id)"
-                @change="toggleSelect(media.id)"
-                @click.stop
-              />
-            </div>
-            <div
               v-if="media.media_type === 'image' && thumbnailUrl(media)"
               class="thumb-img-wrapper"
               @click="openPreview(media)"
             >
+              <div v-if="!isImageLoaded(media.id)" class="thumb-skeleton" />
               <img
                 :src="thumbnailUrl(media)"
                 :alt="media.title"
                 class="thumb-img"
+                :class="{ 'is-loaded': isImageLoaded(media.id) }"
+                loading="lazy"
+                decoding="async"
+                @load="markImageLoaded(media.id)"
+                @error="markImageError(media.id)"
               />
               <div class="thumb-overlay">
-                <el-icon :size="24"><ZoomIn /></el-icon>
+                <el-icon :size="20"><ZoomIn /></el-icon>
               </div>
             </div>
             <div
@@ -494,7 +509,7 @@ onMounted(async () => {
                 preload="metadata"
               />
               <div class="thumb-overlay video-overlay">
-                <el-icon :size="32"><VideoCamera /></el-icon>
+                <el-icon :size="24"><VideoCamera /></el-icon>
               </div>
             </div>
             <div class="media-badges">
@@ -505,15 +520,26 @@ onMounted(async () => {
             </div>
           </div>
           <div class="media-info">
-            <h4 class="media-name" :title="media.title">{{ media.title }}</h4>
-            <div class="media-meta">
-              <span>{{ formatFileSize(media.file_size) }}</span>
-              <span v-if="media.uploader_name">{{ media.uploader_name }}</span>
-              <span>{{ formatDate(media.created_at) }}</span>
+            <div class="media-header">
+              <el-checkbox
+                v-if="batchEnabled"
+                :model-value="selectedIds.has(media.id)"
+                @change="toggleSelect(media.id)"
+                class="title-checkbox"
+              />
+              <h4 class="media-name" :title="media.title">{{ media.title }}</h4>
+            </div>
+            <p v-if="media.description" class="media-description">{{ media.description }}</p>
+            <div class="media-meta-row">
+              <div class="media-meta">
+                <span>{{ formatFileSize(media.file_size) }}</span>
+                <span v-if="media.uploader_name">{{ media.uploader_name }}</span>
+                <span>{{ formatDate(media.created_at) }}</span>
+              </div>
             </div>
             <div v-if="media.tags && media.tags.length" class="media-tags">
               <el-tag
-                v-for="tag in media.tags.slice(0, 3)"
+                v-for="tag in media.tags.slice(0, 4)"
                 :key="tag"
                 size="small"
                 type="info"
@@ -521,31 +547,40 @@ onMounted(async () => {
               >
                 {{ tag }}
               </el-tag>
+              <span v-if="media.tags.length > 4" class="tags-more">...</span>
             </div>
-          </div>
-          <div class="media-actions">
-            <el-button type="primary" text size="small" :icon="Edit" @click="openEditDialog(media)">
-              编辑
-            </el-button>
-            <el-button
-              v-if="!nodeIsTerminal(media.current_node)"
-              type="success"
-              text
-              size="small"
-              @click="openReviewDialog(media)"
-            >
-              审核
-            </el-button>
-            <el-button
-              v-else
-              type="info"
-              text
-              size="small"
-              @click="openReviewDialog(media)"
-            >
-              详情
-            </el-button>
-            <el-button type="danger" text size="small" :icon="Delete" @click="handleDelete(media)" />
+            <div class="media-actions">
+              <el-button
+                type="primary"
+                link
+                size="small"
+                :icon="Edit"
+                @click="openEditDialog(media)"
+              >
+                编辑
+              </el-button>
+              <el-button
+                v-if="!nodeIsTerminal(media.current_node)"
+                type="success"
+                link
+                size="small"
+                @click="openReviewDialog(media)"
+              >
+                审核
+              </el-button>
+              <el-button
+                v-else
+                type="info"
+                link
+                size="small"
+                @click="openReviewDialog(media)"
+              >
+                详情
+              </el-button>
+              <el-button type="danger" link size="small" :icon="Delete" @click="handleDelete(media)">
+                删除
+              </el-button>
+            </div>
           </div>
         </div>
       </div>
@@ -752,18 +787,23 @@ onMounted(async () => {
 
 .media-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  grid-template-columns: repeat(4, 1fr);
   gap: 16px;
   max-height: calc(100vh - 300px);
   overflow-y: auto;
+  align-content: start;
 }
 
 .media-card {
+  display: flex;
+  flex-direction: column;
   border: 1px solid var(--border-color, #E2E6ED);
   border-radius: 10px;
   overflow: hidden;
   transition: all 0.2s;
   position: relative;
+  background: var(--bg-primary, #ffffff);
+  height: 320px;
 
   &:hover {
     box-shadow: var(--shadow-md, 0 4px 16px rgba(0, 0, 0, 0.08));
@@ -773,6 +813,7 @@ onMounted(async () => {
 .media-thumbnail {
   position: relative;
   height: 160px;
+  flex-shrink: 0;
   background: var(--bg-secondary, #F4F6FA);
   overflow: hidden;
 }
@@ -802,10 +843,28 @@ onMounted(async () => {
   height: 100%;
   object-fit: cover;
   transition: transform 0.3s ease;
+  opacity: 0;
+
+  &.is-loaded {
+    opacity: 1;
+  }
 
   .thumb-img-wrapper:hover & {
     transform: scale(1.05);
   }
+}
+
+.thumb-skeleton {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    90deg,
+    var(--bg-secondary, #F4F6FA) 25%,
+    #eceff5 37%,
+    var(--bg-secondary, #F4F6FA) 63%
+  );
+  background-size: 400% 100%;
+  animation: thumb-loading 1.3s ease-in-out infinite;
 }
 
 .thumb-overlay {
@@ -832,6 +891,15 @@ onMounted(async () => {
   }
 }
 
+@keyframes thumb-loading {
+  0% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0 50%;
+  }
+}
+
 .thumb-placeholder {
   width: 100%;
   height: 100%;
@@ -843,49 +911,92 @@ onMounted(async () => {
 
 .media-badges {
   position: absolute;
-  top: 8px;
-  right: 8px;
+  bottom: 8px;
+  left: 8px;
   display: flex;
   gap: 4px;
 }
 
 .media-info {
-  padding: 12px;
+  padding: 12px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.media-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 22px;
 }
 
 .media-name {
   font-size: 14px;
   font-weight: 600;
   color: var(--text-primary, #1A1A2E);
-  margin: 0 0 4px;
+  margin: 0;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  flex: 1;
+  line-height: 22px;
+}
+
+.media-description {
+  font-size: 12px;
+  color: var(--text-secondary, #5A5A72);
+  margin: 0;
+  line-height: 1.5;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  height: 18px;
+}
+
+.media-meta-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  height: 18px;
 }
 
 .media-meta {
   display: flex;
-  gap: 12px;
-  font-size: 12px;
+  gap: 8px;
+  font-size: 11px;
   color: var(--text-secondary, #5A5A72);
-  margin-bottom: 6px;
+  line-height: 18px;
 }
 
 .media-tags {
   display: flex;
+  align-items: center;
   gap: 4px;
-  flex-wrap: wrap;
+  overflow: hidden;
+  white-space: nowrap;
+  height: 20px;
 }
 
 .tag-item {
-  font-size: 11px;
+  font-size: 10px;
+  flex-shrink: 0;
+}
+
+.tags-more {
+  font-size: 12px;
+  color: var(--text-secondary, #5A5A72);
+  flex-shrink: 0;
 }
 
 .media-actions {
   display: flex;
-  justify-content: flex-end;
-  padding: 0 8px 8px;
-  gap: 4px;
+  align-items: center;
+  gap: 8px;
+  padding-top: 6px;
+  border-top: 1px solid var(--border-color, #E2E6ED);
+  height: 28px;
 }
 
 .empty-state {
@@ -996,11 +1107,14 @@ onMounted(async () => {
   font-weight: 500;
 }
 
-.card-checkbox {
-  position: absolute;
-  top: 8px;
-  left: 8px;
-  z-index: 2;
+.title-checkbox {
+  margin-right: 4px;
+}
+
+@media (max-width: 1200px) {
+  .media-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
 }
 
 @media (max-width: 768px) {

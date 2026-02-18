@@ -3,7 +3,8 @@ import { ref, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Search } from '@element-plus/icons-vue'
 import * as convApi from '@/api/admin/conversation'
-import type { AdminConversation, AdminMessage } from '@/types/admin'
+import type { AdminConversation, AdminMessage, AdminMessageMediaItem } from '@/types/admin'
+import MediaPreview from '@/components/MediaPreview.vue'
 
 const loading = ref(false)
 const conversations = ref<AdminConversation[]>([])
@@ -19,6 +20,23 @@ const detailDialogVisible = ref(false)
 const detailLoading = ref(false)
 const detailTitle = ref('')
 const detailMessages = ref<AdminMessage[]>([])
+
+// Preview state
+const previewVisible = ref(false)
+const previewType = ref<'image' | 'video'>('image')
+const previewSrc = ref('')
+const previewTitle = ref('')
+
+function openPreview(url: string, type: 'image' | 'video', title: string) {
+  previewType.value = type
+  previewSrc.value = url
+  previewTitle.value = title
+  previewVisible.value = true
+}
+
+function closePreview() {
+  previewVisible.value = false
+}
 
 function riskTag(level: string | null): { type: 'success' | 'warning' | 'danger' | 'info'; label: string } {
   switch (level) {
@@ -110,6 +128,96 @@ async function viewDetail(conv: AdminConversation) {
 onMounted(() => {
   fetchConversations()
 })
+
+// Render message content with embedded media
+function renderMessageContent(msg: AdminMessage): string {
+  let content = msg.content || ''
+
+  // Check if message has media items
+  if (!msg.media_items || msg.media_items.length === 0) {
+    return escapeHtml(content).replace(/\n/g, '<br>')
+  }
+
+  // Build media map
+  const mediaMap = new Map()
+  msg.media_items?.forEach((item: AdminMessageMediaItem, index: number) => {
+    const key = item.slot_key || `slot_${index}`
+    // Normalize URL field - API returns 'url' but we use 'file_url' in type
+    const normalizedItem = {
+      ...item,
+      file_url: item.file_url || (item as any).url || ''
+    }
+    mediaMap.set(key, normalizedItem)
+  })
+
+  // Replace [[MEDIA_ITEM:slot_key]] with image HTML
+  const mediaMarkerRegex = /\[\[\s*MEDIA_ITEM:([^\]]+)\s*\]\]/g
+  let result = content
+
+  for (const match of content.matchAll(mediaMarkerRegex)) {
+    const slotKey = match[1]?.trim()
+    const item = slotKey ? mediaMap.get(slotKey) : null
+
+    if (item) {
+      const mediaHtml = item.media_type === 'image'
+        ? `<span class="inline-media" data-media-url="${escapeHtml(item.file_url)}" data-media-type="image" data-media-title="${escapeHtml(item.title || '')}">
+             <img src="${escapeHtml(item.file_url)}" alt="${escapeHtml(item.title || '图片')}" class="inline-image" />
+           </span>`
+        : `<span class="inline-media" data-media-url="${escapeHtml(item.file_url)}" data-media-type="video" data-media-title="${escapeHtml(item.title || '')}">
+             [视频: ${escapeHtml(item.title || '未命名')}<span class="media-preview-btn">点击播放</span>]
+           </span>`
+      result = result.replace(match[0], mediaHtml)
+    }
+  }
+
+  // Append remaining media items
+  const usedKeys = new Set()
+  for (const match of content.matchAll(mediaMarkerRegex)) {
+    const slotKey = match[1]?.trim()
+    if (slotKey) usedKeys.add(slotKey)
+  }
+
+  const unusedMedia = msg.media_items?.filter((item: AdminMessageMediaItem) => !usedKeys.has(item.slot_key)) ?? []
+  if (unusedMedia.length > 0) {
+    result += '\n\n'
+    result += unusedMedia.map((item: AdminMessageMediaItem) =>
+      item.media_type === 'image'
+        ? `<span class="inline-media" data-media-url="${escapeHtml(item.file_url)}" data-media-type="image" data-media-title="${escapeHtml(item.title || '')}">
+             <img src="${escapeHtml(item.file_url)}" alt="${escapeHtml(item.title || '图片')}" class="inline-image" />
+           </span>`
+        : `<span class="inline-media" data-media-url="${escapeHtml(item.file_url)}" data-media-type="video" data-media-title="${escapeHtml(item.title || '')}">
+             [视频: ${escapeHtml(item.title || '未命名')}<span class="media-preview-btn">点击播放</span>]
+           </span>`
+    ).join('')
+  }
+
+  return result.replace(/\n/g, '<br>')
+}
+
+function escapeHtml(text: string): string {
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;')
+}
+
+// Handle click on inline media
+function handleMessageClick(e: MouseEvent, _msg: AdminMessage) {
+  const target = e.target as HTMLElement
+  const mediaSpan = target.closest('.inline-media') as HTMLElement
+
+  if (mediaSpan) {
+    const mediaUrl = mediaSpan.dataset.mediaUrl
+    const mediaType = mediaSpan.dataset.mediaType as 'image' | 'video'
+    const mediaTitle = mediaSpan.dataset.mediaTitle || ''
+
+    if (mediaUrl && mediaType) {
+      openPreview(mediaUrl, mediaType, mediaTitle)
+    }
+  }
+}
 </script>
 
 <template>
@@ -271,10 +379,22 @@ onMounted(() => {
             <span class="message-meta">{{ msg.char_count }}字</span>
             <span class="message-time">{{ formatDate(msg.created_at) }}</span>
           </div>
-          <div class="message-content">{{ msg.content }}</div>
+          <div
+            class="message-content"
+            v-html="renderMessageContent(msg)"
+            @click="(e) => handleMessageClick(e, msg)"
+          ></div>
         </div>
       </div>
     </el-dialog>
+
+    <MediaPreview
+      :visible="previewVisible"
+      :type="previewType"
+      :src="previewSrc"
+      :title="previewTitle"
+      @close="closePreview"
+    />
   </div>
 </template>
 
@@ -428,7 +548,36 @@ onMounted(() => {
   font-size: 13px;
   line-height: 1.45;
   color: var(--text-primary, #1A1A2E);
-  white-space: pre-wrap;
   word-break: break-word;
+
+  :deep(.inline-media) {
+    display: inline-block;
+    margin: 4px 0;
+    cursor: pointer;
+    border-radius: 8px;
+    overflow: hidden;
+    vertical-align: middle;
+
+    &:hover {
+      opacity: 0.9;
+    }
+  }
+
+  :deep(.inline-image) {
+    max-width: 200px;
+    max-height: 150px;
+    width: auto;
+    height: auto;
+    object-fit: contain;
+    display: block;
+    border-radius: 8px;
+    border: 1px solid rgba(0, 0, 0, 0.1);
+  }
+
+  :deep(.media-preview-btn) {
+    color: var(--bnu-blue, #003DA5);
+    text-decoration: underline;
+    margin-left: 4px;
+  }
 }
 </style>

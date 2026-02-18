@@ -109,3 +109,6 @@ User query → `risk_service` (risk level) → `sensitive_service` (filter) → 
 - Time-aware responses: system adjusts tone based on admission calendar phase (exam prep → application → enrollment)
 - User roles affect responses: high school students, grad students, international students, parents
 - High-risk questions return only verified answers or redirect to admissions office
+
+
+## 注意，必须要安装并启用向量数据库

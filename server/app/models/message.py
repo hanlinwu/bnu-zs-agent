@@ -29,3 +29,4 @@ class Message(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=text("NOW()"))
 
     conversation = relationship("Conversation", back_populates="messages")
+    media_associations = relationship("MessageMedia", back_populates="message", lazy="selectin")

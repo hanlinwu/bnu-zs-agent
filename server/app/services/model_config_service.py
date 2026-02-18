@@ -151,6 +151,7 @@ async def reload_router(db: AsyncSession) -> None:
                     base_url=ep.base_url,
                     model=inst.model_name,
                 )
+                provider.weight = inst.weight or 1
 
                 if grp.type == "llm":
                     router.add_provider(provider)

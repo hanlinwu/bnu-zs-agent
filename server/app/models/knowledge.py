@@ -52,5 +52,6 @@ class KnowledgeChunk(Base):
     content: Mapped[str] = mapped_column(Text, nullable=False)
     # embedding column uses pgvector — defined via raw SQL in migration since
     # pgvector ORM support requires the pgvector package at import time
+    embedding_model: Mapped[str | None] = mapped_column(String(120))
     token_count: Mapped[int | None] = mapped_column(Integer)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=text("NOW()"))

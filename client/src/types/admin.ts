@@ -176,6 +176,14 @@ export interface AdminConversation {
 }
 
 /** 对话消息详情 (admin) */
+export interface AdminMessageMediaItem {
+  id: string
+  title: string
+  media_type: 'image' | 'video'
+  file_url: string
+  slot_key: string
+}
+
 export interface AdminMessage {
   id: string
   role: 'user' | 'assistant' | 'system'
@@ -188,6 +196,7 @@ export interface AdminMessage {
   sensitive_words: string[] | null
   sensitive_level: string | null
   created_at: string
+  media_items?: AdminMessageMediaItem[]
 }
 
 /** 对话消息列表响应 */

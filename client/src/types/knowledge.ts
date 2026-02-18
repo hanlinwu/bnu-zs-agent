@@ -45,4 +45,10 @@ export interface KnowledgeChunk {
   chunkIndex: number
   content: string
   tokenCount: number
+  embeddingModel?: string
+  embeddingStatus?: 'generated' | 'missing'
+}
+
+export interface KnowledgeChunkDetail extends KnowledgeChunk {
+  embeddingVector?: string | null
 }

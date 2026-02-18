@@ -1,5 +1,9 @@
 """Tests for LLM service."""
 
+import random
+
+import pytest
+
 from app.services.llm_service import LLMRouter, LLMProvider, OpenAICompatibleProvider
 
 
@@ -46,3 +50,53 @@ def test_review_provider_separate():
     router.add_provider(main)
     router.set_review_provider(review)
     assert router.review_provider.name == "review"
+
+
+class MockProvider(LLMProvider):
+    def __init__(self, name: str, should_fail: bool = False):
+        self.name = name
+        self.model = name
+        self.should_fail = should_fail
+        self.calls = 0
+        self.weight = 1
+
+    async def chat(self, messages: list[dict], stream: bool = False):
+        self.calls += 1
+        if self.should_fail:
+            raise RuntimeError(f"{self.name} failed")
+        return self.name
+
+    async def embed(self, texts: list[str]) -> list[list[float]]:
+        return [[0.0] for _ in texts]
+
+
+@pytest.mark.asyncio
+async def test_chat_round_robin_sequence_uses_strategy():
+    router = LLMRouter()
+    router.strategy = "round_robin"
+    p1 = MockProvider("p1")
+    p2 = MockProvider("p2")
+    router.add_provider(p1)
+    router.add_provider(p2)
+
+    assert await router.chat([{"role": "user", "content": "hi"}]) == "p1"
+    assert await router.chat([{"role": "user", "content": "hi"}]) == "p2"
+
+
+@pytest.mark.asyncio
+async def test_chat_weighted_first_then_fallback(monkeypatch):
+    router = LLMRouter()
+    router.strategy = "weighted"
+    first = MockProvider("weighted_fail", should_fail=True)
+    second = MockProvider("fallback_ok")
+    first.weight = 100
+    second.weight = 1
+    router.add_provider(first)
+    router.add_provider(second)
+
+    monkeypatch.setattr(random, "choices", lambda providers, weights, k: [providers[0]])
+    result = await router.chat([{"role": "user", "content": "hi"}])
+
+    assert result == "fallback_ok"
+    assert first.calls == 1
+    assert second.calls == 1

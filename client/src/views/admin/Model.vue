@@ -80,6 +80,27 @@ const strategyOptions = [
   { label: '加权随机', value: 'weighted' },
 ]
 
+type SimulationRow = {
+  modelName: string
+  endpointName: string
+  weight: number
+  priority: number
+  hits: number
+  ratio: number
+}
+
+const simDialogVisible = ref(false)
+const simGroupName = ref('')
+const simStrategy = ref('')
+const simRounds = ref(100)
+const simRows = ref<SimulationRow[]>([])
+
+const strategyDescMap: Record<string, string> = {
+  failover: '按实例优先级顺序调用；当前实例失败时自动切换到下一个。',
+  round_robin: '按实例顺序轮流分配请求；单实例失败时会自动回退到其他实例。',
+  weighted: '按实例“权重”进行随机分流；权重越大被选中概率越高，失败时会自动回退。',
+}
+
 function providerLabel(provider: string) {
   return providerOptions.find(o => o.value === provider)?.label || provider
 }
@@ -91,6 +112,60 @@ function groupTypeLabel(type: string) {
 function groupTypeTag(type: string) {
   const map: Record<string, string> = { llm: 'primary', embedding: 'success', review: 'warning' }
   return map[type] || 'info'
+}
+
+function strategyDescription(strategy: string) {
+  return strategyDescMap[strategy] || ''
+}
+
+function pickWeightedIndex(weights: number[]) {
+  const total = weights.reduce((sum, value) => sum + Math.max(1, value), 0)
+  let ticket = Math.random() * total
+  for (let i = 0; i < weights.length; i += 1) {
+    ticket -= Math.max(1, weights[i] || 1)
+    if (ticket <= 0) return i
+  }
+  return Math.max(0, weights.length - 1)
+}
+
+function openStrategySimulation(grp: ModelGroup) {
+  const enabled = (grp.instances || [])
+    .filter(instance => instance.enabled)
+    .sort((a, b) => (a.priority ?? 0) - (b.priority ?? 0))
+
+  if (enabled.length === 0) {
+    ElMessage.warning('该模型组暂无可用实例')
+    return
+  }
+
+  const rounds = Math.max(10, Math.min(10000, Number(simRounds.value) || 100))
+  const counts = new Array(enabled.length).fill(0)
+
+  if (grp.strategy === 'failover') {
+    counts[0] = rounds
+  } else if (grp.strategy === 'round_robin') {
+    for (let i = 0; i < rounds; i += 1) {
+      counts[i % enabled.length] += 1
+    }
+  } else {
+    const weights = enabled.map(instance => instance.weight || 1)
+    for (let i = 0; i < rounds; i += 1) {
+      const index = pickWeightedIndex(weights)
+      counts[index] += 1
+    }
+  }
+
+  simGroupName.value = grp.name
+  simStrategy.value = grp.strategy
+  simRows.value = enabled.map((instance, index) => ({
+    modelName: instance.modelName,
+    endpointName: instance.endpoint?.name || '-',
+    weight: instance.weight,
+    priority: instance.priority,
+    hits: counts[index],
+    ratio: Number(((counts[index] / rounds) * 100).toFixed(2)),
+  }))
+  simDialogVisible.value = true
 }
 
 async function fetchConfig() {
@@ -381,6 +456,12 @@ onMounted(() => {
         </el-button>
       </div>
 
+      <el-alert type="info" :closable="false" class="strategy-alert">
+        <template #title>
+          负载均衡说明：策略仅对「LLM 对话」组生效；Embedding/审核组通常只配置单实例。
+        </template>
+      </el-alert>
+
       <div v-if="groups.length === 0" class="empty-state">
         暂无模型组，请创建
       </div>
@@ -398,6 +479,7 @@ onMounted(() => {
               :model-value="grp.strategy"
               size="small"
               style="width: 120px"
+              :disabled="grp.type !== 'llm'"
               @change="(val: any) => handleStrategyChange(grp, val)"
             >
               <el-option
@@ -407,6 +489,18 @@ onMounted(() => {
                 :value="opt.value"
               />
             </el-select>
+            <span class="strategy-inline-desc" :title="strategyDescription(grp.strategy)">
+              {{ grp.type === 'llm' ? strategyDescription(grp.strategy) : '仅 LLM 组生效' }}
+            </span>
+            <el-button
+              v-if="grp.type === 'llm'"
+              size="small"
+              type="primary"
+              plain
+              @click="openStrategySimulation(grp)"
+            >
+              策略仿真
+            </el-button>
             <el-switch
               :model-value="grp.enabled"
               size="small"
@@ -428,7 +522,7 @@ onMounted(() => {
               {{ row.endpoint?.name || '-' }}
             </template>
           </el-table-column>
-          <el-table-column label="权重" width="70" align="center">
+          <el-table-column label="权重" width="90" align="center">
             <template #default="{ row }">{{ row.weight }}</template>
           </el-table-column>
           <el-table-column label="Max Tokens" width="100" align="center">
@@ -507,6 +601,7 @@ onMounted(() => {
           <el-select v-model="grpForm.strategy" style="width: 100%">
             <el-option v-for="opt in strategyOptions" :key="opt.value" :label="opt.label" :value="opt.value" />
           </el-select>
+          <div class="form-hint">仅 LLM 组生效：故障转移按优先级，轮询按顺序，加权随机按权重比例。</div>
         </el-form-item>
       </el-form>
       <template #footer>
@@ -540,6 +635,7 @@ onMounted(() => {
           <el-col :span="8">
             <el-form-item label="权重">
               <el-input-number v-model="instForm.weight" :min="1" :max="100" style="width: 100%" />
+              <span class="form-hint">仅加权随机策略使用</span>
             </el-form-item>
           </el-col>
           <el-col :span="8">
@@ -561,6 +657,37 @@ onMounted(() => {
       <template #footer>
         <el-button @click="instDialogVisible = false">取消</el-button>
         <el-button type="primary" :loading="instSubmitting" @click="handleSaveInstance">保存</el-button>
+      </template>
+    </el-dialog>
+
+    <!-- Strategy Simulation Dialog -->
+    <el-dialog
+      v-model="simDialogVisible"
+      width="680px"
+      destroy-on-close
+      title="负载均衡策略仿真"
+    >
+      <div class="sim-head">
+        <span><strong>模型组：</strong>{{ simGroupName }}</span>
+        <span><strong>策略：</strong>{{ strategyOptions.find(i => i.value === simStrategy)?.label || simStrategy }}</span>
+      </div>
+      <el-alert type="info" :closable="false" class="sim-alert">
+        <template #title>
+          本仿真基于当前启用实例进行 {{ simRounds }} 次请求分配（不模拟网络失败），用于观察策略分流效果。
+        </template>
+      </el-alert>
+      <el-table :data="simRows" size="small" stripe>
+        <el-table-column prop="modelName" label="模型名称" min-width="170" />
+        <el-table-column prop="endpointName" label="接入点" min-width="130" />
+        <el-table-column prop="priority" label="优先级" width="80" align="center" />
+        <el-table-column prop="weight" label="权重" width="80" align="center" />
+        <el-table-column prop="hits" label="命中次数" width="110" align="center" />
+        <el-table-column label="命中占比" width="120" align="center">
+          <template #default="{ row }">{{ row.ratio }}%</template>
+        </el-table-column>
+      </el-table>
+      <template #footer>
+        <el-button @click="simDialogVisible = false">关闭</el-button>
       </template>
     </el-dialog>
   </div>
@@ -681,6 +808,19 @@ onMounted(() => {
   gap: 10px;
 }
 
+.strategy-alert {
+  margin-bottom: 12px;
+}
+
+.strategy-inline-desc {
+  max-width: 240px;
+  font-size: 12px;
+  color: var(--text-secondary, #5A5A72);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .instance-table {
   margin-bottom: 8px;
 }
@@ -693,5 +833,18 @@ onMounted(() => {
   font-size: 12px;
   color: var(--text-secondary, #9E9EB3);
   margin-left: 8px;
+}
+
+.sim-head {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  margin-bottom: 10px;
+  font-size: 13px;
+  color: var(--text-secondary, #5A5A72);
+}
+
+.sim-alert {
+  margin-bottom: 10px;
 }
 </style>

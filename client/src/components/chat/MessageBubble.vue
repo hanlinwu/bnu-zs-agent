@@ -3,7 +3,6 @@ import { ref, computed } from 'vue'
 import type { Message, MediaItem } from '@/types/chat'
 import SourceCitation from './SourceCitation.vue'
 import MediaPreview from '@/components/MediaPreview.vue'
-import { ZoomIn } from '@element-plus/icons-vue'
 import { renderMarkdown } from '@/utils/markdown'
 
 const props = defineProps<{
@@ -25,77 +24,6 @@ const hasSources = computed(() => {
 
 const mediaItems = computed(() => props.message.mediaItems || [])
 
-type ContentPart =
-  | { type: 'text'; key: string; content: string }
-  | { type: 'media'; key: string; item: MediaItem | null }
-
-const mediaBySlotKey = computed(() => {
-  const map = new Map<string, MediaItem>()
-  mediaItems.value.forEach((item, index) => {
-    const key = item.slot_key || `slot_${index}`
-    if (!map.has(key)) {
-      map.set(key, item)
-    }
-  })
-  return map
-})
-
-const contentParts = computed<ContentPart[]>(() => {
-  const content = props.message.content || ''
-  const mediaMarkerRegex = /\[\[\s*MEDIA_ITEM:([^\]]+)\s*\]\]/g
-  const parts: ContentPart[] = []
-  let lastIndex = 0
-  let matched = false
-
-  for (const match of content.matchAll(mediaMarkerRegex)) {
-    matched = true
-    const marker = match[0]
-    const slotKey = (match[1] || '').trim()
-    const markerIndex = match.index ?? 0
-
-    if (markerIndex > lastIndex) {
-      parts.push({
-        type: 'text',
-        key: `text-${lastIndex}`,
-        content: content.slice(lastIndex, markerIndex),
-      })
-    }
-
-    parts.push({
-      type: 'media',
-      key: `media-${slotKey}-${markerIndex}`,
-      item: mediaBySlotKey.value.get(slotKey) || null,
-    })
-
-    lastIndex = markerIndex + marker.length
-  }
-
-  if (lastIndex < content.length) {
-    parts.push({
-      type: 'text',
-      key: `text-${lastIndex}`,
-      content: content.slice(lastIndex),
-    })
-  }
-
-  if (!matched) {
-    parts.splice(0, parts.length, {
-      type: 'text',
-      key: 'text-full',
-      content,
-    })
-    mediaItems.value.forEach((item, index) => {
-      parts.push({
-        type: 'media',
-        key: `media-fallback-${item.id}-${index}`,
-        item,
-      })
-    })
-  }
-
-  return parts
-})
-
 // Preview state
 const previewVisible = ref(false)
 const previewType = ref<'image' | 'video'>('image')
@@ -113,6 +41,106 @@ function closePreview() {
   previewVisible.value = false
 }
 
+// Build media map by slot key
+const mediaBySlotKey = computed(() => {
+  const map = new Map<string, MediaItem>()
+  mediaItems.value.forEach((item, index) => {
+    const key = item.slot_key || `slot_${index}`
+    if (!map.has(key)) {
+      map.set(key, item)
+    }
+  })
+  return map
+})
+
+// Render content with embedded media
+const renderedContent = computed(() => {
+  const content = props.message.content || ''
+  const mediaMarkerRegex = /\[\[\s*MEDIA_ITEM:([^\]]+)\s*\]\]/g
+
+  // If no markers, just render markdown
+  if (!content.includes('MEDIA_ITEM')) {
+    return renderMarkdown(content)
+  }
+
+  // Replace markers with media placeholders that we'll render as Vue components
+  // Use <template> element as placeholder since HTML comments are stripped by DOMPurify
+  let result = content
+  let match
+  let index = 0
+  const replacements: { placeholder: string; item: MediaItem | null }[] = []
+
+  while ((match = mediaMarkerRegex.exec(content)) !== null) {
+    const slotKey = match[1]?.trim() || ''
+    const item = slotKey ? mediaBySlotKey.value.get(slotKey) || null : null
+    const placeholder = `<template data-media-index="${index}"></template>`
+
+    result = result.replace(match[0], placeholder)
+    replacements.push({ placeholder, item })
+    index++
+  }
+
+  // Render markdown
+  let html = renderMarkdown(result)
+
+  // Replace placeholders with media HTML
+  replacements.forEach(({ placeholder, item }) => {
+    if (item) {
+      const mediaHtml = item.media_type === 'image'
+        ? `<span class="inline-media" data-media-id="${item.id}" data-media-type="image" data-media-url="${item.url}" data-media-title="${item.title || ''}">
+             <img src="${item.url}" alt="${item.title || ''}" class="inline-image" loading="lazy" />
+           </span>`
+        : `<span class="inline-media" data-media-id="${item.id}" data-media-type="video" data-media-url="${item.url}" data-media-title="${item.title || ''}">
+             <video controls preload="metadata" class="inline-video">
+               <source src="${item.url}" type="video/mp4" />
+             </video>
+           </span>`
+      html = html.replace(placeholder, mediaHtml)
+    }
+  })
+
+  // Append remaining media items that weren't referenced in content
+  const usedKeys = new Set(replacements.map(r => r.item?.id).filter(Boolean))
+  const unusedMedia = mediaItems.value.filter(item => !usedKeys.has(item.id))
+
+  if (unusedMedia.length > 0) {
+    const mediaHtml = unusedMedia.map(item =>
+      item.media_type === 'image'
+        ? `<span class="inline-media" data-media-id="${item.id}" data-media-type="image" data-media-url="${item.url}" data-media-title="${item.title || ''}">
+             <img src="${item.url}" alt="${item.title || ''}" class="inline-image" loading="lazy" />
+           </span>`
+        : `<span class="inline-media" data-media-id="${item.id}" data-media-type="video" data-media-url="${item.url}" data-media-title="${item.title || ''}">
+             <video controls preload="metadata" class="inline-video">
+               <source src="${item.url}" type="video/mp4" />
+             </video>
+           </span>`
+    ).join('')
+    html += mediaHtml
+  }
+
+  return html
+})
+
+// Handle click on inline media for preview
+function handleContentClick(e: MouseEvent) {
+  const target = e.target as HTMLElement
+  const mediaSpan = target.closest('.inline-media') as HTMLElement
+
+  if (mediaSpan) {
+    const mediaType = mediaSpan.dataset.mediaType as 'image' | 'video'
+    const mediaUrl = mediaSpan.dataset.mediaUrl
+    const mediaTitle = mediaSpan.dataset.mediaTitle
+
+    if (mediaUrl) {
+      openPreview({
+        id: mediaSpan.dataset.mediaId || '',
+        media_type: mediaType,
+        url: mediaUrl,
+        title: mediaTitle || ''
+      } as MediaItem)
+    }
+  }
+}
 </script>
 
 <template>
@@ -131,51 +159,12 @@ function closePreview() {
     </div>
 
     <div class="bubble-body">
-      <template v-for="part in contentParts" :key="part.key">
-        <div
-          v-if="part.type === 'text'"
-          class="bubble-content"
-          v-html="renderMarkdown(part.content)"
-        ></div>
-
-        <div
-          v-else-if="part.item"
-          class="media-card"
-        >
-          <div
-            v-if="part.item.media_type === 'image'"
-            class="media-image-wrapper"
-            @click="openPreview(part.item)"
-          >
-            <img
-              :src="part.item.url"
-              :alt="part.item.title"
-              class="media-image"
-              loading="lazy"
-            />
-            <div class="media-overlay">
-              <el-icon :size="20"><ZoomIn /></el-icon>
-            </div>
-          </div>
-          <div
-            v-else
-            class="media-video-wrapper"
-            @click="openPreview(part.item)"
-          >
-            <video
-              class="media-video"
-              controls
-              preload="metadata"
-            >
-              <source :src="part.item.url" type="video/mp4" />
-            </video>
-          </div>
-          <div class="media-meta">
-            <div class="media-title">{{ part.item.title }}</div>
-            <div v-if="part.item.description" class="media-desc">{{ part.item.description }}</div>
-          </div>
-        </div>
-      </template>
+      <!-- Single bubble content with embedded media -->
+      <div
+        class="bubble-content"
+        @click="handleContentClick"
+        v-html="renderedContent"
+      ></div>
 
       <div class="bubble-time">{{ formattedTime }}</div>
 
@@ -324,6 +313,41 @@ function closePreview() {
   .is-user & :deep(.md-inline-code) {
     background: rgba(255, 255, 255, 0.15);
   }
+
+  // Inline media styles
+  :deep(.inline-media) {
+    display: inline-block;
+    max-width: 100%;
+    margin: 8px 0;
+    cursor: pointer;
+    border-radius: 12px;
+    overflow: hidden;
+    vertical-align: middle;
+
+    &:hover {
+      opacity: 0.95;
+    }
+  }
+
+  :deep(.inline-image) {
+    max-width: 280px;
+    max-height: 200px;
+    width: auto;
+    height: auto;
+    object-fit: contain;
+    display: block;
+    border-radius: 12px;
+  }
+
+  :deep(.inline-video) {
+    max-width: 100%;
+    max-height: 200px;
+    width: auto;
+    height: auto;
+    display: block;
+    border-radius: 12px;
+    background: #000;
+  }
 }
 
 .bubble-time {
@@ -345,69 +369,5 @@ function closePreview() {
 
 .bubble-sources {
   margin-top: 6px;
-}
-
-.media-card {
-  margin-top: 8px;
-  border: 1px solid var(--border-color, #e2e6ed);
-  border-radius: 10px;
-  overflow: hidden;
-  background: var(--bg-primary, #fff);
-}
-
-.media-image-wrapper,
-.media-video-wrapper {
-  position: relative;
-  cursor: pointer;
-  overflow: hidden;
-
-  &:hover .media-overlay {
-    opacity: 1;
-  }
-
-  &:hover .media-image {
-    transform: scale(1.03);
-  }
-}
-
-.media-image,
-.media-video {
-  width: 100%;
-  max-height: 280px;
-  object-fit: cover;
-  display: block;
-  background: #000;
-  transition: transform 0.3s ease;
-}
-
-.media-overlay {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.4);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  opacity: 0;
-  transition: opacity 0.2s;
-  color: #fff;
-}
-
-.media-meta {
-  padding: 8px 10px;
-}
-
-.media-title {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--text-primary, #1a1a2e);
-}
-
-.media-desc {
-  margin-top: 4px;
-  font-size: 12px;
-  color: var(--text-secondary, #5a5a72);
 }
 </style>

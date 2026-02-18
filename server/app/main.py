@@ -82,6 +82,13 @@ async def lifespan(app: FastAPI):
     async with session_factory() as db:
         await model_config_service.reload_router(db)
 
+    # Ensure KB vector schema + backfill embeddings for existing chunks
+    from app.services.knowledge_embedding_service import ensure_embedding_schema, backfill_missing_embeddings
+    async with session_factory() as db:
+        await ensure_embedding_schema(db)
+        await backfill_missing_embeddings(db, limit=2000)
+        await db.commit()
+
     yield
     # Shutdown
 

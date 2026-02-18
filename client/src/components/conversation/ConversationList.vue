@@ -116,16 +116,18 @@ function handleTogglePin(conv: Conversation) {
     <template v-else>
       <div v-for="group in grouped" :key="group.label" class="conversation-group">
         <div class="group-label">{{ group.label }}</div>
-        <ConversationItem
-          v-for="conv in group.items"
-          :key="conv.id"
-          :conversation="conv"
-          :active="chatStore.currentConversationId === conv.id"
-          @select="handleSelect(conv)"
-          @delete="handleDelete(conv)"
-          @update-title="(title: string) => handleUpdateTitle(conv, title)"
-          @toggle-pin="handleTogglePin(conv)"
-        />
+        <transition-group name="conversation-item" tag="div" class="group-items">
+          <ConversationItem
+            v-for="conv in group.items"
+            :key="conv.id"
+            :conversation="conv"
+            :active="chatStore.currentConversationId === conv.id"
+            @select="handleSelect(conv)"
+            @delete="handleDelete(conv)"
+            @update-title="(title: string) => handleUpdateTitle(conv, title)"
+            @toggle-pin="handleTogglePin(conv)"
+          />
+        </transition-group>
       </div>
     </template>
   </div>
@@ -157,6 +159,34 @@ function handleTogglePin(conv: Conversation) {
 
 .conversation-group {
   margin-bottom: 8px;
+}
+
+.group-items {
+  display: flex;
+  flex-direction: column;
+}
+
+.conversation-item-enter-active,
+.conversation-item-leave-active {
+  transition: opacity 0.14s ease, transform 0.14s ease;
+}
+
+.conversation-item-enter-from,
+.conversation-item-leave-to {
+  opacity: 0;
+  transform: translateY(3px);
+}
+
+.conversation-item-move {
+  transition: transform 0.16s ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .conversation-item-enter-active,
+  .conversation-item-leave-active,
+  .conversation-item-move {
+    transition-duration: 0.01ms !important;
+  }
 }
 
 .group-label {

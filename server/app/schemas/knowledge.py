@@ -39,6 +39,18 @@ class ChunkPreviewResponse(BaseModel):
     chunkIndex: int
     content: str
     tokenCount: int | None
+    embeddingModel: str | None = None
+    embeddingStatus: str = "missing"
+
+
+class ChunkDetailResponse(BaseModel):
+    id: str
+    chunkIndex: int
+    content: str
+    tokenCount: int | None
+    embeddingModel: str | None = None
+    embeddingStatus: str = "missing"
+    embeddingVector: str | None = None
 
 
 class ChunkListResponse(BaseModel):
@@ -46,3 +58,15 @@ class ChunkListResponse(BaseModel):
     total: int
     page: int
     pageSize: int
+
+
+class ReembedRequest(BaseModel):
+    documentId: str | None = None
+    limit: int = Field(2000, ge=1, le=20000)
+
+
+class ReembedResponse(BaseModel):
+    success: bool
+    updated: int
+    scanned: int
+    message: str

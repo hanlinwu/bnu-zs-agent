@@ -8,7 +8,7 @@ from urllib.parse import quote
 
 from fastapi import APIRouter, BackgroundTasks, Depends, Query, UploadFile, File, Form
 from fastapi.responses import FileResponse
-from sqlalchemy import select, func, delete as sql_delete
+from sqlalchemy import select, func, delete as sql_delete, text as sa_text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
@@ -21,7 +21,8 @@ from app.models.knowledge import KnowledgeDocument, KnowledgeChunk
 from app.models.audit_log import FileUploadLog
 from app.schemas.knowledge import (
     KnowledgeDocResponse, KnowledgeDocListResponse,
-    KnowledgeReviewRequest, ChunkPreviewResponse, ChunkListResponse,
+    KnowledgeReviewRequest, ChunkPreviewResponse, ChunkListResponse, ChunkDetailResponse,
+    ReembedRequest, ReembedResponse,
 )
 
 logger = logging.getLogger(__name__)
@@ -212,23 +213,123 @@ async def get_document_chunks(
         .where(KnowledgeChunk.document_id == doc_id)
     )).scalar() or 0
 
-    result = await db.execute(
-        select(KnowledgeChunk)
-        .where(KnowledgeChunk.document_id == doc_id)
-        .order_by(KnowledgeChunk.chunk_index)
-        .offset((page - 1) * pageSize)
-        .limit(pageSize)
-    )
-    chunks = result.scalars().all()
+    rows = (await db.execute(
+        sa_text(
+            """
+            SELECT
+                kc.id,
+                kc.chunk_index,
+                kc.content,
+                kc.token_count,
+                kc.embedding_model,
+                CASE WHEN kc.embedding IS NULL THEN 'missing' ELSE 'generated' END AS embedding_status
+            FROM knowledge_chunks kc
+            WHERE kc.document_id = :doc_id
+            ORDER BY kc.chunk_index
+            OFFSET :offset
+            LIMIT :limit
+            """
+        ),
+        {
+            "doc_id": str(doc_id),
+            "offset": (page - 1) * pageSize,
+            "limit": pageSize,
+        },
+    )).all()
+
     return ChunkListResponse(
         items=[
             ChunkPreviewResponse(
-                id=str(c.id), chunkIndex=c.chunk_index,
-                content=c.content, tokenCount=c.token_count,
+                id=str(row[0]),
+                chunkIndex=row[1],
+                content=row[2],
+                tokenCount=row[3],
+                embeddingModel=row[4],
+                embeddingStatus=row[5],
             )
-            for c in chunks
+            for row in rows
         ],
         total=total, page=page, pageSize=pageSize,
+    )
+
+
+@router.get("/chunks/{chunk_id}/detail", response_model=ChunkDetailResponse,
+            dependencies=[Depends(require_permission("knowledge:read"))])
+async def get_chunk_detail(
+    chunk_id: str,
+    admin: AdminUser = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """获取单个切片详情（含向量文本）。"""
+    row = (await db.execute(
+        sa_text(
+            """
+            SELECT
+                kc.id,
+                kc.chunk_index,
+                kc.content,
+                kc.token_count,
+                kc.embedding_model,
+                CASE WHEN kc.embedding IS NULL THEN 'missing' ELSE 'generated' END AS embedding_status,
+                CASE WHEN kc.embedding IS NULL THEN NULL ELSE kc.embedding::text END AS embedding_vector
+            FROM knowledge_chunks kc
+            WHERE kc.id = :chunk_id
+            LIMIT 1
+            """
+        ),
+        {"chunk_id": chunk_id},
+    )).first()
+
+    if not row:
+        raise NotFoundError("切片不存在")
+
+    return ChunkDetailResponse(
+        id=str(row[0]),
+        chunkIndex=row[1],
+        content=row[2],
+        tokenCount=row[3],
+        embeddingModel=row[4],
+        embeddingStatus=row[5],
+        embeddingVector=row[6],
+    )
+
+
+@router.post("/re-embed-missing", response_model=ReembedResponse,
+             dependencies=[Depends(require_permission("knowledge:approve"))])
+async def reembed_missing_chunks(
+    body: ReembedRequest,
+    admin: AdminUser = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """重跑缺失 embedding 的切片（全局或指定文档）。"""
+    from app.services import model_config_service
+    from app.services.knowledge_embedding_service import ensure_embedding_schema, backfill_missing_embeddings
+
+    await model_config_service.reload_router(db)
+    await ensure_embedding_schema(db)
+
+    count_sql = "SELECT count(*) FROM knowledge_chunks WHERE embedding IS NULL"
+    params: dict[str, str | int] = {}
+    if body.documentId:
+        await _get_document(body.documentId, db)
+        count_sql += " AND document_id = :doc_id"
+        params["doc_id"] = body.documentId
+
+    missing_before = (await db.execute(sa_text(count_sql), params)).scalar() or 0
+
+    if body.documentId:
+        updated = await backfill_missing_embeddings(db, limit=body.limit, document_id=body.documentId)
+    else:
+        updated = await backfill_missing_embeddings(db, limit=body.limit)
+
+    await db.commit()
+
+    scope = f"文档 {body.documentId}" if body.documentId else "全库"
+    return ReembedResponse(
+        success=True,
+        updated=updated,
+        scanned=min(missing_before, body.limit),
+        message=f"{scope} 缺失 embedding 重跑完成",
     )
 
 
@@ -291,9 +392,13 @@ async def _background_chunk_document(doc_id: str, file_path: str, file_type: str
     async with session_factory() as db:
         try:
             from app.services.file_parser_service import parse_file, chunk_text
+            from app.services.knowledge_embedding_service import ensure_embedding_schema, embed_document_chunks
 
             text = parse_file(file_path, file_type)
             text_chunks = chunk_text(text)
+
+            # Ensure vector schema exists before writing embeddings (graceful no-op if unavailable)
+            await ensure_embedding_schema(db)
 
             # Remove old chunks if re-approving
             await db.execute(
@@ -311,6 +416,15 @@ async def _background_chunk_document(doc_id: str, file_path: str, file_type: str
                 )
                 db.add(chunk)
 
+            await db.flush()
+
+            embedded_count = 0
+            embedded_count = await embed_document_chunks(doc_id, db)
+            if text_chunks and embedded_count < len(text_chunks):
+                raise RuntimeError(
+                    f"embedding generation incomplete: {embedded_count}/{len(text_chunks)}"
+                )
+
             # Update document status to approved
             doc = (await db.execute(
                 select(KnowledgeDocument).where(KnowledgeDocument.id == doc_id)
@@ -319,15 +433,12 @@ async def _background_chunk_document(doc_id: str, file_path: str, file_type: str
             doc.updated_at = datetime.now(timezone.utc)
 
             await db.commit()
-            logger.info("Document %s chunked: %d chunks", doc_id, len(text_chunks))
-
-            # Trigger async embedding generation if configured
-            if settings.EMBEDDING_BASE_URL or settings.LLM_PRIMARY_BASE_URL:
-                try:
-                    from app.tasks.embedding_task import generate_embeddings_task
-                    generate_embeddings_task.delay(doc_id, text_chunks)
-                except Exception as e:
-                    logger.warning("Failed to queue embedding task: %s", e)
+            logger.info(
+                "Document %s chunked: %d chunks, embedded: %d",
+                doc_id,
+                len(text_chunks),
+                embedded_count,
+            )
 
         except Exception as e:
             logger.error("Failed to chunk document %s: %s", doc_id, e)

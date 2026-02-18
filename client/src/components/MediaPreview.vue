@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
+import { ref, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { Close, VideoPlay, Picture } from '@element-plus/icons-vue'
 
 interface Props {
@@ -17,9 +17,40 @@ const emit = defineEmits<{
 
 const isLoading = ref(true)
 const isError = ref(false)
+const imageRef = ref<HTMLImageElement | null>(null)
 const videoRef = ref<HTMLVideoElement | null>(null)
 
-const isVisible = computed(() => props.visible)
+// Check if media is already loaded (for cached resources)
+function checkIfAlreadyLoaded() {
+  if (props.type === 'image' && imageRef.value) {
+    const img = imageRef.value
+    if (img.complete && img.naturalWidth > 0) {
+      isLoading.value = false
+      isError.value = false
+      return true
+    }
+  } else if (props.type === 'video' && videoRef.value) {
+    const video = videoRef.value
+    if (video.readyState >= 2) {
+      isLoading.value = false
+      isError.value = false
+      return true
+    }
+  }
+  return false
+}
+
+// Retry checking if media is loaded (for browsers with slow DOM updates)
+function retryCheckLoaded(attempts = 0) {
+  if (attempts >= 10) return // Max 10 attempts (about 500ms)
+  if (!props.visible) return
+
+  setTimeout(() => {
+    if (!checkIfAlreadyLoaded()) {
+      retryCheckLoaded(attempts + 1)
+    }
+  }, 50)
+}
 
 watch(() => props.src, () => {
   isLoading.value = true
@@ -31,6 +62,12 @@ watch(() => props.visible, (val) => {
     isLoading.value = true
     isError.value = false
     document.body.style.overflow = 'hidden'
+    // Check if already loaded (cached) after DOM update with retry
+    nextTick(() => {
+      if (!checkIfAlreadyLoaded()) {
+        retryCheckLoaded()
+      }
+    })
   } else {
     document.body.style.overflow = ''
     if (videoRef.value) {
@@ -42,6 +79,9 @@ watch(() => props.visible, (val) => {
 onMounted(() => {
   if (props.visible) {
     document.body.style.overflow = 'hidden'
+    nextTick(() => {
+      checkIfAlreadyLoaded()
+    })
   }
 })
 
@@ -55,6 +95,7 @@ function handleClose() {
 
 function handleImageLoad() {
   isLoading.value = false
+  isError.value = false
 }
 
 function handleImageError() {
@@ -64,6 +105,7 @@ function handleImageError() {
 
 function handleVideoLoad() {
   isLoading.value = false
+  isError.value = false
 }
 
 function handleVideoError() {
@@ -96,7 +138,7 @@ onUnmounted(() => {
   <Teleport to="body">
     <Transition name="preview-fade">
       <div
-        v-if="isVisible"
+        v-if="visible"
         class="media-preview-overlay"
         @click="handleBackdropClick"
       >
@@ -113,13 +155,20 @@ onUnmounted(() => {
 
         <!-- Error state -->
         <div v-else-if="isError" class="preview-error">
-          <el-icon :size="48"><VideoPlay /></el-icon>
+          <el-icon :size="48">
+            <component :is="type === 'image' ? Picture : VideoPlay" />
+          </el-icon>
           <p>加载失败</p>
         </div>
 
         <!-- Image preview -->
-        <div v-else-if="type === 'image'" class="preview-content image-content">
+        <div
+          v-if="type === 'image'"
+          v-show="!isLoading && !isError"
+          class="preview-content image-content"
+        >
           <img
+            ref="imageRef"
             :src="src"
             :alt="title || '图片预览'"
             class="preview-image"
@@ -129,7 +178,11 @@ onUnmounted(() => {
         </div>
 
         <!-- Video preview -->
-        <div v-else class="preview-content video-content">
+        <div
+          v-if="type === 'video'"
+          v-show="!isLoading && !isError"
+          class="preview-content video-content"
+        >
           <video
             ref="videoRef"
             :src="src"
