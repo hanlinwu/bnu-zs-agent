@@ -1,0 +1,133 @@
+name: CD
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  DEPLOY_PATH: /opt/bnu-admission-chatbot/deploy
+
+jobs:
+  quality-gate:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: server
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install backend dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run backend tests
+        run: pytest -v
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: client/package-lock.json
+
+      - name: Install frontend dependencies
+        working-directory: client
+        run: npm ci
+
+      - name: Build frontend
+        working-directory: client
+        run: npm run build
+
+  build-and-push:
+    runs-on: ubuntu-latest
+    needs: quality-gate
+    outputs:
+      image_tag: ${{ steps.meta.outputs.image_tag }}
+      owner_lc: ${{ steps.meta.outputs.owner_lc }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Prepare image metadata
+        id: meta
+        run: |
+          OWNER_LC=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
+          echo "owner_lc=${OWNER_LC}" >> "$GITHUB_OUTPUT"
+          echo "image_tag=${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push app image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./server
+          file: ./server/Dockerfile
+          push: true
+          tags: |
+            ghcr.io/${{ steps.meta.outputs.owner_lc }}/bnu-admission-chatbot-app:${{ steps.meta.outputs.image_tag }}
+            ghcr.io/${{ steps.meta.outputs.owner_lc }}/bnu-admission-chatbot-app:latest
+
+      - name: Build and push nginx image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./nginx/Dockerfile.prod
+          push: true
+          tags: |
+            ghcr.io/${{ steps.meta.outputs.owner_lc }}/bnu-admission-chatbot-nginx:${{ steps.meta.outputs.image_tag }}
+            ghcr.io/${{ steps.meta.outputs.owner_lc }}/bnu-admission-chatbot-nginx:latest
+
+  deploy:
+    runs-on: ubuntu-latest
+    needs: build-and-push
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Start SSH agent
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.DEPLOY_SSH_KEY }}
+
+      - name: Add server host key
+        run: ssh-keyscan -H "${{ secrets.DEPLOY_HOST }}" >> ~/.ssh/known_hosts
+
+      - name: Prepare remote directory
+        run: |
+          ssh "${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}" \
+            "mkdir -p '${{ env.DEPLOY_PATH }}/scripts'"
+
+      - name: Upload deploy files
+        run: |
+          scp deploy/docker-compose.prod.yml "${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}:${{ env.DEPLOY_PATH }}/docker-compose.prod.yml"
+          scp deploy/.env.example "${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}:${{ env.DEPLOY_PATH }}/.env.example"
+          scp deploy/scripts/deploy.sh deploy/scripts/rollback.sh "${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}:${{ env.DEPLOY_PATH }}/scripts/"
+
+      - name: Execute deployment
+        run: |
+          ssh "${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}" \
+            "cd '${{ env.DEPLOY_PATH }}' && chmod +x scripts/*.sh && \
+            GHCR_USERNAME='${{ github.actor }}' \
+            GHCR_TOKEN='${{ secrets.GHCR_PAT }}' \
+            APP_IMAGE='ghcr.io/${{ needs.build-and-push.outputs.owner_lc }}/bnu-admission-chatbot-app' \
+            NGINX_IMAGE='ghcr.io/${{ needs.build-and-push.outputs.owner_lc }}/bnu-admission-chatbot-nginx' \
+            IMAGE_TAG='${{ needs.build-and-push.outputs.image_tag }}' \
+            ./scripts/deploy.sh"

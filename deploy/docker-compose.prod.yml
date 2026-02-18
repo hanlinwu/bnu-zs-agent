@@ -1,0 +1,88 @@
+version: "3.9"
+
+name: bnu
+
+services:
+  nginx:
+    image: ${NGINX_IMAGE}:${IMAGE_TAG}
+    restart: unless-stopped
+    ports:
+      - "${BIND_IP:-127.0.0.1}:${HTTP_PORT:-18080}:80"
+    depends_on:
+      - app
+    networks:
+      - frontend
+
+  app:
+    image: ${APP_IMAGE}:${IMAGE_TAG}
+    restart: unless-stopped
+    env_file:
+      - ./.env
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - upload_data:/data/uploads
+      - app_logs:/data/logs
+    networks:
+      - frontend
+      - backend
+
+  worker:
+    image: ${APP_IMAGE}:${IMAGE_TAG}
+    restart: unless-stopped
+    command: celery -A app.tasks.celery_app worker --loglevel=info --concurrency=4
+    env_file:
+      - ./.env
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - upload_data:/data/uploads
+    networks:
+      - backend
+
+  db:
+    image: pgvector/pgvector:pg16
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    networks:
+      - backend
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    networks:
+      - backend
+
+volumes:
+  pg_data:
+  redis_data:
+  upload_data:
+  app_logs:
+
+networks:
+  frontend:
+  backend:
