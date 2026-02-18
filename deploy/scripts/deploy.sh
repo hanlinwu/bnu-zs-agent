@@ -85,8 +85,12 @@ wait_for_service_healthy redis 120
 echo "[deploy] ensure pgvector extension"
 compose exec -T db bash -lc 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "CREATE EXTENSION IF NOT EXISTS vector;"'
 
+echo "[deploy] bootstrap base schema via app startup"
+compose up -d app
+wait_for_service_healthy app 180
+
 echo "[deploy] running migrations"
-if ! compose run --rm -e PYTHONPATH=/app app sh -lc 'cd /app && alembic -c /app/alembic.ini upgrade head'; then
+if ! compose exec -T app sh -lc 'cd /app && PYTHONPATH=/app alembic -c /app/alembic.ini upgrade head'; then
   echo "[deploy] migration failed" >&2
   rollback_to_previous || true
   exit 1

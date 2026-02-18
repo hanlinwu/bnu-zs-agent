@@ -29,7 +29,7 @@
 ## 3. 自动化流程
 
 ### CI（`.github/workflows/ci.yml`）
-- 触发：`pull_request` 和 `push main`
+- 触发：`pull_request`
 - 执行：
   - 后端 `pytest -v`
   - 前端 `npm ci && npm run build`
