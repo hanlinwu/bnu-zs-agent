@@ -185,6 +185,10 @@ async function handleToggleGroup(group: GroupListItem, value: boolean) {
   }
 }
 
+function handleToggleGroupChange(group: GroupListItem, value: string | number | boolean) {
+  handleToggleGroup(group, Boolean(value))
+}
+
 async function handleSaveWordList() {
   if (!selectedGroup.value) return
 
@@ -348,7 +352,7 @@ onMounted(() => {
                 <el-switch
                   :model-value="row.is_active"
                   size="small"
-                  @change="(val) => handleToggleGroup(row, Boolean(val))"
+                  @change="handleToggleGroupChange(row, $event)"
                   @click.stop
                 />
               </template>
