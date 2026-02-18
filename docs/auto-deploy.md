@@ -148,3 +148,31 @@ docker info
 ```
 
 如果以上命令正常，服务器就可以接收自动发布了。
+
+## 7. 宿主机一键模拟生产部署（推荐发布前执行）
+
+新增脚本：`deploy/scripts/host-prod-smoke.sh`
+
+用途：
+- 本地构建 `app/nginx` 镜像
+- 使用生产 compose 启动 `db/redis`
+- 执行 `alembic upgrade head`
+- 启动 `app/worker/nginx`
+- 做健康检查并输出关键日志
+
+执行：
+
+```bash
+./deploy/scripts/host-prod-smoke.sh
+```
+
+常用参数：
+
+```bash
+./deploy/scripts/host-prod-smoke.sh --port 18081
+./deploy/scripts/host-prod-smoke.sh --project bnu-hosttest-2 --keep
+```
+
+说明：
+- 默认会清理测试容器与数据卷（不加 `--keep`）。
+- 该脚本用于宿主机验证，CI 容器内若无 Docker 不可执行。
