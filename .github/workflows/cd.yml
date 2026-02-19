@@ -15,10 +15,9 @@ env:
 
 jobs:
   build-and-push:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux, x64, cn-builder]
     outputs:
       image_tag: ${{ steps.meta.outputs.image_tag }}
-      owner_lc: ${{ steps.meta.outputs.owner_lc }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -26,18 +25,16 @@ jobs:
       - name: Prepare image metadata
         id: meta
         run: |
-          OWNER_LC=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
-          echo "owner_lc=${OWNER_LC}" >> "$GITHUB_OUTPUT"
           echo "image_tag=${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
 
-      - name: Login to GHCR
+      - name: Login to TCR
         uses: docker/login-action@v3
         with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          registry: ${{ secrets.TCR_REGISTRY }}
+          username: ${{ secrets.TCR_USERNAME }}
+          password: ${{ secrets.TCR_PASSWORD }}
 
-      - name: Build and push app image (GHCR)
+      - name: Build and push app image (TCR)
         uses: docker/build-push-action@v6
         with:
           context: ./server
@@ -46,10 +43,10 @@ jobs:
           provenance: false
           sbom: false
           tags: |
-            ghcr.io/${{ steps.meta.outputs.owner_lc }}/bnu-admission-chatbot-app:${{ steps.meta.outputs.image_tag }}
-            ghcr.io/${{ steps.meta.outputs.owner_lc }}/bnu-admission-chatbot-app:latest
+            ${{ secrets.TCR_REGISTRY }}/${{ secrets.TCR_NAMESPACE }}/bnu-admission-chatbot-app:${{ steps.meta.outputs.image_tag }}
+            ${{ secrets.TCR_REGISTRY }}/${{ secrets.TCR_NAMESPACE }}/bnu-admission-chatbot-app:latest
 
-      - name: Build and push nginx image (GHCR)
+      - name: Build and push nginx image (TCR)
         uses: docker/build-push-action@v6
         with:
           context: .
@@ -58,8 +55,8 @@ jobs:
           provenance: false
           sbom: false
           tags: |
-            ghcr.io/${{ steps.meta.outputs.owner_lc }}/bnu-admission-chatbot-nginx:${{ steps.meta.outputs.image_tag }}
-            ghcr.io/${{ steps.meta.outputs.owner_lc }}/bnu-admission-chatbot-nginx:latest
+            ${{ secrets.TCR_REGISTRY }}/${{ secrets.TCR_NAMESPACE }}/bnu-admission-chatbot-nginx:${{ steps.meta.outputs.image_tag }}
+            ${{ secrets.TCR_REGISTRY }}/${{ secrets.TCR_NAMESPACE }}/bnu-admission-chatbot-nginx:latest
 
   deploy:
     runs-on: ubuntu-latest
@@ -85,14 +82,14 @@ jobs:
         run: |
           scp deploy/docker-compose.prod.yml "${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}:${{ env.DEPLOY_PATH }}/docker-compose.prod.yml"
           scp deploy/.env.example "${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}:${{ env.DEPLOY_PATH }}/.env.example"
-          scp deploy/scripts/deploy.sh deploy/scripts/rollback.sh "${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}:${{ env.DEPLOY_PATH }}/scripts/"
+          scp -r deploy/scripts/. "${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}:${{ env.DEPLOY_PATH }}/scripts/"
 
       - name: Execute deployment
         run: |
-          APP_IMAGE_BASE="ghcr.io/${{ needs.build-and-push.outputs.owner_lc }}/bnu-admission-chatbot-app"
-          NGINX_IMAGE_BASE="ghcr.io/${{ needs.build-and-push.outputs.owner_lc }}/bnu-admission-chatbot-nginx"
-          REGISTRY_USERNAME="${{ github.actor }}"
-          REGISTRY_PASSWORD="${{ secrets.GHCR_PAT }}"
+          APP_IMAGE_BASE="${{ secrets.TCR_REGISTRY }}/${{ secrets.TCR_NAMESPACE }}/bnu-admission-chatbot-app"
+          NGINX_IMAGE_BASE="${{ secrets.TCR_REGISTRY }}/${{ secrets.TCR_NAMESPACE }}/bnu-admission-chatbot-nginx"
+          REGISTRY_USERNAME="${{ secrets.TCR_USERNAME }}"
+          REGISTRY_PASSWORD="${{ secrets.TCR_PASSWORD }}"
 
           ssh "${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}" \
             "cd '${{ env.DEPLOY_PATH }}' && chmod +x scripts/*.sh && \
