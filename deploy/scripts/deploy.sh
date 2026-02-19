@@ -7,6 +7,22 @@ ENV_FILE="${ROOT_DIR}/.env"
 CURRENT_RELEASE_FILE="${ROOT_DIR}/.current_release"
 PREVIOUS_RELEASE_FILE="${ROOT_DIR}/.previous_release"
 
+DOCKER_CMD="docker"
+
+ensure_docker_access() {
+  if docker info >/dev/null 2>&1; then
+    DOCKER_CMD="docker"
+    return
+  fi
+  if sudo -n docker info >/dev/null 2>&1; then
+    DOCKER_CMD="sudo docker"
+    return
+  fi
+
+  echo "[deploy] cannot access docker daemon. Ensure deploy user is in docker group or has passwordless sudo for docker." >&2
+  exit 1
+}
+
 if [[ ! -f "${ENV_FILE}" ]]; then
   echo "[deploy] ${ENV_FILE} not found. Copy deploy/.env.example to deploy/.env and fill real values." >&2
   exit 1
@@ -16,13 +32,23 @@ set -a
 source "${ENV_FILE}"
 set +a
 
-required_vars=(GHCR_USERNAME GHCR_TOKEN APP_IMAGE NGINX_IMAGE IMAGE_TAG)
+required_vars=(APP_IMAGE NGINX_IMAGE IMAGE_TAG)
 for name in "${required_vars[@]}"; do
   if [[ -z "${!name:-}" ]]; then
     echo "[deploy] missing required env: ${name}" >&2
     exit 1
   fi
 done
+
+registry_from_image() {
+  local image_ref="$1"
+  local first_part="${image_ref%%/*}"
+  if [[ "${first_part}" == *.* || "${first_part}" == *:* || "${first_part}" == "localhost" ]]; then
+    echo "${first_part}"
+  else
+    echo "docker.io"
+  fi
+}
 
 if [[ -f "${CURRENT_RELEASE_FILE}" ]]; then
   PREVIOUS_TAG="$(cat "${CURRENT_RELEASE_FILE}")"
@@ -31,7 +57,7 @@ else
 fi
 
 compose() {
-  docker compose --env-file "${ENV_FILE}" -f "${COMPOSE_FILE}" "$@"
+  ${DOCKER_CMD} compose --env-file "${ENV_FILE}" -f "${COMPOSE_FILE}" "$@"
 }
 
 wait_for_service_healthy() {
@@ -48,7 +74,7 @@ wait_for_service_healthy() {
 
   while (( waited < timeout )); do
     local status
-    status="$(docker inspect --format='{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' "${container_id}")"
+    status="$(${DOCKER_CMD} inspect --format='{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' "${container_id}")"
     if [[ "${status}" == "healthy" || "${status}" == "running" ]]; then
       return 0
     fi
@@ -71,8 +97,17 @@ rollback_to_previous() {
   IMAGE_TAG="${PREVIOUS_TAG}" compose ps
 }
 
-echo "[deploy] docker login ghcr.io"
-echo "${GHCR_TOKEN}" | docker login ghcr.io -u "${GHCR_USERNAME}" --password-stdin
+ensure_docker_access
+REGISTRY_HOST="$(registry_from_image "${APP_IMAGE}")"
+REGISTRY_USERNAME="${REGISTRY_USERNAME:-${GHCR_USERNAME:-}}"
+REGISTRY_PASSWORD="${REGISTRY_PASSWORD:-${GHCR_TOKEN:-}}"
+
+if [[ -n "${REGISTRY_USERNAME}" && -n "${REGISTRY_PASSWORD}" ]]; then
+  echo "[deploy] docker login ${REGISTRY_HOST}"
+  echo "${REGISTRY_PASSWORD}" | ${DOCKER_CMD} login "${REGISTRY_HOST}" -u "${REGISTRY_USERNAME}" --password-stdin
+else
+  echo "[deploy] skip docker login (REGISTRY_USERNAME/REGISTRY_PASSWORD not provided)"
+fi
 
 echo "[deploy] pulling target images"
 compose pull app worker nginx

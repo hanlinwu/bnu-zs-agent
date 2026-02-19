@@ -7,6 +7,22 @@ ENV_FILE="${ROOT_DIR}/.env"
 CURRENT_RELEASE_FILE="${ROOT_DIR}/.current_release"
 PREVIOUS_RELEASE_FILE="${ROOT_DIR}/.previous_release"
 
+DOCKER_CMD="docker"
+
+ensure_docker_access() {
+  if docker info >/dev/null 2>&1; then
+    DOCKER_CMD="docker"
+    return
+  fi
+  if sudo -n docker info >/dev/null 2>&1; then
+    DOCKER_CMD="sudo docker"
+    return
+  fi
+
+  echo "[rollback] cannot access docker daemon. Ensure deploy user is in docker group or has passwordless sudo for docker." >&2
+  exit 1
+}
+
 if [[ ! -f "${ENV_FILE}" ]]; then
   echo "[rollback] ${ENV_FILE} not found" >&2
   exit 1
@@ -24,8 +40,10 @@ if [[ -z "${ROLLBACK_TAG}" ]]; then
 fi
 
 compose() {
-  docker compose --env-file "${ENV_FILE}" -f "${COMPOSE_FILE}" "$@"
+  ${DOCKER_CMD} compose --env-file "${ENV_FILE}" -f "${COMPOSE_FILE}" "$@"
 }
+
+ensure_docker_access
 
 echo "[rollback] rolling back to ${ROLLBACK_TAG}"
 IMAGE_TAG="${ROLLBACK_TAG}" compose up -d app worker nginx

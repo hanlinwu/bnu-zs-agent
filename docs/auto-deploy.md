@@ -26,6 +26,12 @@
 - `DEPLOY_SSH_KEY`：用于登录服务器的私钥（建议专用 deploy key）
 - `GHCR_PAT`：用于服务器拉取 GHCR 镜像的 Token（至少 `read:packages`）
 
+可选（腾讯云 TCR，推荐腾讯云服务器配置）：
+- `TCR_REGISTRY`：如 `ccr.ccs.tencentyun.com`
+- `TCR_NAMESPACE`：TCR 命名空间
+- `TCR_USERNAME`：TCR 用户名
+- `TCR_PASSWORD`：TCR 密码/令牌
+
 ## 3. 自动化流程
 
 ### CI（`.github/workflows/ci.yml`）
@@ -39,7 +45,8 @@
 - 执行顺序：
   1. 质量门禁（后端测试 + 前端构建）
   2. 构建并推送镜像到 GHCR（`app`、`nginx`）
-  3. SSH 到服务器执行 `deploy/scripts/deploy.sh`
+  3. 若配置了 TCR Secrets，则额外推送到 TCR
+  4. SSH 到服务器执行 `deploy/scripts/deploy.sh`（优先使用 TCR 镜像，否则回退 GHCR）
 
 部署脚本行为：
 - `docker login ghcr.io`
