@@ -38,6 +38,8 @@ httpx==0.28.1
 # Utils
 python-jose[cryptography]==3.3.0
 pyahocorasick==2.1.0
+alibabacloud-dypnsapi20170525==2.0.0
+alibabacloud-tea-openapi==0.4.3
 
 # Testing
 pytest==8.3.4

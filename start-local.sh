@@ -111,13 +111,60 @@ setup_backend() {
 
     cd "$SERVER_DIR"
 
-    # 创建 .env（如果不存在），将连接地址改为 localhost
-    if [ ! -f .env ]; then
-        cp .env.example .env
-        sed -i 's|@db:|@localhost:|g' .env
-        sed -i 's|redis://redis:|redis://localhost:|g' .env
-        info "已创建 server/.env（连接地址已改为 localhost）"
+    # 生成最小必要 .env（保留短信相关配置）
+    local EXISTING_ENV=".env"
+    local TMP_ENV=".env.minimal.tmp"
+    local SMS_MOCK_VALUE="true"
+    local SMS_ALIYUN_ACCESS_KEY_ID_VALUE=""
+    local SMS_ALIYUN_ACCESS_KEY_SECRET_VALUE=""
+    local SMS_ALIYUN_SIGN_NAME_VALUE=""
+    local SMS_ALIYUN_TEMPLATE_CODE_VALUE=""
+    local SMS_ALIYUN_TEMPLATE_MIN_VALUE="5"
+    local SMS_ALIYUN_SCHEME_NAME_VALUE=""
+    local SMS_ALIYUN_ENDPOINT_VALUE="dypnsapi.aliyuncs.com"
+
+    read_env_value() {
+        local key="$1"
+        local file="$2"
+        if [ ! -f "$file" ]; then
+            return
+        fi
+        grep -E "^${key}=" "$file" | tail -n 1 | cut -d'=' -f2-
+    }
+
+    if [ -f "$EXISTING_ENV" ]; then
+        SMS_MOCK_VALUE="$(read_env_value SMS_MOCK "$EXISTING_ENV")"
+        SMS_ALIYUN_ACCESS_KEY_ID_VALUE="$(read_env_value SMS_ALIYUN_ACCESS_KEY_ID "$EXISTING_ENV")"
+        SMS_ALIYUN_ACCESS_KEY_SECRET_VALUE="$(read_env_value SMS_ALIYUN_ACCESS_KEY_SECRET "$EXISTING_ENV")"
+        SMS_ALIYUN_SIGN_NAME_VALUE="$(read_env_value SMS_ALIYUN_SIGN_NAME "$EXISTING_ENV")"
+        SMS_ALIYUN_TEMPLATE_CODE_VALUE="$(read_env_value SMS_ALIYUN_TEMPLATE_CODE "$EXISTING_ENV")"
+        SMS_ALIYUN_TEMPLATE_MIN_VALUE="$(read_env_value SMS_ALIYUN_TEMPLATE_MIN "$EXISTING_ENV")"
+        SMS_ALIYUN_SCHEME_NAME_VALUE="$(read_env_value SMS_ALIYUN_SCHEME_NAME "$EXISTING_ENV")"
+        SMS_ALIYUN_ENDPOINT_VALUE="$(read_env_value SMS_ALIYUN_ENDPOINT "$EXISTING_ENV")"
     fi
+
+    SMS_MOCK_VALUE="${SMS_MOCK_VALUE:-true}"
+    SMS_ALIYUN_TEMPLATE_MIN_VALUE="${SMS_ALIYUN_TEMPLATE_MIN_VALUE:-5}"
+    SMS_ALIYUN_ENDPOINT_VALUE="${SMS_ALIYUN_ENDPOINT_VALUE:-dypnsapi.aliyuncs.com}"
+
+    cat > "$TMP_ENV" <<EOF
+DATABASE_URL=postgresql+asyncpg://postgres:postgres@localhost:5432/bnu_admission
+REDIS_URL=redis://localhost:6379/0
+JWT_SECRET_KEY=change-me-in-production
+JWT_ALGORITHM=HS256
+SMS_MOCK=${SMS_MOCK_VALUE}
+SMS_ALIYUN_ACCESS_KEY_ID=${SMS_ALIYUN_ACCESS_KEY_ID_VALUE}
+SMS_ALIYUN_ACCESS_KEY_SECRET=${SMS_ALIYUN_ACCESS_KEY_SECRET_VALUE}
+SMS_ALIYUN_SIGN_NAME=${SMS_ALIYUN_SIGN_NAME_VALUE}
+SMS_ALIYUN_TEMPLATE_CODE=${SMS_ALIYUN_TEMPLATE_CODE_VALUE}
+SMS_ALIYUN_TEMPLATE_MIN=${SMS_ALIYUN_TEMPLATE_MIN_VALUE}
+SMS_ALIYUN_SCHEME_NAME=${SMS_ALIYUN_SCHEME_NAME_VALUE}
+SMS_ALIYUN_ENDPOINT=${SMS_ALIYUN_ENDPOINT_VALUE}
+CELERY_BROKER_URL=redis://localhost:6379/1
+CELERY_RESULT_BACKEND=redis://localhost:6379/2
+EOF
+    mv "$TMP_ENV" "$EXISTING_ENV"
+    info "已写入最小 server/.env（保留短信配置）"
 
     # 创建虚拟环境
     if [ ! -d .venv ]; then
@@ -167,8 +214,15 @@ setup_frontend() {
     cd "$CLIENT_DIR"
 
     if [ ! -f .env ]; then
-        cp .env.example .env
-        info "已创建 client/.env"
+        if [ -f .env.example ]; then
+            cp .env.example .env
+            info "已创建 client/.env"
+        else
+            cat > .env <<'EOF'
+VITE_API_BASE=/api/v1
+EOF
+            warn "未找到 client/.env.example，已创建最小 client/.env"
+        fi
     fi
 
     if [ ! -d node_modules ]; then
@@ -208,6 +262,11 @@ start_services() {
     # 等待后端启动
     sleep 3
 
+    local SMS_STATUS="真实短信模式"
+    if grep -E '^SMS_MOCK=true$' "$SERVER_DIR/.env" >/dev/null 2>&1; then
+        SMS_STATUS="Mock 模式 (验证码 123456)"
+    fi
+
     echo ""
     info "=========================================="
     info "  所有服务已启动"
@@ -217,7 +276,7 @@ start_services() {
     info "  API 文档:     http://localhost:8001/api/docs"
     info ""
     info "  默认管理员:   admin / admin123"
-    info "  短信验证码:   123456 (Mock 模式)"
+    info "  短信配置:     ${SMS_STATUS}"
     info "=========================================="
     info "  按 Ctrl+C 停止所有服务"
     echo ""

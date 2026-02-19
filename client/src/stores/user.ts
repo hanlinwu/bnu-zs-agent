@@ -22,6 +22,13 @@ export const useUserStore = defineStore('user', () => {
   async function login(phone: string, code: string, nickname?: string, role?: string) {
     const res = await axios.post('/api/v1/auth/login', { phone, code, nickname, user_role: role })
     const data = res.data
+    if (!data?.success || !data?.token) {
+      const error = new Error(data?.message || '登录失败，请检查验证码') as Error & {
+        response?: { data?: { message?: string } }
+      }
+      error.response = { data: { message: data?.message || '登录失败，请检查验证码' } }
+      throw error
+    }
     token.value = data.token
     userInfo.value = data.user
     localStorage.setItem('token', data.token)

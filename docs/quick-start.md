@@ -51,6 +51,14 @@ JWT_SECRET_KEY=your-random-secret-string
 # 关闭短信 mock（接入真实短信服务时）
 SMS_MOCK=false
 
+# 阿里云 Dypns 短信认证
+SMS_ALIYUN_ACCESS_KEY_ID=LTAIxxxxxxxx
+SMS_ALIYUN_ACCESS_KEY_SECRET=xxxxxxxx
+SMS_ALIYUN_SIGN_NAME=北京师范大学
+SMS_ALIYUN_TEMPLATE_CODE=SMS_123456789
+SMS_ALIYUN_SCHEME_NAME=
+SMS_ALIYUN_ENDPOINT=dypnsapi.aliyuncs.com
+
 # 审计日志 SQLite 分片目录（建议挂载持久卷）
 # 默认 /data/audit_logs，若不可写会自动回退到可写目录
 AUDIT_SQLITE_DIR=/data/audit_logs

@@ -2,7 +2,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env")
+    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
     # App
     APP_NAME: str = "BNU Admission Chatbot"
@@ -23,6 +23,15 @@ class Settings(BaseSettings):
 
     # SMS
     SMS_MOCK: bool = True
+
+    # Aliyun Dypns SMS Verify
+    SMS_ALIYUN_ACCESS_KEY_ID: str = ""
+    SMS_ALIYUN_ACCESS_KEY_SECRET: str = ""
+    SMS_ALIYUN_SIGN_NAME: str = ""
+    SMS_ALIYUN_TEMPLATE_CODE: str = ""
+    SMS_ALIYUN_TEMPLATE_MIN: str = "5"
+    SMS_ALIYUN_SCHEME_NAME: str = ""
+    SMS_ALIYUN_ENDPOINT: str = "dypnsapi.aliyuncs.com"
 
     # LLM
     LLM_PRIMARY_PROVIDER: str = "qwen"

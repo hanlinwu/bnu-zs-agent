@@ -167,14 +167,17 @@ async function handleSendCode() {
 
   smsSending.value = true
   try {
-    await sendSmsCode(phone.value)
+    const res = await sendSmsCode(phone.value)
+    if (!res?.data?.success) {
+      throw new Error(res?.data?.message || '验证码发送失败，请稍后重试')
+    }
     ElMessage.success('验证码已发送，请注意查收')
     codeSent.value = true
     startCountdown()
     // Auto-focus SMS code input after transition
     nextTick(() => smsCodeRef.value?.focus())
   } catch (error: any) {
-    const msg = error?.response?.data?.message || '验证码发送失败，请稍后重试'
+    const msg = error?.response?.data?.message || error?.message || '验证码发送失败，请稍后重试'
     ElMessage.error(msg)
   } finally {
     smsSending.value = false

@@ -3,6 +3,15 @@ import { ElMessage } from 'element-plus'
 import router from '@/router'
 
 let isRedirecting = false
+let last429NoticeAt = 0
+
+function parseRetryAfterSeconds(value?: string): number {
+  const parsed = Number(value)
+  if (Number.isFinite(parsed) && parsed > 0) {
+    return Math.max(1, Math.floor(parsed))
+  }
+  return 2
+}
 
 /**
  * Handle 401 unauthorized — clear token and redirect to login.
@@ -46,8 +55,10 @@ request.interceptors.request.use((config) => {
 /** 响应拦截：统一错误处理 */
 request.interceptors.response.use(
   (response) => response,
-  (error) => {
+  async (error) => {
+    const config = error.config || {}
     const status = error.response?.status
+    const method = String(config.method || '').toLowerCase()
     const message: string = error.response?.data?.detail?.message
       || error.response?.data?.message
       || error.message
@@ -55,6 +66,23 @@ request.interceptors.response.use(
 
     if (status === 401) {
       handleUnauthorized()
+    } else if (status === 429) {
+      const retryAfterRaw = error.response?.headers?.['retry-after'] as string | undefined
+      const retryAfterSeconds = parseRetryAfterSeconds(retryAfterRaw)
+      const now = Date.now()
+
+      if (now - last429NoticeAt > 1200) {
+        ElMessage.warning(`请求较频繁，${retryAfterSeconds} 秒后自动重试`)
+        last429NoticeAt = now
+      }
+
+      if (method === 'get' && !config.__retried429) {
+        config.__retried429 = true
+        await new Promise((resolve) => {
+          setTimeout(resolve, retryAfterSeconds * 1000)
+        })
+        return request(config)
+      }
     } else {
       ElMessage.error(message)
     }

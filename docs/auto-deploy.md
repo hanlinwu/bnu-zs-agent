@@ -85,6 +85,52 @@ BIND_IP=127.0.0.1
 HTTP_PORT=18081
 ```
 
+宿主机 Nginx 配置模板见：`deploy/nginx/host-bnu.conf.example`
+
+强制 HTTPS + Certbot 模板见：`deploy/nginx/host-bnu-https-certbot.conf.example`
+
+使用步骤（宿主机）：
+
+```bash
+sudo cp deploy/nginx/host-bnu.conf.example /etc/nginx/conf.d/bnu.conf
+sudo sed -i 's/admissions.example.com/你的域名/g' /etc/nginx/conf.d/bnu.conf
+sudo nginx -t
+sudo systemctl reload nginx
+```
+
+### 5.2 强制 HTTPS + Certbot（Webroot）
+
+```bash
+# 1) 安装 nginx 和 certbot（Ubuntu）
+sudo apt-get update
+sudo apt-get install -y nginx certbot
+
+# 2) 准备 ACME 验证目录
+sudo mkdir -p /var/www/certbot
+sudo chown -R www-data:www-data /var/www/certbot
+
+# 3) 启用 HTTPS 模板（先替换域名）
+sudo cp deploy/nginx/host-bnu-https-certbot.conf.example /etc/nginx/conf.d/bnu.conf
+sudo sed -i 's/admissions.example.com/你的域名/g' /etc/nginx/conf.d/bnu.conf
+
+# 4) 先申请证书（webroot 模式）
+sudo nginx -t
+sudo systemctl reload nginx
+sudo certbot certonly --webroot -w /var/www/certbot -d 你的域名
+
+# 5) 申请成功后重载 nginx（模板已强制 HTTP -> HTTPS）
+sudo nginx -t
+sudo systemctl reload nginx
+
+# 6) 验证自动续期
+sudo certbot renew --dry-run
+```
+
+说明：
+- 模板已保留 `/.well-known/acme-challenge/` 放行，其余 HTTP 请求会 301 到 HTTPS。
+- 若服务器有防火墙，请确保放行 `80/443`。
+- 若你此前配置里包含 `include /etc/letsencrypt/options-ssl-nginx.conf;` 且文件不存在，会导致 `nginx -t` 失败。可改用本仓库最新 HTTPS 模板（已去除该硬依赖）。
+
 ## 6. 服务器首次初始化命令清单（Ubuntu 22.04/24.04）
 
 ### 6.1 安装 Docker + Compose 插件
