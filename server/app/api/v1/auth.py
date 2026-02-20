@@ -16,6 +16,7 @@ from app.schemas.user import (
 )
 from app.services.sms_service import send_sms_code
 from app.services.auth_service import login_or_register
+from app.services.request_ip_service import get_client_ip
 
 router = APIRouter()
 
@@ -30,7 +31,7 @@ async def api_send_sms(body: SmsSendRequest):
 @router.post("/login", response_model=LoginResponse)
 async def api_login(body: LoginRequest, request: Request, db: AsyncSession = Depends(get_db)):
     """短信验证码登录/注册"""
-    ip = request.client.host if request.client else None
+    ip = get_client_ip(request)
     result = await login_or_register(
         phone=body.phone,
         code=body.code,

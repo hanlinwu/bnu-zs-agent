@@ -10,6 +10,7 @@ from app.core.exceptions import ForbiddenError
 from app.core.security import create_access_token
 from app.models.user import User
 from app.models.role import UserRole, Role
+from app.services.ip_location_service import detect_province_by_ip
 from app.services.sms_service import verify_sms_code
 
 
@@ -65,6 +66,9 @@ async def login_or_register(
     now = datetime.now(timezone.utc)
     user.last_login_at = now
     user.last_login_ip = ip
+    detected_province = await detect_province_by_ip(ip)
+    if detected_province:
+        user.province = detected_province
     user.token_expire_at = now + expire_delta
 
     await db.commit()

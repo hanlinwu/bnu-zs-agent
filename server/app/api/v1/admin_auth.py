@@ -22,6 +22,7 @@ from app.schemas.admin import (
     AdminBindPhoneSendRequest,
     AdminBindPhoneConfirmRequest,
 )
+from app.services.request_ip_service import get_client_ip
 from app.services.sms_service import send_sms_code, verify_sms_code
 
 router = APIRouter()
@@ -134,7 +135,7 @@ async def admin_bind_phone_confirm(
 
     now = datetime.now(timezone.utc)
     admin.last_login_at = now
-    admin.last_login_ip = request.client.host if request.client else None
+    admin.last_login_ip = get_client_ip(request)
     admin.token_expire_at = now + expire_delta
     await db.commit()
 
@@ -154,7 +155,7 @@ async def admin_send_sms_code(
     if not admin or admin.status != "active" or not verify_password(body.password, admin.password_hash):
         raise UnauthorizedError("用户名或密码错误")
 
-    current_ip = request.client.host if request.client else None
+    current_ip = get_client_ip(request)
     now = datetime.now(timezone.utc)
     if not _need_phone_sms_verification(admin, current_ip, now):
         return {"success": True, "required": False, "message": "当前登录无需手机号验证"}
@@ -199,7 +200,7 @@ async def admin_login(body: AdminLoginRequest, request: Request, db: AsyncSessio
             raise UnauthorizedError("MFA 验证码错误")
 
     # Verify phone SMS code if risk check requires
-    current_ip = request.client.host if request.client else None
+    current_ip = get_client_ip(request)
     now = datetime.now(timezone.utc)
     if _need_phone_sms_verification(admin, current_ip, now):
         if not admin.phone:

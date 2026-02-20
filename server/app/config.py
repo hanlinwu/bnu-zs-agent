@@ -11,6 +11,8 @@ class Settings(BaseSettings):
     BUILD_TIME: str = ""
     DEBUG: bool = False
     API_V1_PREFIX: str = "/api/v1"
+    TRUST_PROXY_HEADERS: bool = True
+    TRUSTED_PROXY_CIDRS: str = "127.0.0.1/32,::1/128,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"
 
     # Database
     DATABASE_URL: str = "postgresql+asyncpg://postgres:postgres@db:5432/bnu_admission"
@@ -28,6 +30,12 @@ class Settings(BaseSettings):
 
     # SMS
     SMS_MOCK: bool = True
+
+    # IP geolocation
+    IP_GEO_LOOKUP_ENABLED: bool = True
+    IP_GEO_LOOKUP_TIMEOUT_SEC: float = 2.0
+    IP_GEO_LOOKUP_PRIMARY_URL: str = "http://ip-api.com/json/{ip}?lang=zh-CN"
+    IP_GEO_LOOKUP_SECONDARY_URL: str = "https://ipwho.is/{ip}"
 
     # Aliyun Dypns SMS Verify
     SMS_ALIYUN_ACCESS_KEY_ID: str = ""

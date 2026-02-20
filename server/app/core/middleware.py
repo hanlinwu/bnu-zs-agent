@@ -1,6 +1,7 @@
 """Application middleware: audit logging, rate limiting."""
 
 import asyncio
+import re
 import time
 import uuid
 from typing import Any
@@ -12,6 +13,7 @@ from starlette.responses import Response, JSONResponse
 from app.config import settings
 from app.core.security import verify_token
 from app.services.audit_sqlite_service import append_audit_log
+from app.services.request_ip_service import get_client_ip
 
 
 class AuditLogMiddleware(BaseHTTPMiddleware):
@@ -104,7 +106,7 @@ class AuditLogMiddleware(BaseHTTPMiddleware):
                 "action": action,
                 "resource": resource,
                 "resource_id": None,
-                "ip_address": request.client.host if request.client else None,
+                "ip_address": get_client_ip(request),
                 "user_agent": request.headers.get("user-agent"),
                 "detail": detail,
             }
@@ -123,6 +125,7 @@ class AuditLogMiddleware(BaseHTTPMiddleware):
         if request.url.path.startswith("/api/"):
             import logging
             logger = logging.getLogger("audit")
+            client_ip = get_client_ip(request) or "unknown"
             logger.info(
                 "request_id=%s method=%s path=%s status=%s duration_ms=%s ip=%s",
                 request.state.request_id,
@@ -130,7 +133,7 @@ class AuditLogMiddleware(BaseHTTPMiddleware):
                 request.url.path,
                 response.status_code,
                 duration_ms,
-                request.client.host if request.client else "unknown",
+                client_ip,
             )
 
         try:
@@ -143,29 +146,90 @@ class AuditLogMiddleware(BaseHTTPMiddleware):
 
 
 class RateLimitMiddleware(BaseHTTPMiddleware):
-    """Redis-based IP rate limiting (120 requests/minute)."""
+    """Redis-based layered rate limiting.
 
-    RATE_LIMIT = 120
+    Priority:
+    - Authenticated requests: limit by actor id (user/admin), reduce NAT collateral.
+    - Anonymous requests: limit by ip + path.
+    - Global IP guard: a wider cap to protect from floods.
+    """
+
+    ACTOR_RATE_LIMIT = 180
+    ANON_RATE_LIMIT = 90
+    IP_BURST_LIMIT = 600
     WINDOW_SECONDS = 60
+    _UUID_RE = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$", re.I)
+
+    @classmethod
+    def _normalize_route_key(cls, path: str) -> str:
+        parts: list[str] = []
+        for seg in path.split("/"):
+            if not seg:
+                continue
+            low = seg.lower()
+            if low.isdigit() or cls._UUID_RE.match(low):
+                parts.append(":id")
+            else:
+                parts.append(low)
+        if not parts:
+            return "/"
+        # Keep bounded cardinality.
+        return "/" + "/".join(parts[:6])
+
+    @staticmethod
+    def _extract_actor_key(request: Request) -> str | None:
+        auth = request.headers.get("authorization") or ""
+        if not auth.startswith("Bearer "):
+            return None
+
+        token = auth[7:]
+        try:
+            payload = verify_token(token)
+        except Exception:
+            return None
+
+        subject = payload.get("sub")
+        actor_type = payload.get("type")
+        if not subject or actor_type not in {"user", "admin"}:
+            return None
+        return f"{actor_type}:{subject}"
+
+    async def _hit_limit(self, key: str, limit: int) -> bool:
+        from app.core.redis import redis_client
+
+        current = await redis_client.incr(key)
+        if current == 1:
+            await redis_client.expire(key, self.WINDOW_SECONDS)
+        return current > limit
 
     async def dispatch(self, request: Request, call_next):
         # Skip rate limiting for health checks
         if request.url.path in ("/health",):
             return await call_next(request)
 
-        client_ip = request.client.host if request.client else "unknown"
+        client_ip = get_client_ip(request) or "unknown"
+        actor_key = self._extract_actor_key(request)
+        route_key = self._normalize_route_key(request.url.path)
 
         try:
-            from app.core.redis import redis_client
-            key = f"rate:{client_ip}"
-            current = await redis_client.incr(key)
-            if current == 1:
-                await redis_client.expire(key, self.WINDOW_SECONDS)
-            if current > self.RATE_LIMIT:
+            if await self._hit_limit(f"rate:ipburst:{client_ip}", self.IP_BURST_LIMIT):
                 return JSONResponse(
                     status_code=429,
                     content={"detail": {"code": 429, "message": "请求过于频繁，请稍后再试"}},
                 )
+
+            if actor_key:
+                if await self._hit_limit(f"rate:actor:{actor_key}", self.ACTOR_RATE_LIMIT):
+                    return JSONResponse(
+                        status_code=429,
+                        content={"detail": {"code": 429, "message": "请求过于频繁，请稍后再试"}},
+                    )
+            else:
+                if await self._hit_limit(f"rate:anon:{client_ip}:{route_key}", self.ANON_RATE_LIMIT):
+                    return JSONResponse(
+                        status_code=429,
+                        content={"detail": {"code": 429, "message": "请求过于频繁，请稍后再试"}},
+                    )
         except Exception:
             # If Redis is unavailable, allow the request through
             pass
