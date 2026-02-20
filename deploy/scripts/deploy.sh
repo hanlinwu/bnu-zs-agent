@@ -114,7 +114,7 @@ health_check_with_retry() {
 
   while (( waited < timeout )); do
     local http_code
-    http_code="$(curl -sS --max-time 10 -o /dev/null -w '%{http_code}' "${url}" || true)"
+    http_code="$(curl -sS --max-time 10 -o /dev/null -w '%{http_code}' "${url}" 2>/dev/null || true)"
     if [[ "${http_code}" =~ ^2[0-9][0-9]$ || "${http_code}" =~ ^3[0-9][0-9]$ ]]; then
       return 0
     fi
@@ -123,6 +123,28 @@ health_check_with_retry() {
   done
 
   return 1
+}
+
+persist_release_metadata() {
+  local release_tag="$1"
+
+  if [[ -f "${CURRENT_RELEASE_FILE}" ]]; then
+    if ! cp "${CURRENT_RELEASE_FILE}" "${PREVIOUS_RELEASE_FILE}"; then
+      if sudo -n cp "${CURRENT_RELEASE_FILE}" "${PREVIOUS_RELEASE_FILE}"; then
+        echo "[deploy] metadata copied with sudo: ${PREVIOUS_RELEASE_FILE}"
+      else
+        echo "[deploy] warning: failed to update ${PREVIOUS_RELEASE_FILE} (permission denied or read-only)" >&2
+      fi
+    fi
+  fi
+
+  if ! printf '%s\n' "${release_tag}" > "${CURRENT_RELEASE_FILE}"; then
+    if printf '%s\n' "${release_tag}" | sudo -n tee "${CURRENT_RELEASE_FILE}" >/dev/null; then
+      echo "[deploy] metadata written with sudo: ${CURRENT_RELEASE_FILE}"
+    else
+      echo "[deploy] warning: failed to update ${CURRENT_RELEASE_FILE} (permission denied or read-only)" >&2
+    fi
+  fi
 }
 
 ensure_docker_access
@@ -179,10 +201,7 @@ if ! health_check_with_retry "${HEALTH_URL}" 120 3; then
   exit 1
 fi
 
-if [[ -f "${CURRENT_RELEASE_FILE}" ]]; then
-  cp "${CURRENT_RELEASE_FILE}" "${PREVIOUS_RELEASE_FILE}"
-fi
-echo "${IMAGE_TAG}" > "${CURRENT_RELEASE_FILE}"
+persist_release_metadata "${IMAGE_TAG}"
 
 echo "[deploy] success: ${IMAGE_TAG}"
 compose ps
