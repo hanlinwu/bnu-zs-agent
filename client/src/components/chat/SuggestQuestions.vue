@@ -75,14 +75,14 @@ const icons = ['&#127891;', '&#128218;', '&#127942;', '&#127961;']
 }
 
 .suggest-title {
-  font-size: 22px;
+  font-size: 1.375rem;
   font-weight: 700;
   color: var(--text-primary, #1a1a2e);
   margin: 0 0 8px;
 }
 
 .suggest-subtitle {
-  font-size: 14px;
+  font-size: 0.875rem;
   color: var(--text-secondary, #5a5a72);
   margin: 0;
 }
@@ -121,14 +121,14 @@ const icons = ['&#127891;', '&#128218;', '&#127942;', '&#127961;']
 }
 
 .card-icon {
-  font-size: 20px;
+  font-size: 1.25rem;
   flex-shrink: 0;
   line-height: 1;
   margin-top: 1px;
 }
 
 .card-text {
-  font-size: 14px;
+  font-size: 0.875rem;
   color: var(--text-primary, #1a1a2e);
   line-height: 1.5;
 }

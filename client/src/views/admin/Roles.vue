@@ -341,14 +341,14 @@ onMounted(() => {
 }
 
 .page-title {
-  font-size: 22px;
+  font-size: 1.375rem;
   font-weight: 700;
   color: var(--text-primary, #1A1A2E);
   margin: 0 0 4px;
 }
 
 .page-desc {
-  font-size: 14px;
+  font-size: 0.875rem;
   color: var(--text-secondary, #5A5A72);
   margin: 0;
 }

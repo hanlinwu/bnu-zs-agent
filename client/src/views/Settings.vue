@@ -152,7 +152,7 @@ onMounted(() => {
   margin-bottom: 24px;
 
   h2 {
-    font-size: 20px;
+    font-size: 1.25rem;
     font-weight: 700;
     color: var(--color-text-primary);
     margin: 0;
@@ -168,7 +168,7 @@ onMounted(() => {
 }
 
 .section-title {
-  font-size: 15px;
+  font-size: 0.9375rem;
   font-weight: 600;
   color: var(--color-text-primary);
   margin: 0 0 16px;
@@ -197,19 +197,19 @@ onMounted(() => {
   gap: 2px;
 
   span:first-child {
-    font-size: 14px;
+    font-size: 0.875rem;
     font-weight: 500;
     color: var(--color-text-primary);
   }
 }
 
 .setting-desc {
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--color-text-secondary);
 }
 
 .setting-value {
-  font-size: 14px;
+  font-size: 0.875rem;
   color: var(--color-text-secondary);
 }
 
@@ -227,14 +227,14 @@ onMounted(() => {
 
 .about-info {
   p {
-    font-size: 14px;
+    font-size: 0.875rem;
     color: var(--color-text-primary);
     margin: 0 0 4px;
   }
 }
 
 .about-copyright {
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--color-text-secondary) !important;
 }
 </style>

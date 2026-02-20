@@ -667,7 +667,7 @@ onMounted(async () => {
 }
 
 .kb-sidebar-title {
-  font-size: 16px;
+  font-size: 1rem;
   font-weight: 600;
   color: var(--text-primary, #1A1A2E);
   margin: 0;
@@ -713,7 +713,7 @@ onMounted(async () => {
 }
 
 .kb-item-name {
-  font-size: 14px;
+  font-size: 0.875rem;
   color: var(--text-primary, #1A1A2E);
   white-space: nowrap;
   overflow: hidden;
@@ -728,7 +728,7 @@ onMounted(async () => {
 }
 
 .kb-item-count {
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--text-secondary, #5A5A72);
 }
 
@@ -744,7 +744,7 @@ onMounted(async () => {
   padding: 40px 16px;
   text-align: center;
   color: var(--text-secondary, #5A5A72);
-  font-size: 14px;
+  font-size: 0.875rem;
 
   p {
     margin: 0 0 12px;
@@ -773,14 +773,14 @@ onMounted(async () => {
 }
 
 .kb-content-title {
-  font-size: 22px;
+  font-size: 1.375rem;
   font-weight: 700;
   color: var(--text-primary, #1A1A2E);
   margin: 0;
 }
 
 .kb-content-count {
-  font-size: 14px;
+  font-size: 0.875rem;
   color: var(--text-secondary, #5A5A72);
 }
 
@@ -824,7 +824,7 @@ onMounted(async () => {
 
 .upload-text {
   color: var(--text-secondary, #5A5A72);
-  font-size: 14px;
+  font-size: 0.875rem;
 
   em {
     color: var(--bnu-blue, #003DA5);
@@ -834,7 +834,7 @@ onMounted(async () => {
 
 .upload-tip {
   color: var(--text-secondary, #9E9EB3);
-  font-size: 12px;
+  font-size: 0.75rem;
   margin-top: 8px;
 }
 
@@ -849,7 +849,7 @@ onMounted(async () => {
 }
 
 .batch-count {
-  font-size: 13px;
+  font-size: 0.8125rem;
   color: var(--text-primary, #1A1A2E);
   font-weight: 500;
 }
@@ -870,7 +870,7 @@ onMounted(async () => {
 }
 
 .kb-empty-state-text {
-  font-size: 16px;
+  font-size: 1rem;
   color: var(--text-secondary, #5A5A72);
   margin: 0 0 16px;
 }

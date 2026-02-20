@@ -310,14 +310,14 @@ onMounted(() => {
 }
 
 .page-title {
-  font-size: 22px;
+  font-size: 1.375rem;
   font-weight: 700;
   color: var(--text-primary, #1A1A2E);
   margin: 0 0 4px;
 }
 
 .page-desc {
-  font-size: 14px;
+  font-size: 0.875rem;
   color: var(--text-secondary, #5A5A72);
   margin: 0;
 }
@@ -356,7 +356,7 @@ onMounted(() => {
 }
 
 .log-time {
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-family: monospace;
   color: var(--text-secondary, #5A5A72);
 }
@@ -375,7 +375,7 @@ onMounted(() => {
   border-radius: 8px;
   background: var(--bg-secondary, #F4F6FA);
   color: var(--text-primary, #1A1A2E);
-  font-size: 13px;
+  font-size: 0.8125rem;
   line-height: 1.6;
   white-space: pre-wrap;
   word-break: break-word;

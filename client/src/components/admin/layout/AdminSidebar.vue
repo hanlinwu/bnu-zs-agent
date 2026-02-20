@@ -177,20 +177,20 @@ function handleMenuSelect(index: string) {
 
 .logo-text-icon {
   color: #ffffff;
-  font-size: 16px;
+  font-size: 1rem;
   font-weight: 700;
 }
 
 .logo-title {
   color: #ffffff;
-  font-size: 15px;
+  font-size: 0.9375rem;
   font-weight: 600;
   white-space: nowrap;
 }
 
 .menu-group-label {
   padding: 16px 20px 4px;
-  font-size: 11px;
+  font-size: 0.6875rem;
   font-weight: 600;
   color: rgba(255, 255, 255, 0.35);
   text-transform: uppercase;
@@ -240,7 +240,7 @@ function handleMenuSelect(index: string) {
     }
 
     .el-icon {
-      font-size: 18px;
+      font-size: 1.125rem;
     }
   }
 

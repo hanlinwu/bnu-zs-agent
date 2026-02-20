@@ -166,7 +166,7 @@ defineExpose({
     border: 2px solid var(--color-border);
     border-radius: var(--radius-md);
     text-align: center;
-    font-size: 22px;
+    font-size: 1.375rem;
     font-weight: 600;
     color: var(--color-text-primary);
     background-color: var(--color-bg-primary);
@@ -202,7 +202,7 @@ defineExpose({
     &__box {
       width: 40px;
       height: 48px;
-      font-size: 20px;
+      font-size: 1.25rem;
     }
   }
 }

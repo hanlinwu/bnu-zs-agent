@@ -226,7 +226,7 @@ function handleContentClick(e: MouseEvent) {
 .bubble-content {
   padding: 12px 16px;
   border-radius: 18px;
-  font-size: 14px;
+  font-size: 0.875rem;
   line-height: 1.7;
   word-break: break-word;
 
@@ -262,7 +262,7 @@ function handleContentClick(e: MouseEvent) {
     width: 100%;
     border-collapse: collapse;
     margin: 8px 0;
-    font-size: 13px;
+    font-size: 0.8125rem;
   }
 
   :deep(th), :deep(td) {
@@ -294,7 +294,7 @@ function handleContentClick(e: MouseEvent) {
     border-radius: 8px;
     overflow-x: auto;
     margin: 8px 0;
-    font-size: 13px;
+    font-size: 0.8125rem;
     line-height: 1.5;
 
     code {
@@ -307,7 +307,7 @@ function handleContentClick(e: MouseEvent) {
     padding: 2px 6px;
     border-radius: 4px;
     font-family: 'Menlo', 'Consolas', monospace;
-    font-size: 13px;
+    font-size: 0.8125rem;
   }
 
   .is-user & :deep(.md-inline-code) {
@@ -351,7 +351,7 @@ function handleContentClick(e: MouseEvent) {
 }
 
 .bubble-time {
-  font-size: 11px;
+  font-size: 0.6875rem;
   color: var(--text-secondary, #5a5a72);
   margin-top: 4px;
   opacity: 0;

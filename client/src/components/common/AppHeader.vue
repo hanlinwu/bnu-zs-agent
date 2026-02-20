@@ -160,7 +160,7 @@ function handleFontSize(size: number) {
 }
 
 .logo-text {
-  font-size: 18px;
+  font-size: 1.125rem;
   font-weight: 700;
   color: var(--bnu-blue, #003DA5);
   letter-spacing: 1px;
@@ -177,7 +177,7 @@ function handleFontSize(size: number) {
 }
 
 .conversation-title {
-  font-size: 15px;
+  font-size: 0.9375rem;
   font-weight: 500;
   color: var(--text-primary, #1a1a2e);
   max-width: 300px;
@@ -195,7 +195,7 @@ function handleFontSize(size: number) {
 }
 
 .title-edit-input {
-  font-size: 15px;
+  font-size: 0.9375rem;
   font-weight: 500;
   color: var(--text-primary, #1a1a2e);
   background: var(--bg-secondary, #f4f6fa);
@@ -232,7 +232,7 @@ function handleFontSize(size: number) {
 }
 
 .font-size-icon {
-  font-size: 16px;
+  font-size: 1rem;
   font-weight: 700;
   line-height: 1;
 }
@@ -243,7 +243,7 @@ function handleFontSize(size: number) {
 }
 
 .font-size-label {
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--text-secondary, #5a5a72);
   margin-bottom: 8px;
   font-weight: 500;
@@ -256,7 +256,7 @@ function handleFontSize(size: number) {
 
 .font-size-opt {
   padding: 6px 12px;
-  font-size: 13px;
+  font-size: 0.8125rem;
   border-radius: 6px;
   color: var(--text-primary, #1a1a2e);
   background: var(--bg-secondary, #f4f6fa);

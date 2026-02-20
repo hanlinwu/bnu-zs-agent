@@ -134,7 +134,7 @@ watch(content, () => {
   border: none;
   outline: none;
   resize: none;
-  font-size: 14px;
+  font-size: 0.875rem;
   line-height: 22px;
   color: var(--text-primary, #1a1a2e);
   background: transparent;
@@ -159,7 +159,7 @@ watch(content, () => {
 }
 
 .char-count {
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--text-secondary, #9e9eb3);
 
   &.is-over {

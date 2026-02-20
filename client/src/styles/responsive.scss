@@ -72,13 +72,13 @@
 
 // Responsive text
 .text-responsive {
-  font-size: 14px;
+  font-size: rem(14);
 
   @include tablet-up {
-    font-size: 16px;
+    font-size: rem(16);
   }
 
   @include desktop {
-    font-size: 18px;
+    font-size: rem(18);
   }
 }

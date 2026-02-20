@@ -543,7 +543,7 @@ onUnmounted(() => {
 }
 
 .page-title {
-  font-size: 22px;
+  font-size: 1.375rem;
   font-weight: 700;
   color: var(--text-primary, #1A1A2E);
   margin: 0;
@@ -566,7 +566,7 @@ onUnmounted(() => {
 }
 
 .panel-title {
-  font-size: 16px;
+  font-size: 1rem;
   font-weight: 600;
   color: var(--text-primary, #1A1A2E);
   margin: 0 0 16px;
@@ -596,18 +596,18 @@ onUnmounted(() => {
 }
 
 .info-label {
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--text-secondary, #5A5A72);
 }
 
 .info-value {
-  font-size: 14px;
+  font-size: 0.875rem;
   color: var(--text-primary, #1A1A2E);
   font-weight: 500;
 
   &--mono {
     font-family: monospace;
-    font-size: 12px;
+    font-size: 0.75rem;
     word-break: break-all;
   }
 }
@@ -647,14 +647,14 @@ onUnmounted(() => {
   color: var(--text-secondary, #5A5A72);
 
   .processing-icon {
-    font-size: 32px;
+    font-size: 2rem;
     color: var(--bnu-blue, #003DA5);
     margin-bottom: 12px;
   }
 
   p {
     margin: 0;
-    font-size: 14px;
+    font-size: 0.875rem;
   }
 }
 
@@ -699,13 +699,13 @@ onUnmounted(() => {
 }
 
 .chunk-index {
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-weight: 600;
   color: var(--bnu-blue, #003DA5);
 }
 
 .chunk-model {
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--text-secondary, #5A5A72);
   max-width: 180px;
   overflow: hidden;
@@ -714,13 +714,13 @@ onUnmounted(() => {
 }
 
 .chunk-tokens {
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--text-secondary, #5A5A72);
 }
 
 .chunk-content {
   padding: 8px 12px;
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--text-primary, #1A1A2E);
   line-height: 1.5;
   white-space: pre-wrap;
@@ -736,7 +736,7 @@ onUnmounted(() => {
 
 .chunk-detail-loading {
   padding: 10px 12px;
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--text-secondary, #5A5A72);
 }
 
@@ -754,17 +754,17 @@ onUnmounted(() => {
 }
 
 .chunk-modal-model {
-  font-size: 13px;
+  font-size: 0.8125rem;
   color: var(--text-secondary, #5A5A72);
 }
 
 .chunk-modal-tokens {
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--text-secondary, #5A5A72);
 }
 
 .chunk-modal-label {
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--text-secondary, #5A5A72);
 }
 
@@ -774,7 +774,7 @@ onUnmounted(() => {
   padding: 10px 12px;
   max-height: 220px;
   overflow-y: auto;
-  font-size: 13px;
+  font-size: 0.8125rem;
   line-height: 1.6;
   color: var(--text-primary, #1A1A2E);
   white-space: pre-wrap;
@@ -786,14 +786,14 @@ onUnmounted(() => {
   border: 1px dashed var(--border-color, #E2E6ED);
   border-radius: 8px;
   color: var(--text-secondary, #5A5A72);
-  font-size: 12px;
+  font-size: 0.75rem;
 }
 
 .vector-summary {
   display: flex;
   gap: 14px;
   flex-wrap: wrap;
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--text-secondary, #5A5A72);
 }
 
@@ -820,7 +820,7 @@ onUnmounted(() => {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  font-size: 11px;
+  font-size: 0.6875rem;
   color: var(--text-secondary, #5A5A72);
 }
 
@@ -832,7 +832,7 @@ onUnmounted(() => {
 }
 
 .vector-note {
-  font-size: 11px;
+  font-size: 0.6875rem;
   color: var(--text-secondary, #5A5A72);
 }
 
@@ -858,14 +858,14 @@ onUnmounted(() => {
 }
 
 .review-note-reviewer {
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-weight: 500;
   color: var(--text-primary, #1A1A2E);
   margin: 0 0 4px;
 }
 
 .review-note-text {
-  font-size: 13px;
+  font-size: 0.8125rem;
   color: var(--text-secondary, #5A5A72);
   margin: 0;
   line-height: 1.6;

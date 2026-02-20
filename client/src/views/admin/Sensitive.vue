@@ -589,14 +589,14 @@ onMounted(() => {
 }
 
 .page-title {
-  font-size: 22px;
+  font-size: 1.375rem;
   font-weight: 700;
   color: var(--text-primary, #1A1A2E);
   margin: 0 0 4px;
 }
 
 .page-desc {
-  font-size: 14px;
+  font-size: 0.875rem;
   color: var(--text-secondary, #5A5A72);
   margin: 0;
 }
@@ -628,7 +628,7 @@ onMounted(() => {
 }
 
 .panel-title {
-  font-size: 15px;
+  font-size: 0.9375rem;
   font-weight: 600;
   color: var(--text-primary, #1A1A2E);
   margin: 0;
@@ -670,7 +670,7 @@ onMounted(() => {
 .header-stats {
   display: flex;
   gap: 16px;
-  font-size: 13px;
+  font-size: 0.8125rem;
   color: var(--text-secondary, #5A5A72);
 }
 
@@ -701,13 +701,13 @@ onMounted(() => {
 }
 
 .editor-label {
-  font-size: 14px;
+  font-size: 0.875rem;
   font-weight: 500;
   color: var(--text-primary, #1A1A2E);
 }
 
 .editor-hint {
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--text-secondary, #9E9EB3);
 }
 
@@ -740,7 +740,7 @@ onMounted(() => {
 }
 
 .form-hint {
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--text-secondary, #9E9EB3);
   margin-top: 4px;
   line-height: 1.4;
@@ -753,12 +753,12 @@ onMounted(() => {
 }
 
 .file-name {
-  font-size: 13px;
+  font-size: 0.8125rem;
   color: var(--text-primary, #1A1A2E);
 }
 
 .file-hint {
-  font-size: 13px;
+  font-size: 0.8125rem;
   color: var(--text-secondary, #9E9EB3);
 }
 
@@ -766,7 +766,7 @@ onMounted(() => {
   background: var(--bg-secondary, #F4F6FA);
   border-radius: 8px;
   padding: 12px 16px;
-  font-size: 13px;
+  font-size: 0.8125rem;
   color: var(--text-secondary, #5A5A72);
   line-height: 1.6;
 
@@ -796,7 +796,7 @@ onMounted(() => {
 .progress-text {
   min-width: 48px;
   text-align: right;
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--text-secondary, #5A5A72);
 }
 

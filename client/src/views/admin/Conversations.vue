@@ -413,14 +413,14 @@ function handleMessageClick(e: MouseEvent, _msg: AdminMessage) {
 }
 
 .page-title {
-  font-size: 22px;
+  font-size: 1.375rem;
   font-weight: 700;
   color: var(--text-primary, #1A1A2E);
   margin: 0 0 4px;
 }
 
 .page-desc {
-  font-size: 14px;
+  font-size: 0.875rem;
   color: var(--text-secondary, #5A5A72);
   margin: 0;
 }
@@ -470,7 +470,7 @@ function handleMessageClick(e: MouseEvent, _msg: AdminMessage) {
 }
 
 .sub-text {
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--text-secondary, #5A5A72);
 }
 
@@ -504,7 +504,7 @@ function handleMessageClick(e: MouseEvent, _msg: AdminMessage) {
   text-align: center;
   padding: 40px 0;
   color: var(--text-secondary, #5A5A72);
-  font-size: 14px;
+  font-size: 0.875rem;
 }
 
 .message-item {
@@ -534,18 +534,18 @@ function handleMessageClick(e: MouseEvent, _msg: AdminMessage) {
 }
 
 .message-meta {
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--text-secondary, #5A5A72);
 }
 
 .message-time {
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--text-secondary, #5A5A72);
   margin-left: auto;
 }
 
 .message-content {
-  font-size: 13px;
+  font-size: 0.8125rem;
   line-height: 1.45;
   color: var(--text-primary, #1A1A2E);
   word-break: break-word;

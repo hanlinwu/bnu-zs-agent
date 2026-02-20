@@ -153,7 +153,7 @@ function handleTogglePin(conv: Conversation) {
 }
 
 .empty-text {
-  font-size: 14px;
+  font-size: 0.875rem;
   color: var(--text-secondary, #5a5a72);
 }
 
@@ -190,7 +190,7 @@ function handleTogglePin(conv: Conversation) {
 }
 
 .group-label {
-  font-size: 12px;
+  font-size: 0.75rem;
   font-weight: 600;
   color: var(--text-secondary, #5a5a72);
   padding: 8px 12px 4px;

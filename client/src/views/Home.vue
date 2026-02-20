@@ -59,7 +59,7 @@ import QuickActions from '@/components/home/QuickActions.vue'
   a {
     color: rgba(255, 255, 255, 0.7);
     text-decoration: none;
-    font-size: 14px;
+    font-size: 0.875rem;
     transition: color 0.2s;
 
     &:hover {
@@ -75,13 +75,13 @@ import QuickActions from '@/components/home/QuickActions.vue'
 
 .footer-copyright {
   color: rgba(255, 255, 255, 0.5);
-  font-size: 13px;
+  font-size: 0.8125rem;
   margin: 0 0 8px;
 }
 
 .footer-address {
   color: rgba(255, 255, 255, 0.4);
-  font-size: 12px;
+  font-size: 0.75rem;
   margin: 0;
 }
 
@@ -91,7 +91,7 @@ import QuickActions from '@/components/home/QuickActions.vue'
   }
 
   .footer-links a {
-    font-size: 13px;
+    font-size: 0.8125rem;
   }
 
   .footer-divider {

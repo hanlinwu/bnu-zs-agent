@@ -263,14 +263,14 @@ const svgHeight = computed(() => Math.max(100, layout.value.totalHeight))
 }
 
 .node-label {
-  font-size: 12px;
+  font-size: 0.75rem;
   font-weight: 500;
   pointer-events: none;
   user-select: none;
 }
 
 .edge-label {
-  font-size: 10px;
+  font-size: 0.625rem;
   fill: #606266;
   pointer-events: none;
   user-select: none;

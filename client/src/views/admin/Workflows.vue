@@ -580,14 +580,14 @@ onMounted(() => {
 }
 
 .page-title {
-  font-size: 22px;
+  font-size: 1.375rem;
   font-weight: 700;
   color: var(--text-primary, #1A1A2E);
   margin: 0 0 4px;
 }
 
 .page-desc {
-  font-size: 14px;
+  font-size: 0.875rem;
   color: var(--text-secondary, #5A5A72);
   margin: 0;
 }
@@ -605,14 +605,14 @@ onMounted(() => {
 }
 
 .section-title {
-  font-size: 16px;
+  font-size: 1rem;
   font-weight: 600;
   color: var(--text-primary, #1A1A2E);
   margin: 0 0 4px;
 }
 
 .section-desc {
-  font-size: 13px;
+  font-size: 0.8125rem;
   color: var(--text-secondary, #5A5A72);
   margin: 0 0 16px;
 }
@@ -637,7 +637,7 @@ onMounted(() => {
 }
 
 .editor-section-title {
-  font-size: 15px;
+  font-size: 0.9375rem;
   font-weight: 600;
   color: var(--text-primary, #1A1A2E);
   margin: 0 0 12px;

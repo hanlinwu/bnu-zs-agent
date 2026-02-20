@@ -64,6 +64,11 @@ $dark-bubble-assistant-text: #E4E4EC;
 $font-family: 'Source Han Sans SC', 'Noto Sans SC', -apple-system, sans-serif;
 $font-size-base: 16px;
 
+// px to rem conversion (base 16px)
+@function rem($px) {
+  @return #{$px / 16}rem;
+}
+
 // ------------------------------------------------------------------
 // Borders
 // ------------------------------------------------------------------

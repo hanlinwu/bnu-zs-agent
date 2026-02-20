@@ -544,7 +544,7 @@ onMounted(() => {
 
 .page-title {
   margin: 0;
-  font-size: 22px;
+  font-size: 1.375rem;
   font-weight: 600;
   color: #1f2d3d;
 }
@@ -552,13 +552,13 @@ onMounted(() => {
 .page-desc {
   margin: 6px 0 0;
   color: #6b7280;
-  font-size: 14px;
+  font-size: 0.875rem;
 }
 
 .page-version {
   margin: 6px 0 0;
   color: #94a3b8;
-  font-size: 12px;
+  font-size: 0.75rem;
 }
 
 .config-form {
@@ -576,7 +576,7 @@ onMounted(() => {
 
 .section-title {
   margin: 0 0 12px;
-  font-size: 16px;
+  font-size: 1rem;
   color: #1f2d3d;
 }
 
@@ -606,13 +606,13 @@ onMounted(() => {
 }
 
 .graph-node-title {
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-weight: 600;
   fill: #0f172a;
 }
 
 .graph-node-sub {
-  font-size: 12px;
+  font-size: 0.75rem;
   fill: #475569;
 }
 
@@ -632,7 +632,7 @@ onMounted(() => {
 }
 
 .flow-detail__title {
-  font-size: 14px;
+  font-size: 0.875rem;
   font-weight: 600;
   color: #0f172a;
 }
@@ -640,7 +640,7 @@ onMounted(() => {
 .flow-detail__desc {
   margin: 0;
   color: #475569;
-  font-size: 13px;
+  font-size: 0.8125rem;
   line-height: 1.5;
 }
 
@@ -654,7 +654,7 @@ onMounted(() => {
 }
 
 .node-edit-form :deep(.el-form-item__label) {
-  font-size: 13px;
+  font-size: 0.8125rem;
   color: #334155;
 }
 
@@ -663,7 +663,7 @@ onMounted(() => {
 }
 
 .node-edit-form :deep(.el-textarea__inner) {
-  font-size: 13px;
+  font-size: 0.8125rem;
   line-height: 1.5;
 }
 

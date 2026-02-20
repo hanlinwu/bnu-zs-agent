@@ -143,7 +143,7 @@ function handleDelete(e: Event) {
 }
 
 .item-title {
-  font-size: 14px;
+  font-size: 0.875rem;
   color: var(--text-primary, #1a1a2e);
   font-weight: 500;
   overflow: hidden;
@@ -171,7 +171,7 @@ function handleDelete(e: Event) {
 }
 
 .item-time {
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--text-secondary, #5a5a72);
   margin-top: 2px;
 }
@@ -183,7 +183,7 @@ function handleDelete(e: Event) {
 
 .edit-input {
   width: 100%;
-  font-size: 14px;
+  font-size: 0.875rem;
   padding: 4px 8px;
   border: 1px solid var(--bnu-blue, #003DA5);
   border-radius: 4px;

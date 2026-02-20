@@ -333,7 +333,7 @@ function setMessageRef(el: HTMLElement | null, msg: Message) {
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 13px;
+  font-size: 0.8125rem;
   color: var(--text-secondary, #5a5a72);
 
   .loading-icon {
@@ -343,7 +343,7 @@ function setMessageRef(el: HTMLElement | null, msg: Message) {
 }
 
 .load-more-hint {
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--text-secondary, #9e9eb3);
   padding: 4px 12px;
   background: var(--bg-secondary, #f4f6fa);
@@ -405,7 +405,7 @@ function setMessageRef(el: HTMLElement | null, msg: Message) {
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 14px;
+  font-size: 0.875rem;
   color: var(--text-secondary, #5a5a72);
 }
 

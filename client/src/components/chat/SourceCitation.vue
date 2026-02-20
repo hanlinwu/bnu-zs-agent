@@ -50,7 +50,7 @@ function handleClick(source: SourceReference) {
   background: var(--bg-tertiary, #eef1f6);
   border: 1px solid var(--border-color, #e2e6ed);
   border-radius: 12px;
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--text-secondary, #5a5a72);
   cursor: pointer;
   transition: background-color 0.2s, color 0.2s;
@@ -67,7 +67,7 @@ function handleClick(source: SourceReference) {
 }
 
 .source-icon {
-  font-size: 13px;
+  font-size: 0.8125rem;
   flex-shrink: 0;
 }
 

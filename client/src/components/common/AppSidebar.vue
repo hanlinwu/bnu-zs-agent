@@ -159,7 +159,7 @@ function handleSettingsCommand(command: string) {
   width: 100%;
   height: 42px;
   border-radius: 8px;
-  font-size: 14px;
+  font-size: 0.875rem;
   font-weight: 500;
   display: flex;
   align-items: center;
@@ -215,7 +215,7 @@ function handleSettingsCommand(command: string) {
 }
 
 .avatar-fallback {
-  font-size: 14px;
+  font-size: 0.875rem;
   font-weight: 600;
 }
 
@@ -225,7 +225,7 @@ function handleSettingsCommand(command: string) {
 }
 
 .user-name {
-  font-size: 14px;
+  font-size: 0.875rem;
   font-weight: 500;
   color: var(--text-primary, #1a1a2e);
   display: block;

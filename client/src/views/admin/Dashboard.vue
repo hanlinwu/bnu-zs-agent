@@ -202,14 +202,14 @@ onMounted(async () => {
 }
 
 .page-title {
-  font-size: 22px;
+  font-size: 1.375rem;
   font-weight: 700;
   color: var(--text-primary, #1A1A2E);
   margin: 0 0 4px;
 }
 
 .page-desc {
-  font-size: 14px;
+  font-size: 0.875rem;
   color: var(--text-secondary, #5A5A72);
   margin: 0;
 }
@@ -252,14 +252,14 @@ onMounted(async () => {
 }
 
 .stat-value {
-  font-size: 28px;
+  font-size: 1.75rem;
   font-weight: 700;
   color: var(--text-primary, #1A1A2E);
   line-height: 1.2;
 }
 
 .stat-title {
-  font-size: 13px;
+  font-size: 0.8125rem;
   color: var(--text-secondary, #5A5A72);
   margin-top: 2px;
 }
@@ -293,7 +293,7 @@ onMounted(async () => {
 }
 
 .card-title {
-  font-size: 15px;
+  font-size: 0.9375rem;
   font-weight: 600;
   color: var(--text-primary, #1A1A2E);
   margin: 0;
@@ -351,13 +351,13 @@ onMounted(async () => {
 }
 
 .chart-bar-value {
-  font-size: 11px;
+  font-size: 0.6875rem;
   font-weight: 600;
   color: #ffffff;
 }
 
 .chart-bar-label {
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--text-secondary, #5A5A72);
 }
 
@@ -369,7 +369,7 @@ onMounted(async () => {
   width: 100%;
   height: 100%;
   color: var(--text-secondary, #5A5A72);
-  font-size: 14px;
+  font-size: 0.875rem;
 }
 
 .topics-list {
@@ -401,7 +401,7 @@ onMounted(async () => {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 12px;
+  font-size: 0.75rem;
   font-weight: 700;
   flex-shrink: 0;
   background: var(--bg-secondary, #F4F6FA);
@@ -415,7 +415,7 @@ onMounted(async () => {
 
 .topic-question {
   flex: 1;
-  font-size: 13px;
+  font-size: 0.8125rem;
   color: var(--text-primary, #1A1A2E);
   white-space: nowrap;
   overflow: hidden;

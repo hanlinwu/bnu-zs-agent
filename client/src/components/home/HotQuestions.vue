@@ -81,7 +81,7 @@ function askQuestion(query: string) {
 
 .section-title {
   text-align: center;
-  font-size: 26px;
+  font-size: 1.625rem;
   font-weight: 700;
   color: var(--text-primary, #1A1A2E);
   margin: 0 0 6px;
@@ -89,7 +89,7 @@ function askQuestion(query: string) {
 
 .section-desc {
   text-align: center;
-  font-size: 15px;
+  font-size: 0.9375rem;
   color: var(--text-secondary, #5A5A72);
   margin: 0;
 }
@@ -144,7 +144,7 @@ function askQuestion(query: string) {
 
 .question-text {
   flex: 1;
-  font-size: 14px;
+  font-size: 0.875rem;
   font-weight: 500;
   color: var(--text-primary, #1A1A2E);
 }
@@ -169,7 +169,7 @@ function askQuestion(query: string) {
   }
 
   .section-title {
-    font-size: 22px;
+    font-size: 1.375rem;
   }
 
   .questions-grid {
@@ -187,7 +187,7 @@ function askQuestion(query: string) {
   }
 
   .question-text {
-    font-size: 13px;
+    font-size: 0.8125rem;
   }
 }
 </style>

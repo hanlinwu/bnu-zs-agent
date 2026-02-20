@@ -170,14 +170,14 @@ import LoginForm from '@/components/auth/LoginForm.vue'
   }
 
   &__school-name {
-    font-size: 32px;
+    font-size: 2rem;
     font-weight: 700;
     letter-spacing: 6px;
     text-shadow: 0 2px 16px rgba(0, 0, 0, 0.2);
   }
 
   &__school-name-en {
-    font-size: 14px;
+    font-size: 0.875rem;
     font-weight: 400;
     letter-spacing: 2px;
     opacity: 0.7;
@@ -204,7 +204,7 @@ import LoginForm from '@/components/auth/LoginForm.vue'
   }
 
   &__motto-text {
-    font-size: 24px;
+    font-size: 1.5rem;
     font-weight: 600;
     letter-spacing: 8px;
     color: rgba(255, 255, 255, 0.95);
@@ -212,7 +212,7 @@ import LoginForm from '@/components/auth/LoginForm.vue'
   }
 
   &__motto-text-en {
-    font-size: 12px;
+    font-size: 0.75rem;
     letter-spacing: 1px;
     opacity: 0.6;
     text-align: center;
@@ -231,7 +231,7 @@ import LoginForm from '@/components/auth/LoginForm.vue'
     display: flex;
     align-items: center;
     gap: 12px;
-    font-size: 14px;
+    font-size: 0.875rem;
     color: rgba(255, 255, 255, 0.8);
 
     .el-icon {
@@ -268,7 +268,7 @@ import LoginForm from '@/components/auth/LoginForm.vue'
   }
 
   &__title {
-    font-size: 24px;
+    font-size: 1.5rem;
     font-weight: 700;
     color: var(--color-text-primary);
     margin-bottom: 8px;
@@ -276,7 +276,7 @@ import LoginForm from '@/components/auth/LoginForm.vue'
   }
 
   &__subtitle {
-    font-size: 14px;
+    font-size: 0.875rem;
     color: var(--color-text-secondary);
   }
 
@@ -286,7 +286,7 @@ import LoginForm from '@/components/auth/LoginForm.vue'
     text-align: center;
 
     p {
-      font-size: 12px;
+      font-size: 0.75rem;
       color: var(--color-text-placeholder);
     }
   }
@@ -306,12 +306,12 @@ import LoginForm from '@/components/auth/LoginForm.vue'
     }
 
     &__school-name {
-      font-size: 26px;
+      font-size: 1.625rem;
       letter-spacing: 4px;
     }
 
     &__motto-text {
-      font-size: 20px;
+      font-size: 1.25rem;
       letter-spacing: 6px;
     }
   }
@@ -339,14 +339,14 @@ import LoginForm from '@/components/auth/LoginForm.vue'
     }
 
     &__title {
-      font-size: 22px;
+      font-size: 1.375rem;
     }
 
     &__header {
       &::before {
         content: '北京师范大学';
         display: block;
-        font-size: 13px;
+        font-size: 0.8125rem;
         font-weight: 500;
         color: var(--color-primary);
         letter-spacing: 3px;

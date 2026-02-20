@@ -90,7 +90,7 @@ function stepTagType(step: WorkflowStep): 'success' | 'warning' | 'info' | 'dang
 }
 
 .step-tag {
-  font-size: 12px;
+  font-size: 0.75rem;
 }
 
 .workflow-steps-empty {
@@ -112,7 +112,7 @@ function stepTagType(step: WorkflowStep): 'success' | 'warning' | 'info' | 'dang
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 11px;
+  font-size: 0.6875rem;
   font-weight: 600;
   flex-shrink: 0;
   transition: all 0.2s;
@@ -135,7 +135,7 @@ function stepTagType(step: WorkflowStep): 'success' | 'warning' | 'info' | 'dang
 }
 
 .step-check {
-  font-size: 12px;
+  font-size: 0.75rem;
 }
 
 .step-info {
@@ -146,7 +146,7 @@ function stepTagType(step: WorkflowStep): 'success' | 'warning' | 'info' | 'dang
 }
 
 .step-name {
-  font-size: 12px;
+  font-size: 0.75rem;
   font-weight: 500;
   color: var(--text-primary, #1A1A2E);
   white-space: nowrap;
@@ -157,7 +157,7 @@ function stepTagType(step: WorkflowStep): 'success' | 'warning' | 'info' | 'dang
 }
 
 .step-role {
-  font-size: 10px;
+  font-size: 0.625rem;
   color: var(--text-secondary, #9E9EB3);
   white-space: nowrap;
 }

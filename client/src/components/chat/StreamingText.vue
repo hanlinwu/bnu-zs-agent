@@ -19,7 +19,7 @@ const renderedHtml = computed(() => renderMarkdown(props.text))
 
 <style scoped lang="scss">
 .streaming-text {
-  font-size: 14px;
+  font-size: 0.875rem;
   line-height: 1.7;
   word-break: break-word;
 
@@ -45,7 +45,7 @@ const renderedHtml = computed(() => renderMarkdown(props.text))
     width: 100%;
     border-collapse: collapse;
     margin: 8px 0;
-    font-size: 13px;
+    font-size: 0.8125rem;
   }
 
   :deep(th), :deep(td) {
@@ -77,7 +77,7 @@ const renderedHtml = computed(() => renderMarkdown(props.text))
     border-radius: 8px;
     overflow-x: auto;
     margin: 8px 0;
-    font-size: 13px;
+    font-size: 0.8125rem;
     line-height: 1.5;
 
     code {
@@ -90,7 +90,7 @@ const renderedHtml = computed(() => renderMarkdown(props.text))
     padding: 2px 6px;
     border-radius: 4px;
     font-family: 'Menlo', 'Consolas', monospace;
-    font-size: 13px;
+    font-size: 0.8125rem;
   }
 }
 

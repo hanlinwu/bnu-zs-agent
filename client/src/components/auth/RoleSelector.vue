@@ -89,7 +89,7 @@ function selectRole(value: string) {
 <style lang="scss" scoped>
 .role-selector {
   &__title {
-    font-size: 18px;
+    font-size: 1.125rem;
     font-weight: 600;
     color: var(--color-text-primary);
     text-align: center;
@@ -97,7 +97,7 @@ function selectRole(value: string) {
   }
 
   &__subtitle {
-    font-size: 14px;
+    font-size: 0.875rem;
     color: var(--color-text-secondary);
     text-align: center;
     margin-bottom: 20px;
@@ -155,14 +155,14 @@ function selectRole(value: string) {
   }
 
   &__title {
-    font-size: 15px;
+    font-size: 0.9375rem;
     font-weight: 600;
     color: var(--color-text-primary);
     transition: color 0.2s ease;
   }
 
   &__desc {
-    font-size: 12px;
+    font-size: 0.75rem;
     color: var(--color-text-secondary);
     line-height: 1.4;
   }

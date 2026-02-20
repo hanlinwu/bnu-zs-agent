@@ -203,20 +203,20 @@ async function handleLogin() {
 
   span {
     color: #ffffff;
-    font-size: 28px;
+    font-size: 1.75rem;
     font-weight: 700;
   }
 }
 
 .login-title {
-  font-size: 24px;
+  font-size: 1.5rem;
   font-weight: 700;
   color: #1A1A2E;
   margin: 0 0 6px;
 }
 
 .login-subtitle {
-  font-size: 14px;
+  font-size: 0.875rem;
   color: #5A5A72;
   margin: 0;
 }
@@ -234,7 +234,7 @@ async function handleLogin() {
 .login-btn {
   width: 100%;
   height: 44px;
-  font-size: 16px;
+  font-size: 1rem;
   font-weight: 600;
   border-radius: 8px;
   background: #003DA5;
@@ -254,7 +254,7 @@ async function handleLogin() {
 .back-link {
   color: #5A5A72;
   text-decoration: none;
-  font-size: 14px;
+  font-size: 0.875rem;
   transition: color 0.2s;
 
   &:hover {

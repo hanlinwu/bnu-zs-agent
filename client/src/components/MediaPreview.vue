@@ -297,7 +297,7 @@ onUnmounted(() => {
   left: 50%;
   transform: translateX(-50%);
   color: #fff;
-  font-size: 14px;
+  font-size: 0.875rem;
   text-align: center;
   max-width: 80%;
   white-space: nowrap;
@@ -314,7 +314,7 @@ onUnmounted(() => {
   left: 50%;
   transform: translateX(-50%);
   color: rgba(255, 255, 255, 0.5);
-  font-size: 12px;
+  font-size: 0.75rem;
 }
 
 .preview-loading,
@@ -327,7 +327,7 @@ onUnmounted(() => {
 
   p {
     margin: 0;
-    font-size: 14px;
+    font-size: 0.875rem;
   }
 }
 

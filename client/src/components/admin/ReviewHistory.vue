@@ -82,7 +82,7 @@ function actionTagType(action: string): 'success' | 'danger' | 'warning' | 'info
 
 .flow-arrow {
   color: var(--text-secondary, #9E9EB3);
-  font-size: 12px;
+  font-size: 0.75rem;
 }
 
 .review-record-meta {
@@ -93,18 +93,18 @@ function actionTagType(action: string): 'success' | 'danger' | 'warning' | 'info
 }
 
 .review-record-reviewer {
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-weight: 500;
   color: var(--text-primary, #1A1A2E);
 }
 
 .review-record-time {
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--text-secondary, #5A5A72);
 }
 
 .review-record-note {
-  font-size: 13px;
+  font-size: 0.8125rem;
   color: var(--text-secondary, #5A5A72);
   margin: 8px 0 0;
   line-height: 1.6;

@@ -280,13 +280,13 @@ function showAgreement(title: string) {
   }
 
   &__label {
-    font-size: 14px;
+    font-size: 0.875rem;
     font-weight: 500;
     color: var(--color-text-primary);
   }
 
   &__error {
-    font-size: 12px;
+    font-size: 0.75rem;
     color: var(--color-danger);
     margin-top: 2px;
   }
@@ -306,19 +306,19 @@ function showAgreement(title: string) {
     background: var(--color-bg-secondary, #f4f6fa);
     border: 1px solid var(--color-border);
     border-radius: var(--radius-md);
-    font-size: 14px;
+    font-size: 0.875rem;
     font-weight: 500;
     color: var(--color-text-primary);
     white-space: nowrap;
     flex-shrink: 0;
 
     .country-flag {
-      font-size: 16px;
+      font-size: 1rem;
       line-height: 1;
     }
 
     .country-number {
-      font-size: 14px;
+      font-size: 0.875rem;
     }
   }
 
@@ -334,7 +334,7 @@ function showAgreement(title: string) {
     gap: 4px;
     height: 40px;
     padding: 0 16px;
-    font-size: 13px;
+    font-size: 0.8125rem;
     font-weight: 600;
     color: #ffffff;
     background: var(--color-primary);
@@ -365,7 +365,7 @@ function showAgreement(title: string) {
   &__submit {
     width: 100%;
     height: 48px;
-    font-size: 16px;
+    font-size: 1rem;
     font-weight: 600;
     border-radius: var(--radius-md);
     background-color: var(--color-primary);
@@ -384,7 +384,7 @@ function showAgreement(title: string) {
 
   &__agreement {
     text-align: center;
-    font-size: 12px;
+    font-size: 0.75rem;
     color: var(--color-text-secondary);
 
     a {
@@ -401,7 +401,7 @@ function showAgreement(title: string) {
     display: block;
     width: 100%;
     text-align: center;
-    font-size: 14px;
+    font-size: 0.875rem;
     color: var(--color-text-secondary);
     background: none;
     border: none;

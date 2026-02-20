@@ -98,7 +98,7 @@ function handleAction(action: QuickAction) {
 
 .section-title {
   text-align: center;
-  font-size: 26px;
+  font-size: 1.625rem;
   font-weight: 700;
   color: var(--text-primary, #1A1A2E);
   margin: 0 0 6px;
@@ -106,7 +106,7 @@ function handleAction(action: QuickAction) {
 
 .section-desc {
   text-align: center;
-  font-size: 15px;
+  font-size: 0.9375rem;
   color: var(--text-secondary, #5A5A72);
   margin: 0;
 }
@@ -159,14 +159,14 @@ function handleAction(action: QuickAction) {
 }
 
 .action-title {
-  font-size: 16px;
+  font-size: 1rem;
   font-weight: 600;
   color: var(--text-primary, #1A1A2E);
   margin: 0 0 4px;
 }
 
 .action-desc {
-  font-size: 13px;
+  font-size: 0.8125rem;
   color: var(--text-secondary, #5A5A72);
   margin: 0;
   line-height: 1.5;
@@ -184,7 +184,7 @@ function handleAction(action: QuickAction) {
   }
 
   .section-title {
-    font-size: 22px;
+    font-size: 1.375rem;
   }
 
   .actions-grid {
@@ -202,7 +202,7 @@ function handleAction(action: QuickAction) {
   }
 
   .action-title {
-    font-size: 15px;
+    font-size: 0.9375rem;
   }
 }
 </style>

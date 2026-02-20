@@ -155,18 +155,18 @@ function handleCommand(command: string) {
 }
 
 .admin-name {
-  font-size: 14px;
+  font-size: 0.875rem;
   font-weight: 500;
   color: var(--text-primary, #1A1A2E);
 }
 
 .dropdown-arrow {
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--text-secondary, #5A5A72);
 }
 
 :deep(.el-breadcrumb) {
-  font-size: 14px;
+  font-size: 0.875rem;
 
   .el-breadcrumb__inner {
     color: var(--text-secondary, #5A5A72);

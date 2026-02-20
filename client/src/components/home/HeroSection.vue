@@ -189,7 +189,7 @@ function handleKeydown(e: KeyboardEvent) {
   backdrop-filter: blur(8px);
   border: 1px solid rgba(255, 255, 255, 0.15);
   border-radius: 100px;
-  font-size: 13px;
+  font-size: 0.8125rem;
   color: rgba(255, 255, 255, 0.9);
   margin-bottom: 24px;
   letter-spacing: 0.5px;
@@ -210,7 +210,7 @@ function handleKeydown(e: KeyboardEvent) {
 }
 
 .hero-title {
-  font-size: 44px;
+  font-size: 2.75rem;
   font-weight: 700;
   color: #ffffff;
   margin: 0 0 16px;
@@ -220,7 +220,7 @@ function handleKeydown(e: KeyboardEvent) {
 
 .title-line {
   display: block;
-  font-size: 28px;
+  font-size: 1.75rem;
   font-weight: 400;
   opacity: 0.9;
   letter-spacing: 2px;
@@ -235,7 +235,7 @@ function handleKeydown(e: KeyboardEvent) {
 }
 
 .hero-subtitle {
-  font-size: 16px;
+  font-size: 1rem;
   color: rgba(255, 255, 255, 0.75);
   margin: 0 0 32px;
   line-height: 1.6;
@@ -272,7 +272,7 @@ function handleKeydown(e: KeyboardEvent) {
   border: none;
   outline: none;
   resize: none;
-  font-size: 15px;
+  font-size: 0.9375rem;
   line-height: 24px;
   color: #1a1a2e;
   background: transparent;
@@ -311,7 +311,7 @@ function handleKeydown(e: KeyboardEvent) {
 
 .hero-input-hint {
   text-align: right;
-  font-size: 12px;
+  font-size: 0.75rem;
   color: rgba(255, 255, 255, 0.45);
   margin-top: 8px;
   padding-right: 4px;
@@ -327,7 +327,7 @@ function handleKeydown(e: KeyboardEvent) {
 .hero-chip {
   padding: 6px 16px;
   border-radius: 100px;
-  font-size: 13px;
+  font-size: 0.8125rem;
   color: rgba(255, 255, 255, 0.85);
   background: rgba(255, 255, 255, 0.1);
   backdrop-filter: blur(4px);
@@ -350,15 +350,15 @@ function handleKeydown(e: KeyboardEvent) {
   }
 
   .hero-title {
-    font-size: 32px;
+    font-size: 2rem;
   }
 
   .title-line {
-    font-size: 20px;
+    font-size: 1.25rem;
   }
 
   .hero-subtitle {
-    font-size: 14px;
+    font-size: 0.875rem;
     margin-bottom: 24px;
   }
 
@@ -367,7 +367,7 @@ function handleKeydown(e: KeyboardEvent) {
   }
 
   .hero-textarea {
-    font-size: 14px;
+    font-size: 0.875rem;
   }
 
   .hero-send-btn {
@@ -381,7 +381,7 @@ function handleKeydown(e: KeyboardEvent) {
 
   .hero-chip {
     padding: 5px 12px;
-    font-size: 12px;
+    font-size: 0.75rem;
   }
 }
 </style>
