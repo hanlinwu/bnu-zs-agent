@@ -135,8 +135,13 @@ if ! compose up -d app worker nginx; then
 fi
 
 echo "[deploy] health check"
-if ! curl -fsS --max-time 10 http://127.0.0.1/health > /dev/null; then
+HEALTH_HOST="${BIND_IP:-127.0.0.1}"
+HEALTH_PORT="${HTTP_PORT:-80}"
+HEALTH_URL="http://${HEALTH_HOST}:${HEALTH_PORT}/health"
+
+if ! curl -fsS --max-time 10 "${HEALTH_URL}" > /dev/null; then
   echo "[deploy] health check failed" >&2
+  echo "[deploy] checked url: ${HEALTH_URL}" >&2
   rollback_to_previous || true
   exit 1
 fi
