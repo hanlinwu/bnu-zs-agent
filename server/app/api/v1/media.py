@@ -1,7 +1,9 @@
 """Media resource management API for administrators."""
 
 import hashlib
+import logging
 import os
+import subprocess
 
 from fastapi import APIRouter, Depends, Query, UploadFile, File, Form
 from pydantic import BaseModel
@@ -17,9 +19,77 @@ from app.models.admin import AdminUser
 from app.models.media import MediaResource
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 ALLOWED_MEDIA_TYPES = {"image/jpeg", "image/png", "image/webp", "image/gif", "video/mp4"}
 ALLOWED_EXTENSIONS = {"jpg", "jpeg", "png", "webp", "gif", "mp4"}
+
+
+def _generate_image_thumbnail(image_path: str, thumb_dir: str, max_size: int = 480) -> str | None:
+    """Generate a low-res JPEG thumbnail for an image."""
+    base = os.path.splitext(os.path.basename(image_path))[0]
+    thumb_path = os.path.join(thumb_dir, f"{base}_thumb.jpg")
+    if os.path.exists(thumb_path):
+        return thumb_path
+    try:
+        from PIL import Image
+        with Image.open(image_path) as img:
+            img.thumbnail((max_size, max_size))
+            if img.mode in ("RGBA", "P"):
+                img = img.convert("RGB")
+            img.save(thumb_path, "JPEG", quality=70)
+        return thumb_path if os.path.exists(thumb_path) else None
+    except Exception as e:
+        logger.warning("Failed to generate image thumbnail: %s", e)
+        return None
+
+
+def _generate_video_thumbnail(video_path: str, thumb_dir: str) -> str | None:
+    """Extract video thumbnail: prefer embedded cover art, fallback to frame at 0.5s."""
+    base = os.path.splitext(os.path.basename(video_path))[0]
+    thumb_path = os.path.join(thumb_dir, f"{base}_thumb.jpg")
+    if os.path.exists(thumb_path):
+        return thumb_path
+    try:
+        # Try extracting embedded cover art first
+        subprocess.run(
+            [
+                "ffmpeg", "-y",
+                "-i", video_path,
+                "-an", "-vcodec", "mjpeg",
+                "-disposition:v", "attached_pic",
+                "-frames:v", "1",
+                "-vf", "scale='min(480,iw)':-2",
+                thumb_path,
+            ],
+            capture_output=True,
+            timeout=30,
+            check=True,
+        )
+        if os.path.exists(thumb_path) and os.path.getsize(thumb_path) > 0:
+            return thumb_path
+    except Exception:
+        pass
+    try:
+        # Fallback: capture frame at 0.5s
+        subprocess.run(
+            [
+                "ffmpeg", "-y",
+                "-ss", "0.5",
+                "-i", video_path,
+                "-frames:v", "1",
+                "-q:v", "5",
+                "-vf", "scale='min(480,iw)':-2",
+                thumb_path,
+            ],
+            capture_output=True,
+            timeout=30,
+            check=True,
+        )
+        return thumb_path if os.path.exists(thumb_path) else None
+    except Exception as e:
+        logger.warning("Failed to generate video thumbnail: %s", e)
+        return None
 
 
 def _media_to_dict(m: MediaResource, uploader_name: str | None = None) -> dict:
@@ -128,11 +198,23 @@ async def upload_media(
 
     tag_list = [t.strip() for t in tags.split(",") if t.strip()] if tags else None
 
+    # Generate thumbnail
+    thumbnail_url = None
+    thumb_dir = os.path.join(settings.UPLOAD_DIR, "thumbnails")
+    os.makedirs(thumb_dir, exist_ok=True)
+    if media_type == "video":
+        thumb_path = _generate_video_thumbnail(file_path, thumb_dir)
+    else:
+        thumb_path = _generate_image_thumbnail(file_path, thumb_dir)
+    if thumb_path:
+        thumbnail_url = f"/uploads/thumbnails/{os.path.basename(thumb_path)}"
+
     resource = MediaResource(
         title=title,
         media_type=media_type,
         file_path=file_path,
         file_size=len(content),
+        thumbnail_url=thumbnail_url,
         tags=tag_list,
         description=description or None,
         status="pending",
@@ -291,6 +373,10 @@ async def delete_media(
 
     if os.path.exists(resource.file_path):
         os.remove(resource.file_path)
+    if resource.thumbnail_url:
+        thumb_path = os.path.join(settings.UPLOAD_DIR, resource.thumbnail_url.lstrip("/uploads/"))
+        if os.path.exists(thumb_path):
+            os.remove(thumb_path)
 
     await db.delete(resource)
     await db.commit()

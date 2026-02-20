@@ -22,15 +22,22 @@ const batchEnabled = computed(() => activeStatus.value !== 'all')
 
 const createDialogVisible = ref(false)
 const editDialogVisible = ref(false)
+const detailDrawerVisible = ref(false)
 const createFormRef = ref<FormInstance>()
 const editFormRef = ref<FormInstance>()
 const submitting = ref(false)
+const detailItem = ref<AdminItem | null>(null)
 
 const createForm = reactive({
   username: '',
   password: '',
   real_name: '',
+  employee_id: '',
+  department: '',
+  title: '',
   phone: '',
+  email: '',
+  avatar_url: '',
   role_code: '' as string,
 })
 
@@ -38,23 +45,86 @@ const editForm = reactive({
   id: '',
   username: '',
   real_name: '',
+  employee_id: '',
+  department: '',
+  title: '',
   phone: '',
+  email: '',
+  avatar_url: '',
   role_code: '' as string,
   status: 'active' as string,
 })
 
+const PHONE_PATTERN = /^1[3-9]\d{9}$/
+
+function calcPasswordStrength(password: string) {
+  let score = 0
+  if (password.length >= 8) score += 1
+  if (/[a-z]/.test(password)) score += 1
+  if (/[A-Z]/.test(password)) score += 1
+  if (/\d/.test(password)) score += 1
+  if (/[^A-Za-z0-9]/.test(password)) score += 1
+  return score
+}
+
+const passwordStrength = computed(() => {
+  const score = calcPasswordStrength(createForm.password)
+  if (!createForm.password) {
+    return { percent: 0, label: '未输入', color: '#909399' }
+  }
+  if (score <= 2) {
+    return { percent: 33, label: '弱', color: '#F56C6C' }
+  }
+  if (score <= 4) {
+    return { percent: 66, label: '中', color: '#E6A23C' }
+  }
+  return { percent: 100, label: '强', color: '#67C23A' }
+})
+
+const validateStrongPassword = (_rule: any, value: string, callback: (error?: Error) => void) => {
+  const score = calcPasswordStrength(value || '')
+  if (!value) {
+    callback(new Error('请输入密码'))
+    return
+  }
+  if (value.length < 8) {
+    callback(new Error('密码至少8位'))
+    return
+  }
+  if (score < 5) {
+    callback(new Error('密码需包含大小写字母、数字和特殊字符'))
+    return
+  }
+  callback()
+}
+
+const validatePhone = (_rule: any, value: string, callback: (error?: Error) => void) => {
+  if (!value) {
+    callback(new Error('请输入手机号'))
+    return
+  }
+  if (!PHONE_PATTERN.test(value)) {
+    callback(new Error('请输入正确的11位手机号'))
+    return
+  }
+  callback()
+}
+
 const createRules: FormRules = {
   username: [{ required: true, message: '请输入用户名', trigger: 'blur' }],
   password: [
-    { required: true, message: '请输入密码', trigger: 'blur' },
-    { min: 8, message: '密码至少8位', trigger: 'blur' },
+    { validator: validateStrongPassword, trigger: 'blur' },
   ],
   real_name: [{ required: true, message: '请输入姓名', trigger: 'blur' }],
+  phone: [{ validator: validatePhone, trigger: 'blur' }],
+  email: [{ type: 'email', message: '邮箱格式不正确', trigger: 'blur' }],
   role_code: [{ required: true, message: '请选择角色', trigger: 'change' }],
 }
 
 const editRules: FormRules = {
   real_name: [{ required: true, message: '请输入姓名', trigger: 'blur' }],
+  phone: [{ validator: validatePhone, trigger: 'blur' }],
+  email: [{ type: 'email', message: '邮箱格式不正确', trigger: 'blur' }],
   role_code: [{ required: true, message: '请选择角色', trigger: 'change' }],
 }
 
@@ -91,12 +161,17 @@ function formatDate(date?: string | null) {
   })
 }
 
+function openDetail(admin: AdminItem) {
+  detailItem.value = admin
+  detailDrawerVisible.value = true
+}
+
 async function fetchAdmins() {
   loading.value = true
   try {
     const res = await adminApi.getAdmins({
       page: currentPage.value,
-      pageSize: pageSize.value,
+      page_size: pageSize.value,
       status: activeStatus.value === 'all' ? undefined : activeStatus.value,
     })
     admins.value = res.data.items
@@ -184,7 +259,12 @@ function openCreate() {
   createForm.username = ''
   createForm.password = ''
   createForm.real_name = ''
+  createForm.employee_id = ''
+  createForm.department = ''
+  createForm.title = ''
   createForm.phone = ''
+  createForm.email = ''
+  createForm.avatar_url = ''
   createForm.role_code = ''
   createDialogVisible.value = true
 }
@@ -193,7 +273,12 @@ function openEdit(admin: AdminItem) {
   editForm.id = admin.id
   editForm.username = admin.username
   editForm.real_name = admin.real_name || admin.nickname
+  editForm.employee_id = admin.employee_id || ''
+  editForm.department = admin.department || ''
+  editForm.title = admin.title || ''
   editForm.phone = admin.phone
+  editForm.email = admin.email || ''
+  editForm.avatar_url = admin.avatar_url || ''
   editForm.role_code = admin.role_code || ''
   editForm.status = admin.status
   editDialogVisible.value = true
@@ -208,7 +293,12 @@ async function handleCreate() {
       username: createForm.username,
       password: createForm.password,
       real_name: createForm.real_name,
-      phone: createForm.phone || undefined,
+      employee_id: createForm.employee_id || undefined,
+      department: createForm.department || undefined,
+      title: createForm.title || undefined,
+      phone: createForm.phone,
+      email: createForm.email || undefined,
+      avatar_url: createForm.avatar_url || undefined,
       role_code: createForm.role_code || undefined,
     })
     ElMessage.success('管理员创建成功')
@@ -228,7 +318,12 @@ async function handleEdit() {
   try {
     await adminApi.updateAdmin(editForm.id, {
       real_name: editForm.real_name,
+      employee_id: editForm.employee_id || undefined,
+      department: editForm.department || undefined,
+      title: editForm.title || undefined,
       phone: editForm.phone || undefined,
+      email: editForm.email || undefined,
+      avatar_url: editForm.avatar_url || undefined,
       role_code: editForm.role_code || undefined,
       status: editForm.status,
     })
@@ -327,7 +422,11 @@ onMounted(() => {
         <el-table-column v-if="batchEnabled" type="selection" width="50" />
         <el-table-column prop="username" label="用户名" min-width="140" />
         <el-table-column prop="real_name" label="姓名" min-width="120" show-overflow-tooltip />
+        <el-table-column prop="employee_id" label="工号" min-width="120" show-overflow-tooltip />
+        <el-table-column prop="department" label="部门" min-width="140" show-overflow-tooltip />
+        <el-table-column prop="title" label="职务" min-width="120" show-overflow-tooltip />
         <el-table-column prop="phone" label="手机号" min-width="140" />
+        <el-table-column prop="email" label="邮箱" min-width="180" show-overflow-tooltip />
         <el-table-column label="角色" width="120" align="center">
           <template #default="{ row }">
             <el-tag size="small" :type="(adminRoleType(row.role_code) as any)">
@@ -347,6 +446,7 @@ onMounted(() => {
         </el-table-column>
         <el-table-column label="操作" width="160" fixed="right">
           <template #default="{ row }">
+            <el-button type="primary" link size="small" @click="openDetail(row)">详情</el-button>
             <el-button type="primary" link size="small" @click="openEdit(row)">编辑</el-button>
             <el-button type="danger" link size="small" @click="handleDelete(row)">删除</el-button>
           </template>
@@ -367,7 +467,7 @@ onMounted(() => {
     <el-dialog
       v-model="createDialogVisible"
       title="添加管理员"
-      width="480px"
+      width="640px"
       destroy-on-close
     >
       <el-form
@@ -386,12 +486,38 @@ onMounted(() => {
             placeholder="请输入密码（至少8位）"
             show-password
           />
+          <div class="password-strength">
+            <el-progress
+              :percentage="passwordStrength.percent"
+              :show-text="false"
+              :stroke-width="6"
+              :color="passwordStrength.color"
+            />
+            <span class="password-strength__label" :style="{ color: passwordStrength.color }">
+              密码强度：{{ passwordStrength.label }}
+            </span>
+          </div>
         </el-form-item>
         <el-form-item label="姓名" prop="real_name">
           <el-input v-model="createForm.real_name" placeholder="请输入真实姓名" />
         </el-form-item>
+        <el-form-item label="工号" prop="employee_id">
+          <el-input v-model="createForm.employee_id" placeholder="请输入工号（可选）" />
+        </el-form-item>
+        <el-form-item label="部门" prop="department">
+          <el-input v-model="createForm.department" placeholder="请输入部门（可选）" />
+        </el-form-item>
+        <el-form-item label="职务" prop="title">
+          <el-input v-model="createForm.title" placeholder="请输入职务（可选）" />
+        </el-form-item>
         <el-form-item label="手机号" prop="phone">
-          <el-input v-model="createForm.phone" placeholder="请输入手机号" />
+          <el-input v-model="createForm.phone" placeholder="请输入11位手机号" />
+        </el-form-item>
+        <el-form-item label="邮箱" prop="email">
+          <el-input v-model="createForm.email" placeholder="请输入邮箱（可选）" />
+        </el-form-item>
+        <el-form-item label="头像URL" prop="avatar_url">
+          <el-input v-model="createForm.avatar_url" placeholder="请输入头像URL（可选）" />
         </el-form-item>
         <el-form-item label="角色" prop="role_code">
           <el-select v-model="createForm.role_code" placeholder="请选择角色" style="width: 100%">
@@ -411,7 +537,7 @@ onMounted(() => {
     <el-dialog
       v-model="editDialogVisible"
       title="编辑管理员"
-      width="480px"
+      width="640px"
       destroy-on-close
     >
       <el-form
@@ -423,13 +549,28 @@ onMounted(() => {
         <el-form-item label="用户名">
           <el-input :model-value="editForm.username" disabled />
         </el-form-item>
-        <el-form-item label="姓名" prop="real_name">
+        <el-form-item label="姓名 *" prop="real_name">
           <el-input v-model="editForm.real_name" placeholder="请输入真实姓名" />
         </el-form-item>
-        <el-form-item label="手机号" prop="phone">
-          <el-input v-model="editForm.phone" placeholder="请输入手机号" />
+        <el-form-item label="工号" prop="employee_id">
+          <el-input v-model="editForm.employee_id" placeholder="请输入工号（可选）" />
         </el-form-item>
-        <el-form-item label="角色" prop="role_code">
+        <el-form-item label="部门" prop="department">
+          <el-input v-model="editForm.department" placeholder="请输入部门（可选）" />
+        </el-form-item>
+        <el-form-item label="职务" prop="title">
+          <el-input v-model="editForm.title" placeholder="请输入职务（可选）" />
+        </el-form-item>
+        <el-form-item label="手机号 *" prop="phone">
+          <el-input v-model="editForm.phone" placeholder="请输入11位手机号" />
+        </el-form-item>
+        <el-form-item label="邮箱" prop="email">
+          <el-input v-model="editForm.email" placeholder="请输入邮箱（可选）" />
+        </el-form-item>
+        <el-form-item label="头像URL" prop="avatar_url">
+          <el-input v-model="editForm.avatar_url" placeholder="请输入头像URL（可选）" />
+        </el-form-item>
+        <el-form-item label="角色 *" prop="role_code">
           <el-select v-model="editForm.role_code" placeholder="请选择角色" style="width: 100%">
             <el-option label="超级管理员" value="super_admin" />
             <el-option label="内容审核员" value="reviewer" />
@@ -452,6 +593,40 @@ onMounted(() => {
         <el-button type="primary" :loading="submitting" @click="handleEdit">保存</el-button>
       </template>
     </el-dialog>
+
+    <el-drawer
+      v-model="detailDrawerVisible"
+      title="管理员详情"
+      size="560px"
+      destroy-on-close
+    >
+      <el-descriptions
+        v-if="detailItem"
+        :column="1"
+        border
+      >
+        <el-descriptions-item label="用户名">{{ detailItem.username }}</el-descriptions-item>
+        <el-descriptions-item label="姓名">{{ detailItem.real_name || '-' }}</el-descriptions-item>
+        <el-descriptions-item label="工号">{{ detailItem.employee_id || '-' }}</el-descriptions-item>
+        <el-descriptions-item label="部门">{{ detailItem.department || '-' }}</el-descriptions-item>
+        <el-descriptions-item label="职务">{{ detailItem.title || '-' }}</el-descriptions-item>
+        <el-descriptions-item label="手机号">{{ detailItem.phone || '-' }}</el-descriptions-item>
+        <el-descriptions-item label="邮箱">{{ detailItem.email || '-' }}</el-descriptions-item>
+        <el-descriptions-item label="头像URL">{{ detailItem.avatar_url || '-' }}</el-descriptions-item>
+        <el-descriptions-item label="角色">{{ adminRoleLabel(detailItem.role_code) }}</el-descriptions-item>
+        <el-descriptions-item label="状态">
+          {{ detailItem.status === 'active' ? '启用' : '禁用' }}
+        </el-descriptions-item>
+        <el-descriptions-item label="最后登录时间">{{ formatDate(detailItem.last_login_at) }}</el-descriptions-item>
+        <el-descriptions-item label="最后登录IP">{{ detailItem.last_login_ip || '-' }}</el-descriptions-item>
+        <el-descriptions-item label="Token过期时间">{{ formatDate(detailItem.token_expire_at) }}</el-descriptions-item>
+        <el-descriptions-item label="创建人">
+          {{ detailItem.created_by_name || detailItem.created_by || '-' }}
+        </el-descriptions-item>
+        <el-descriptions-item label="创建时间">{{ formatDate(detailItem.created_at) }}</el-descriptions-item>
+        <el-descriptions-item label="更新时间">{{ formatDate(detailItem.updated_at) }}</el-descriptions-item>
+      </el-descriptions>
+    </el-drawer>
   </div>
 </template>
 
@@ -524,6 +699,17 @@ onMounted(() => {
 .batch-count {
   font-size: 0.8125rem;
   color: var(--text-primary, #1A1A2E);
+  font-weight: 500;
+}
+
+.password-strength {
+  margin-top: 8px;
+}
+
+.password-strength__label {
+  display: inline-block;
+  margin-top: 6px;
+  font-size: 0.75rem;
   font-weight: 500;
 }
 </style>

@@ -614,10 +614,11 @@ onMounted(() => {
     <el-dialog
       v-model="instDialogVisible"
       :title="isEditInst ? '编辑模型实例' : '添加模型实例'"
-      width="520px"
+      width="760px"
+      class="inst-dialog"
       destroy-on-close
     >
-      <el-form ref="instFormRef" :model="instForm" :rules="instRules" label-width="100px">
+      <el-form ref="instFormRef" :model="instForm" :rules="instRules" label-width="96px" label-position="top">
         <el-form-item label="接入点" prop="endpointId">
           <el-select v-model="instForm.endpointId" style="width: 100%" placeholder="选择接入点">
             <el-option
@@ -631,19 +632,19 @@ onMounted(() => {
         <el-form-item label="模型名称" prop="modelName">
           <el-input v-model="instForm.modelName" placeholder="如 qwen-plus / glm-4-plus" />
         </el-form-item>
-        <el-row :gutter="16">
-          <el-col :span="8">
+        <el-row :gutter="16" class="inst-grid-row">
+          <el-col :xs="24" :sm="12" :md="8">
             <el-form-item label="权重">
               <el-input-number v-model="instForm.weight" :min="1" :max="100" style="width: 100%" />
-              <span class="form-hint">仅加权随机策略使用</span>
+              <div class="form-hint form-hint--block">仅加权随机策略使用</div>
             </el-form-item>
           </el-col>
-          <el-col :span="8">
+          <el-col :xs="24" :sm="12" :md="8">
             <el-form-item label="Max Tokens">
               <el-input-number v-model="instForm.maxTokens" :min="256" :step="1024" style="width: 100%" />
             </el-form-item>
           </el-col>
-          <el-col :span="8">
+          <el-col :xs="24" :sm="12" :md="8">
             <el-form-item label="Temperature">
               <el-input-number v-model="instForm.temperature" :min="0" :max="2" :step="0.1" :precision="1" style="width: 100%" />
             </el-form-item>
@@ -651,7 +652,7 @@ onMounted(() => {
         </el-row>
         <el-form-item label="优先级">
           <el-input-number v-model="instForm.priority" :min="0" style="width: 160px" />
-          <span class="form-hint">数字越小优先级越高</span>
+          <div class="form-hint">数字越小优先级越高</div>
         </el-form-item>
       </el-form>
       <template #footer>
@@ -833,6 +834,21 @@ onMounted(() => {
   font-size: 0.75rem;
   color: var(--text-secondary, #9E9EB3);
   margin-left: 8px;
+}
+
+.form-hint--block {
+  margin-left: 0;
+  margin-top: 6px;
+}
+
+:deep(.inst-dialog) {
+  .el-dialog {
+    max-width: 92vw;
+  }
+}
+
+.inst-grid-row {
+  margin-top: 4px;
 }
 
 .sim-head {

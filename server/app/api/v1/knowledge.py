@@ -96,8 +96,9 @@ async def upload_document(
 
     file_hash = hashlib.sha256(content).hexdigest()
 
-    os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
-    file_path = f"{settings.UPLOAD_DIR}/{file_hash}.{ext}"
+    knowledge_dir = os.path.join(settings.UPLOAD_DIR, "knowledge")
+    os.makedirs(knowledge_dir, exist_ok=True)
+    file_path = os.path.join(knowledge_dir, f"{file_hash}.{ext}")
     with open(file_path, "wb") as f:
         f.write(content)
 

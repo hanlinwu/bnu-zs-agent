@@ -68,15 +68,19 @@ export interface AuditLog {
 /** 招生日历阶段 */
 export interface CalendarPeriod {
   id: string
-  name: string
-  startDate: string
-  endDate: string
-  style: 'motivational' | 'guidance' | 'enrollment' | 'general'
-  description: string
-  keywords: string[]
-  enabled: boolean
-  createdAt: string
-  updatedAt: string
+  period_name: string
+  start_month: number
+  end_month: number
+  year: number
+  tone_config: {
+    style?: string
+    description?: string
+    keywords?: string[]
+  }
+  additional_prompt: string | null
+  is_active: boolean
+  updated_by: string | null
+  updated_at: string
 }
 
 /** 模型接入点 */

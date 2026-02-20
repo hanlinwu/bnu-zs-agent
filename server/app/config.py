@@ -23,6 +23,8 @@ class Settings(BaseSettings):
     JWT_ALGORITHM: str = "HS256"
     USER_TOKEN_EXPIRE_DAYS: int = 7
     ADMIN_TOKEN_EXPIRE_HOURS: int = 2
+    ADMIN_PHONE_VERIFY_IP_CHANGE_HOURS: int = 6
+    ADMIN_PHONE_VERIFY_IDLE_HOURS: int = 72
 
     # SMS
     SMS_MOCK: bool = True
@@ -52,7 +54,7 @@ class Settings(BaseSettings):
 
     # File storage
     UPLOAD_DIR: str = "/data/uploads"
-    MAX_UPLOAD_SIZE_MB: int = 50
+    MAX_UPLOAD_SIZE_MB: int = 100
 
     # Celery
     CELERY_BROKER_URL: str = "redis://redis:6379/1"

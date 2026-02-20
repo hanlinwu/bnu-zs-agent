@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { reactive, ref } from 'vue'
+import { reactive, ref, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAdminStore } from '@/stores/admin'
 import { ElMessage } from 'element-plus'
@@ -11,16 +11,102 @@ const adminStore = useAdminStore()
 const formRef = ref<FormInstance>()
 const loading = ref(false)
 const showMfa = ref(false)
+const showSms = ref(false)
+const showBindPhone = ref(false)
+const smsSending = ref(false)
+const smsCooldown = ref(0)
+let smsTimer: number | null = null
 
 const form = reactive({
   username: '',
   password: '',
   mfaCode: '',
+  smsCode: '',
+  bindPhone: '',
+  bindSmsCode: '',
 })
 
 const rules: FormRules = {
   username: [{ required: true, message: '请输入用户名', trigger: 'blur' }],
   password: [{ required: true, message: '请输入密码', trigger: 'blur' }],
+}
+
+function startSmsCooldown(seconds = 60) {
+  smsCooldown.value = seconds
+  if (smsTimer) window.clearInterval(smsTimer)
+  smsTimer = window.setInterval(() => {
+    smsCooldown.value -= 1
+    if (smsCooldown.value <= 0) {
+      if (smsTimer) window.clearInterval(smsTimer)
+      smsTimer = null
+    }
+  }, 1000)
+}
+
+async function handleSendSmsCode() {
+  if (!form.username || !form.password) {
+    ElMessage.warning('请先输入用户名和密码')
+    return
+  }
+  if (smsCooldown.value > 0) return
+
+  smsSending.value = true
+  try {
+    const res = showBindPhone.value
+      ? await adminStore.sendBindPhoneSmsCode(form.username, form.password, form.bindPhone)
+      : await adminStore.sendLoginSmsCode(form.username, form.password)
+    if (res?.required) {
+      showSms.value = true
+      ElMessage.success(res?.phone_masked ? `验证码已发送至 ${res.phone_masked}` : '验证码已发送')
+      startSmsCooldown(60)
+    } else {
+      ElMessage.success(res?.phone_masked ? `验证码已发送至 ${res.phone_masked}` : (res?.message || '验证码已发送'))
+      if (showBindPhone.value) {
+        startSmsCooldown(60)
+      } else {
+        ElMessage.info(res?.message || '当前登录无需手机号验证')
+      }
+    }
+  } catch (err: any) {
+    const msg = err?.response?.data?.detail?.message
+      || err?.response?.data?.message
+      || '验证码发送失败'
+    ElMessage.error(msg)
+  } finally {
+    smsSending.value = false
+  }
+}
+
+async function handleBindAndLogin() {
+  if (!form.bindPhone || !form.bindSmsCode) {
+    ElMessage.warning('请输入手机号和验证码')
+    return
+  }
+
+  loading.value = true
+  try {
+    await adminStore.bindPhoneAndLogin(
+      form.username,
+      form.password,
+      form.bindPhone,
+      form.bindSmsCode,
+      form.mfaCode,
+    )
+    ElMessage.success('绑定成功并已登录')
+    router.push('/admin/dashboard')
+  } catch (err: any) {
+    const msg = err?.response?.data?.detail?.message
+      || err?.response?.data?.message
+      || '手机号绑定失败'
+    if (msg.includes('MFA') || msg.includes('mfa')) {
+      showMfa.value = true
+      ElMessage.warning('请输入多因素认证码')
+      return
+    }
+    ElMessage.error(msg)
+  } finally {
+    loading.value = false
+  }
 }
 
 async function handleLogin() {
@@ -29,7 +115,7 @@ async function handleLogin() {
 
   loading.value = true
   try {
-    await adminStore.login(form.username, form.password, form.mfaCode)
+    await adminStore.login(form.username, form.password, form.mfaCode, form.smsCode)
     ElMessage.success('登录成功')
     router.push('/admin/dashboard')
   } catch (err: any) {
@@ -38,8 +124,20 @@ async function handleLogin() {
       || (Array.isArray(err?.response?.data?.detail) ? '请检查输入格式' : '')
       || '登录失败，请检查用户名和密码'
     if (msg.includes('MFA') || msg.includes('mfa') || msg.includes('验证码')) {
-      showMfa.value = true
-      ElMessage.warning('请输入多因素认证码')
+      if (msg.includes('MFA') || msg.includes('mfa')) {
+        showMfa.value = true
+        ElMessage.warning('请输入多因素认证码')
+      } else if (msg.includes('绑定手机号')) {
+        showBindPhone.value = true
+        showSms.value = false
+        ElMessage.warning('首次登录需先绑定手机号')
+      } else if (msg.includes('手机号')) {
+        showSms.value = true
+        showBindPhone.value = false
+        ElMessage.warning('当前登录需要手机号验证码，请先获取验证码')
+      } else {
+        ElMessage.error(msg)
+      }
     } else {
       ElMessage.error(msg)
     }
@@ -47,6 +145,13 @@ async function handleLogin() {
     loading.value = false
   }
 }
+
+onUnmounted(() => {
+  if (smsTimer) {
+    window.clearInterval(smsTimer)
+    smsTimer = null
+  }
+})
 </script>
 
 <template>
@@ -99,8 +204,61 @@ async function handleLogin() {
           />
         </el-form-item>
 
+        <el-form-item v-if="showSms" prop="smsCode">
+          <el-input
+            v-model="form.smsCode"
+            placeholder="手机号验证码"
+            size="large"
+            :prefix-icon="Lock"
+            maxlength="6"
+          >
+            <template #append>
+              <el-button
+                :disabled="smsCooldown > 0 || smsSending"
+                :loading="smsSending"
+                @click="handleSendSmsCode"
+              >
+                {{ smsCooldown > 0 ? `${smsCooldown}s` : '发送验证码' }}
+              </el-button>
+            </template>
+          </el-input>
+        </el-form-item>
+
+        <template v-if="showBindPhone">
+          <el-form-item prop="bindPhone">
+            <el-input
+              v-model="form.bindPhone"
+              placeholder="绑定手机号（11位）"
+              size="large"
+              :prefix-icon="User"
+              maxlength="11"
+            />
+          </el-form-item>
+
+          <el-form-item prop="bindSmsCode">
+            <el-input
+              v-model="form.bindSmsCode"
+              placeholder="手机号验证码"
+              size="large"
+              :prefix-icon="Lock"
+              maxlength="6"
+            >
+              <template #append>
+                <el-button
+                  :disabled="smsCooldown > 0 || smsSending"
+                  :loading="smsSending"
+                  @click="handleSendSmsCode"
+                >
+                  {{ smsCooldown > 0 ? `${smsCooldown}s` : '发送验证码' }}
+                </el-button>
+              </template>
+            </el-input>
+          </el-form-item>
+        </template>
+
         <el-form-item>
           <el-button
+            v-if="!showBindPhone"
             type="primary"
             size="large"
             class="login-btn"
@@ -108,6 +266,16 @@ async function handleLogin() {
             native-type="submit"
           >
             登 录
+          </el-button>
+          <el-button
+            v-else
+            type="primary"
+            size="large"
+            class="login-btn"
+            :loading="loading"
+            @click="handleBindAndLogin"
+          >
+            绑定并登录
           </el-button>
         </el-form-item>
       </el-form>

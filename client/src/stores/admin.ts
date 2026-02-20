@@ -18,17 +18,57 @@ export const useAdminStore = defineStore('admin', () => {
 
   const isLoggedIn = computed(() => !!adminToken.value)
 
-  async function login(username: string, password: string, mfaCode: string) {
+  async function login(username: string, password: string, mfaCode: string, smsCode?: string) {
     const res = await axios.post('/api/v1/admin/auth/login', {
       username,
       password,
       mfa_code: mfaCode || undefined,
+      sms_code: smsCode || undefined,
     })
     const data = res.data
     adminToken.value = data.token
     adminInfo.value = data.admin
     localStorage.setItem('admin_token', data.token)
     // Fetch full profile with permissions
+    await fetchProfile()
+    return data
+  }
+
+  async function sendLoginSmsCode(username: string, password: string) {
+    const res = await axios.post('/api/v1/admin/auth/sms/send', {
+      username,
+      password,
+    })
+    return res.data
+  }
+
+  async function sendBindPhoneSmsCode(username: string, password: string, phone: string) {
+    const res = await axios.post('/api/v1/admin/auth/phone/bind/send', {
+      username,
+      password,
+      phone,
+    })
+    return res.data
+  }
+
+  async function bindPhoneAndLogin(
+    username: string,
+    password: string,
+    phone: string,
+    smsCode: string,
+    mfaCode: string,
+  ) {
+    const res = await axios.post('/api/v1/admin/auth/phone/bind/confirm', {
+      username,
+      password,
+      phone,
+      sms_code: smsCode,
+      mfa_code: mfaCode || undefined,
+    })
+    const data = res.data
+    adminToken.value = data.token
+    adminInfo.value = data.admin
+    localStorage.setItem('admin_token', data.token)
     await fetchProfile()
     return data
   }
@@ -67,5 +107,8 @@ export const useAdminStore = defineStore('admin', () => {
     logout,
     fetchProfile,
     hasPermission,
+    sendLoginSmsCode,
+    sendBindPhoneSmsCode,
+    bindPhoneAndLogin,
   }
 })

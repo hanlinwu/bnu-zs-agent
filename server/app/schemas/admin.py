@@ -7,6 +7,26 @@ class AdminLoginRequest(BaseModel):
     username: str = Field(..., min_length=1, max_length=50)
     password: str = Field(..., min_length=1)
     mfa_code: str | None = Field(None, min_length=6, max_length=6)
+    sms_code: str | None = Field(None, min_length=6, max_length=6)
+
+
+class AdminSmsSendRequest(BaseModel):
+    username: str = Field(..., min_length=1, max_length=50)
+    password: str = Field(..., min_length=1)
+
+
+class AdminBindPhoneSendRequest(BaseModel):
+    username: str = Field(..., min_length=1, max_length=50)
+    password: str = Field(..., min_length=1)
+    phone: str = Field(..., pattern=r"^1[3-9]\d{9}$")
+
+
+class AdminBindPhoneConfirmRequest(BaseModel):
+    username: str = Field(..., min_length=1, max_length=50)
+    password: str = Field(..., min_length=1)
+    phone: str = Field(..., pattern=r"^1[3-9]\d{9}$")
+    sms_code: str = Field(..., min_length=6, max_length=6)
+    mfa_code: str | None = Field(None, min_length=6, max_length=6)
 
 
 class AdminLoginResponse(BaseModel):

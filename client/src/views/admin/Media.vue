@@ -193,7 +193,7 @@ function closePreview() {
 }
 
 function thumbnailUrl(media: MediaResource) {
-  if (media.media_type === 'image' && media.file_url) return media.file_url
+  if (media.media_type === 'image') return media.thumbnail_url || media.file_url || ''
   return ''
 }
 
@@ -503,11 +503,14 @@ onMounted(async () => {
               class="thumb-img-wrapper video-wrapper"
               @click="openPreview(media)"
             >
-              <video
-                :src="media.file_url"
-                class="thumb-img"
-                preload="metadata"
+              <img
+                v-if="media.thumbnail_url"
+                :src="media.thumbnail_url"
+                class="thumb-img is-loaded"
               />
+              <div v-else class="thumb-placeholder">
+                <el-icon :size="32"><VideoCamera /></el-icon>
+              </div>
               <div class="thumb-overlay video-overlay">
                 <el-icon :size="24"><VideoCamera /></el-icon>
               </div>
@@ -830,10 +833,14 @@ onMounted(async () => {
   }
 
   &.video-wrapper {
-    video {
+    .thumb-placeholder {
       width: 100%;
       height: 100%;
-      object-fit: cover;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #f0f0f0;
+      color: #999;
     }
   }
 }

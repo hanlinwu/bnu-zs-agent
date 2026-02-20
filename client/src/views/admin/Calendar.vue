@@ -1,34 +1,49 @@
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
-import { ElMessage } from 'element-plus'
-import { Edit, Check, Plus, Calendar } from '@element-plus/icons-vue'
+import { ref, reactive, computed, onMounted } from 'vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import { Edit, Check, Plus, Calendar, Delete } from '@element-plus/icons-vue'
 import * as calendarApi from '@/api/admin/calendar'
 import type { CalendarPeriod } from '@/types/admin'
 import type { FormInstance, FormRules } from 'element-plus'
 
 const loading = ref(false)
 const periods = ref<CalendarPeriod[]>([])
-const editingPeriod = ref<CalendarPeriod | null>(null)
+const years = ref<number[]>([])
+const currentYear = ref<number | ''>('')
+
+// Edit / Create dialog
+const dialogVisible = ref(false)
+const dialogMode = ref<'create' | 'edit'>('create')
 const formRef = ref<FormInstance>()
 const submitting = ref(false)
 
 const form = reactive({
   id: '',
-  name: '',
-  startDate: '',
-  endDate: '',
-  style: '' as CalendarPeriod['style'],
+  period_name: '',
+  start_month: null as number | null,
+  end_month: null as number | null,
+  year: new Date().getFullYear(),
+  style: 'general' as string,
   description: '',
-  keywords: '' as string,
-  enabled: true,
+  keywords: '',
+  additional_prompt: '',
+  is_active: true,
 })
 
 const rules: FormRules = {
-  name: [{ required: true, message: '请输入阶段名称', trigger: 'blur' }],
-  startDate: [{ required: true, message: '请选择开始日期', trigger: 'change' }],
-  endDate: [{ required: true, message: '请选择结束日期', trigger: 'change' }],
+  period_name: [{ required: true, message: '请输入阶段名称', trigger: 'blur' }],
+  start_month: [{ required: true, message: '请选择开始月份', trigger: 'change' }],
+  end_month: [{ required: true, message: '请选择结束月份', trigger: 'change' }],
+  year: [{ required: true, message: '请输入年度', trigger: 'blur' }],
   style: [{ required: true, message: '请选择话术风格', trigger: 'change' }],
 }
+
+const monthOptions = Array.from({ length: 12 }, (_, i) => ({
+  label: `${i + 1}月`,
+  value: i + 1,
+}))
+
+const dialogTitle = computed(() => dialogMode.value === 'create' ? '新增招生阶段' : '编辑招生阶段')
 
 function styleLabel(style: string) {
   const map: Record<string, string> = {
@@ -70,39 +85,37 @@ function periodColor(style: string) {
   return map[style] || '#6B7B8D'
 }
 
-function formatDate(date: string) {
-  return new Date(date).toLocaleDateString('zh-CN', {
-    month: 'long',
-    day: 'numeric',
-  })
+function formatMonthRange(period: CalendarPeriod) {
+  return `${period.start_month}月 — ${period.end_month}月`
 }
 
 function isCurrentPeriod(period: CalendarPeriod) {
   const now = new Date()
-  const start = new Date(period.startDate)
-  const end = new Date(period.endDate)
-  return now >= start && now <= end
+  const currentMonth = now.getMonth() + 1
+  const currentYearVal = now.getFullYear()
+  if (period.year !== currentYearVal) return false
+  if (period.start_month <= period.end_month) {
+    return currentMonth >= period.start_month && currentMonth <= period.end_month
+  }
+  // Cross-year range (e.g., 11 -> 2)
+  return currentMonth >= period.start_month || currentMonth <= period.end_month
+}
+
+async function fetchYears() {
+  try {
+    const res = await calendarApi.getYears()
+    years.value = res.data.years || []
+  } catch {
+    // silently fail
+  }
 }
 
 async function fetchPeriods() {
   loading.value = true
   try {
-    const res = await calendarApi.getPeriods()
-    const raw = (res.data as any[] | { items?: any[] })
-    const list = Array.isArray(raw) ? raw : (raw.items || [])
-    // Map backend fields (period_name, start_month, end_month) to frontend CalendarPeriod
-    periods.value = list.map((item: any) => ({
-      id: item.id,
-      name: item.name || item.period_name || '',
-      startDate: item.startDate || (item.start_month ? `2026-${String(item.start_month).padStart(2, '0')}-01` : ''),
-      endDate: item.endDate || (item.end_month ? `2026-${String(item.end_month).padStart(2, '0')}-28` : ''),
-      style: (item.style || item.tone_config?.style || 'general') as CalendarPeriod['style'],
-      description: item.description || item.tone_config?.description || '',
-      keywords: item.keywords || item.tone_config?.keywords || [],
-      enabled: item.enabled ?? item.is_active ?? true,
-      createdAt: item.createdAt || item.created_at || '',
-      updatedAt: item.updatedAt || item.updated_at || '',
-    }))
+    const yearParam = currentYear.value || undefined
+    const res = await calendarApi.getPeriods(yearParam as number | undefined)
+    periods.value = res.data.items || []
   } catch {
     ElMessage.error('加载招生日历失败')
   } finally {
@@ -110,52 +123,106 @@ async function fetchPeriods() {
   }
 }
 
-function editPeriod(period: CalendarPeriod) {
-  editingPeriod.value = period
-  form.id = period.id
-  form.name = period.name
-  form.startDate = period.startDate
-  form.endDate = period.endDate
-  form.style = period.style
-  form.description = period.description
-  form.keywords = period.keywords.join(', ')
-  form.enabled = period.enabled
-}
-
-function cancelEdit() {
-  editingPeriod.value = null
+function handleYearChange() {
+  fetchPeriods()
 }
 
 function openCreate() {
-  // TODO: implement create calendar period dialog
-  ElMessage.info('请通过数据库或 API 添加招生日历阶段')
+  dialogMode.value = 'create'
+  form.id = ''
+  form.period_name = ''
+  form.start_month = null
+  form.end_month = null
+  form.year = currentYear.value || new Date().getFullYear()
+  form.style = 'general'
+  form.description = ''
+  form.keywords = ''
+  form.additional_prompt = ''
+  form.is_active = true
+  dialogVisible.value = true
 }
 
-async function savePeriod() {
+function openEdit(period: CalendarPeriod) {
+  dialogMode.value = 'edit'
+  form.id = period.id
+  form.period_name = period.period_name
+  form.start_month = period.start_month
+  form.end_month = period.end_month
+  form.year = period.year
+  form.style = period.tone_config?.style || 'general'
+  form.description = period.tone_config?.description || ''
+  form.keywords = (period.tone_config?.keywords || []).join(', ')
+  form.additional_prompt = period.additional_prompt || ''
+  form.is_active = period.is_active
+  dialogVisible.value = true
+}
+
+async function handleSubmit() {
   const valid = await formRef.value?.validate().catch(() => false)
   if (!valid) return
   submitting.value = true
+
+  const toneConfig = {
+    style: form.style,
+    description: form.description,
+    keywords: form.keywords ? form.keywords.split(',').map(k => k.trim()).filter(Boolean) : [],
+  }
+
   try {
-    await calendarApi.updatePeriod(form.id, {
-      name: form.name,
-      startDate: form.startDate,
-      endDate: form.endDate,
-      style: form.style,
-      description: form.description,
-      keywords: form.keywords.split(',').map(k => k.trim()).filter(Boolean),
-      enabled: form.enabled,
-    })
-    ElMessage.success('保存成功')
-    editingPeriod.value = null
+    if (dialogMode.value === 'create') {
+      await calendarApi.createPeriod({
+        period_name: form.period_name,
+        start_month: form.start_month!,
+        end_month: form.end_month!,
+        year: form.year,
+        tone_config: toneConfig,
+        additional_prompt: form.additional_prompt || null,
+        is_active: form.is_active,
+      })
+      ElMessage.success('创建成功')
+    } else {
+      await calendarApi.updatePeriod(form.id, {
+        period_name: form.period_name,
+        start_month: form.start_month!,
+        end_month: form.end_month!,
+        year: form.year,
+        tone_config: toneConfig,
+        additional_prompt: form.additional_prompt || null,
+        is_active: form.is_active,
+      })
+      ElMessage.success('保存成功')
+    }
+    dialogVisible.value = false
+    fetchYears()
     fetchPeriods()
   } catch {
-    ElMessage.error('保存失败')
+    ElMessage.error(dialogMode.value === 'create' ? '创建失败' : '保存失败')
   } finally {
     submitting.value = false
   }
 }
 
-onMounted(() => {
+async function handleDelete(period: CalendarPeriod) {
+  try {
+    await ElMessageBox.confirm(
+      `确定要删除「${period.period_name}」吗？`,
+      '删除确认',
+      { type: 'error', confirmButtonText: '删除', cancelButtonText: '取消' },
+    )
+    await calendarApi.deletePeriod(period.id)
+    ElMessage.success('删除成功')
+    fetchYears()
+    fetchPeriods()
+  } catch {
+    // cancelled
+  }
+}
+
+onMounted(async () => {
+  await fetchYears()
+  if (years.value.length > 0) {
+    currentYear.value = years.value[0] ?? ''
+  }
   fetchPeriods()
 })
 </script>
@@ -166,6 +233,24 @@ onMounted(() => {
       <div class="header-left">
         <h2 class="page-title">招生日历</h2>
         <p class="page-desc">管理招生各阶段的话术风格与重点内容</p>
+      </div>
+      <div class="header-actions">
+        <el-select
+          v-if="years.length > 0"
+          v-model="currentYear"
+          placeholder="全部年度"
+          clearable
+          style="width: 120px; margin-right: 12px;"
+          @change="handleYearChange"
+        >
+          <el-option
+            v-for="y in years"
+            :key="y"
+            :label="`${y}年`"
+            :value="y"
+          />
+        </el-select>
+        <el-button type="primary" :icon="Plus" @click="openCreate">新增阶段</el-button>
       </div>
     </div>
 
@@ -183,95 +268,118 @@ onMounted(() => {
           class="timeline-item"
           :class="{ 'timeline-item--current': isCurrentPeriod(period) }"
         >
-          <div class="timeline-marker" :style="{ background: periodColor(period.style) }">
+          <div class="timeline-marker" :style="{ background: periodColor(period.tone_config?.style || 'general') }">
             <span>{{ index + 1 }}</span>
           </div>
           <div class="timeline-connector" v-if="index < periods.length - 1" />
 
-          <div class="period-card" :class="{ 'period-card--editing': editingPeriod?.id === period.id }">
-            <template v-if="editingPeriod?.id !== period.id">
-              <div class="period-header">
-                <div class="period-title-row">
-                  <h3 class="period-name">{{ period.name }}</h3>
-                  <el-tag v-if="isCurrentPeriod(period)" type="success" size="small" effect="dark">
-                    当前阶段
-                  </el-tag>
-                  <el-tag :type="(styleTagType(period.style) as any)" size="small">
-                    {{ styleLabel(period.style) }}
-                  </el-tag>
-                </div>
-                <el-button text :icon="Edit" @click="editPeriod(period)" />
-              </div>
-              <div class="period-dates">
-                {{ formatDate(period.startDate) }} — {{ formatDate(period.endDate) }}
-              </div>
-              <p class="period-desc">{{ period.description }}</p>
-              <div class="period-style-hint">
-                话术重点：{{ styleDescription(period.style) }}
-              </div>
-              <div v-if="period.keywords.length" class="period-keywords">
-                <el-tag
-                  v-for="keyword in period.keywords"
-                  :key="keyword"
-                  size="small"
-                  type="info"
-                  class="keyword-tag"
-                >
-                  {{ keyword }}
+          <div class="period-card">
+            <div class="period-header">
+              <div class="period-title-row">
+                <h3 class="period-name">{{ period.period_name }}</h3>
+                <el-tag v-if="isCurrentPeriod(period)" type="success" size="small" effect="dark">
+                  当前阶段
                 </el-tag>
+                <el-tag :type="(styleTagType(period.tone_config?.style || 'general') as any)" size="small">
+                  {{ styleLabel(period.tone_config?.style || 'general') }}
+                </el-tag>
+                <el-tag v-if="!period.is_active" type="info" size="small">已停用</el-tag>
               </div>
-            </template>
-
-            <template v-else>
-              <el-form ref="formRef" :model="form" :rules="rules" label-width="80px">
-                <el-form-item label="阶段名称" prop="name">
-                  <el-input v-model="form.name" />
-                </el-form-item>
-                <el-form-item label="开始日期" prop="startDate">
-                  <el-date-picker
-                    v-model="form.startDate"
-                    type="date"
-                    value-format="YYYY-MM-DD"
-                    style="width: 100%"
-                  />
-                </el-form-item>
-                <el-form-item label="结束日期" prop="endDate">
-                  <el-date-picker
-                    v-model="form.endDate"
-                    type="date"
-                    value-format="YYYY-MM-DD"
-                    style="width: 100%"
-                  />
-                </el-form-item>
-                <el-form-item label="话术风格" prop="style">
-                  <el-select v-model="form.style" style="width: 100%">
-                    <el-option label="激励型 — 备考期" value="motivational" />
-                    <el-option label="指导型 — 报名期" value="guidance" />
-                    <el-option label="服务型 — 录取期" value="enrollment" />
-                    <el-option label="常态型 — 全年" value="general" />
-                  </el-select>
-                </el-form-item>
-                <el-form-item label="阶段描述">
-                  <el-input v-model="form.description" type="textarea" :rows="2" />
-                </el-form-item>
-                <el-form-item label="关键词">
-                  <el-input v-model="form.keywords" placeholder="用逗号分隔多个关键词" />
-                </el-form-item>
-                <el-form-item label="启用">
-                  <el-switch v-model="form.enabled" />
-                </el-form-item>
-                <el-form-item>
-                  <el-button type="primary" :icon="Check" :loading="submitting" @click="savePeriod">
-                    保存
-                  </el-button>
-                  <el-button @click="cancelEdit">取消</el-button>
-                </el-form-item>
-              </el-form>
-            </template>
+              <div class="period-actions">
+                <el-button text :icon="Edit" @click="openEdit(period)" />
+                <el-button text type="danger" :icon="Delete" @click="handleDelete(period)" />
+              </div>
+            </div>
+            <div class="period-dates">
+              {{ period.year }}年 {{ formatMonthRange(period) }}
+            </div>
+            <p v-if="period.tone_config?.description" class="period-desc">
+              {{ period.tone_config.description }}
+            </p>
+            <div class="period-style-hint">
+              话术重点：{{ styleDescription(period.tone_config?.style || 'general') }}
+            </div>
+            <div v-if="period.tone_config?.keywords?.length" class="period-keywords">
+              <el-tag
+                v-for="keyword in period.tone_config.keywords"
+                :key="keyword"
+                size="small"
+                type="info"
+                class="keyword-tag"
+              >
+                {{ keyword }}
+              </el-tag>
+            </div>
+            <p v-if="period.additional_prompt" class="period-prompt">
+              附加Prompt：{{ period.additional_prompt }}
+            </p>
           </div>
         </div>
       </div>
     </div>
+
+    <!-- Create / Edit Dialog -->
+    <el-dialog
+      v-model="dialogVisible"
+      :title="dialogTitle"
+      width="560px"
+      destroy-on-close
+    >
+      <el-form ref="formRef" :model="form" :rules="rules" label-width="100px">
+        <el-form-item label="阶段名称" prop="period_name">
+          <el-input v-model="form.period_name" placeholder="如：备考冲刺期" />
+        </el-form-item>
+        <el-form-item label="年度" prop="year">
+          <el-input-number v-model="form.year" :min="2020" :max="2099" style="width: 100%" />
+        </el-form-item>
+        <el-form-item label="开始月份" prop="start_month">
+          <el-select v-model="form.start_month" placeholder="选择月份" style="width: 100%">
+            <el-option
+              v-for="m in monthOptions"
+              :key="m.value"
+              :label="m.label"
+              :value="m.value"
+            />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="结束月份" prop="end_month">
+          <el-select v-model="form.end_month" placeholder="选择月份" style="width: 100%">
+            <el-option
+              v-for="m in monthOptions"
+              :key="m.value"
+              :label="m.label"
+              :value="m.value"
+            />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="话术风格" prop="style">
+          <el-select v-model="form.style" style="width: 100%">
+            <el-option label="激励型 — 备考期" value="motivational" />
+            <el-option label="指导型 — 报名期" value="guidance" />
+            <el-option label="服务型 — 录取期" value="enrollment" />
+            <el-option label="常态型 — 全年" value="general" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="阶段描述">
+          <el-input v-model="form.description" type="textarea" :rows="2" placeholder="该阶段的简要描述" />
+        </el-form-item>
+        <el-form-item label="关键词">
+          <el-input v-model="form.keywords" placeholder="用逗号分隔多个关键词" />
+        </el-form-item>
+        <el-form-item label="附加Prompt">
+          <el-input v-model="form.additional_prompt" type="textarea" :rows="2" placeholder="该阶段的额外Prompt指令（选填）" />
+        </el-form-item>
+        <el-form-item label="启用">
+          <el-switch v-model="form.is_active" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="dialogVisible = false">取消</el-button>
+        <el-button type="primary" :icon="Check" :loading="submitting" @click="handleSubmit">
+          {{ dialogMode === 'create' ? '创建' : '保存' }}
+        </el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -280,6 +388,9 @@ onMounted(() => {
 }
 
 .page-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
   margin-bottom: 24px;
 }
 
@@ -294,6 +405,11 @@ onMounted(() => {
   font-size: 0.875rem;
   color: var(--text-secondary, #5A5A72);
   margin: 0;
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
 }
 
 .empty-state {
@@ -362,11 +478,7 @@ onMounted(() => {
   padding: 20px;
   transition: all 0.2s;
 
-  &--editing {
-    border-color: var(--bnu-blue, #003DA5);
-  }
-
-  &:hover:not(&--editing) {
+  &:hover {
     box-shadow: var(--shadow-sm, 0 2px 8px rgba(0, 0, 0, 0.06));
   }
 }
@@ -389,6 +501,11 @@ onMounted(() => {
   font-weight: 600;
   color: var(--text-primary, #1A1A2E);
   margin: 0;
+}
+
+.period-actions {
+  display: flex;
+  gap: 4px;
 }
 
 .period-dates {
@@ -415,9 +532,20 @@ onMounted(() => {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
+  margin-bottom: 8px;
 }
 
 .keyword-tag {
   font-size: 0.75rem;
+}
+
+.period-prompt {
+  font-size: 0.8125rem;
+  color: var(--text-secondary, #5A5A72);
+  margin: 0;
+  padding: 8px 12px;
+  background: var(--bg-secondary, #F4F6FA);
+  border-radius: 6px;
+  line-height: 1.5;
 }
 </style>

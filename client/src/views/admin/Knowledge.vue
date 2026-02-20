@@ -355,8 +355,8 @@ const beforeUpload: UploadProps['beforeUpload'] = (file) => {
     ElMessage.error('仅支持 PDF、Word、TXT、Markdown 格式')
     return false
   }
-  if (file.size > 50 * 1024 * 1024) {
-    ElMessage.error('文件大小不能超过 50MB')
+  if (file.size > 100 * 1024 * 1024) {
+    ElMessage.error('文件大小不能超过 100MB')
     return false
   }
   uploading.value = true
@@ -631,7 +631,7 @@ onMounted(async () => {
         <div class="upload-text">将文件拖到此处，或<em>点击上传</em></div>
         <template #tip>
           <div class="upload-tip">
-            支持 PDF、Word、TXT、Markdown 格式，单文件不超过 50MB
+            支持 PDF、Word、TXT、Markdown 格式，单文件不超过 100MB
           </div>
         </template>
       </el-upload>

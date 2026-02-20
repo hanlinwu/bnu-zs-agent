@@ -1,5 +1,8 @@
 FROM python:3.12-slim
 
+RUN apt-get update -qq && apt-get install -y -qq --no-install-recommends ffmpeg \
+    && rm -rf /var/lib/apt/lists/*
+
 WORKDIR /app
 ARG APP_VERSION=0.0.0
 ARG GIT_COMMIT=
