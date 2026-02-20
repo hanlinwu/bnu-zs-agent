@@ -27,6 +27,7 @@ npm run preview      # preview production build
 ```bash
 cd server
 source .venv/bin/activate
+pip install -r requirements.txt              # install dependencies
 uvicorn app.main:app --reload --port 8001   # dev server with auto-reload
 celery -A app.tasks.celery_app worker --loglevel=info  # async task worker
 ```
@@ -49,7 +50,7 @@ Tests are in `server/tests/` and use `pytest-asyncio` for async support.
 
 ### Docker (production)
 ```bash
-docker-compose up --build          # starts nginx, app, db (pgvector/pg16), redis, celery worker
+docker-compose -f deploy/docker-compose.prod.yml up --build  # starts nginx, app, db (pgvector/pg16), redis, celery worker
 ```
 
 ## Architecture
@@ -57,7 +58,7 @@ docker-compose up --build          # starts nginx, app, db (pgvector/pg16), redi
 ### Monorepo layout
 - `client/` — Vue 3 + TypeScript + Vite + Pinia + Element Plus
 - `server/` — FastAPI + SQLAlchemy (async) + Celery + pgvector
-- `nginx/` — Reverse proxy for production
+- `deploy/` — Production deployment: docker-compose, nginx config, scripts
 
 ### Frontend structure (client/src/)
 - `api/` — Axios-based API client. `request.ts` sets up base instance with auth interceptors. User APIs and `admin/` sub-directory for admin endpoints.
@@ -110,5 +111,13 @@ User query → `risk_service` (risk level) → `sensitive_service` (filter) → 
 - User roles affect responses: high school students, grad students, international students, parents
 - High-risk questions return only verified answers or redirect to admissions office
 
+## Safari Compatibility Rules (CSS)
 
-## 注意，必须要安装并启用向量数据库
+This project uses `overflow: hidden` on `html`/`body` with inner flex containers handling scroll. This architecture is fragile in Safari — follow these rules strictly:
+
+- **Viewport height**: `html` must use only `height: 100%`. Never set `100vh`/`100svh`/`100dvh`/`-webkit-fill-available` on `html` — Safari resolves these unreliably on the root element and breaks the `height: 100%` inheritance chain
+- **`-webkit-fill-available`**: Only allowed as `min-height` on `body`, nowhere else. Do NOT add it to `#app` or any descendant
+- **Scroll containers**: Any element with `overflow-y: auto` must have `-webkit-overflow-scrolling: touch` for iOS Safari momentum scrolling
+- **`scroll-behavior: smooth`**: Do not use in CSS — Safari support is inconsistent. Use JS `scrollTo()` instead
+- **`viewport-fit=cover`**: Required in `index.html` viewport meta for notch/home bar safe area
+- **Height chain**: The layout relies on `html → body → #app → .route-page-root → page → ...` all having `height: 100%`. If any ancestor's height breaks, all child `overflow-y: auto` containers lose their constraint and stop scrolling

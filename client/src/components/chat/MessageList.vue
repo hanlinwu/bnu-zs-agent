@@ -298,7 +298,7 @@ function setMessageRef(el: HTMLElement | null, msg: Message) {
   overflow-y: auto;
   overflow-x: hidden;
   padding: 16px;
-  scroll-behavior: smooth;
+  -webkit-overflow-scrolling: touch;
 
   &::-webkit-scrollbar {
     width: 6px;
