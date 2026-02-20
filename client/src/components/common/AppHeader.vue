@@ -1,13 +1,15 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { Sunny, Moon } from '@element-plus/icons-vue'
 import { useConversationStore } from '@/stores/conversation'
 import { useChatStore } from '@/stores/chat'
 import { useThemeStore } from '@/stores/theme'
+import { useSystemStore } from '@/stores/system'
 
 const conversationStore = useConversationStore()
 const chatStore = useChatStore()
 const themeStore = useThemeStore()
+const systemStore = useSystemStore()
 
 const isEditingTitle = ref(false)
 const editTitleValue = ref('')
@@ -20,6 +22,10 @@ const currentTitle = computed(() => {
 })
 
 const isDark = computed(() => themeStore.mode === 'dark')
+const systemName = computed(() => systemStore.basic.system_name || '京师小智')
+const systemLogo = computed(() => systemStore.basic.system_logo || '')
+const defaultLogo = '/images/default-logo-shi.svg'
+const displayLogo = computed(() => systemLogo.value || defaultLogo)
 
 const fontSizeOptions = [
   { label: '小', value: 14 },
@@ -48,23 +54,20 @@ function cancelEditTitle() {
 function handleFontSize(size: number) {
   themeStore.setFontSize(size as 14 | 16 | 18 | 20)
 }
+
+onMounted(() => {
+  systemStore.fetchBasic()
+})
 </script>
 
 <template>
   <header class="app-header">
     <div class="header-left">
       <div class="logo-area">
-        <div class="logo-icon">
-          <svg viewBox="0 0 32 32" width="28" height="28" fill="none">
-            <circle cx="16" cy="16" r="15" fill="var(--bnu-blue, #003DA5)" />
-            <text
-              x="16" y="22" text-anchor="middle"
-              fill="#fff" font-size="16" font-weight="bold"
-              font-family="serif"
-            >智</text>
-          </svg>
+        <div class="logo-icon logo-icon--image">
+          <img :src="displayLogo" :alt="`${systemName} Logo`" class="logo-img">
         </div>
-        <span class="logo-text">京师小智</span>
+        <span class="logo-text">{{ systemName }}</span>
       </div>
     </div>
 
@@ -157,6 +160,17 @@ function handleFontSize(size: number) {
   display: flex;
   align-items: center;
   justify-content: center;
+}
+
+.logo-icon--image {
+  width: 28px;
+  height: 28px;
+}
+
+.logo-img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
 }
 
 .logo-text {

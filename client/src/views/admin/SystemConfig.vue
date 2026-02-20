@@ -9,9 +9,6 @@ const loading = ref(false)
 const saving = ref(false)
 const activeFlowNode = ref('risk_medium_topic_specific')
 const router = useRouter()
-const buildVersionText = computed(
-  () => `版本 ${__APP_VERSION__} · ${__GIT_COMMIT__} · ${__GIT_COMMIT_DATE__}`,
-)
 
 type FlowNodeMeta = {
   id: string
@@ -389,7 +386,6 @@ onMounted(() => {
       <div>
         <h2 class="page-title">风险与Prompt配置</h2>
         <p class="page-desc">配置风险判定关键词与低/中/高风险回复模板</p>
-        <p class="page-version">{{ buildVersionText }}</p>
       </div>
       <el-button type="primary" :loading="saving" @click="saveConfig">保存配置</el-button>
     </div>
@@ -553,12 +549,6 @@ onMounted(() => {
   margin: 6px 0 0;
   color: #6b7280;
   font-size: 0.875rem;
-}
-
-.page-version {
-  margin: 6px 0 0;
-  color: #94a3b8;
-  font-size: 0.75rem;
 }
 
 .config-form {

@@ -6,6 +6,9 @@ class Settings(BaseSettings):
 
     # App
     APP_NAME: str = "BNU Admission Chatbot"
+    APP_VERSION: str = "0.0.1"
+    GIT_COMMIT: str = ""
+    BUILD_TIME: str = ""
     DEBUG: bool = False
     API_V1_PREFIX: str = "/api/v1"
 

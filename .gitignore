@@ -29,6 +29,9 @@ client/src/components.d.ts
 # Data volumes
 data/
 
+# Redis
+dump.rdb
+
 # OS
 .DS_Store
 Thumbs.db

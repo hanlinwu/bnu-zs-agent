@@ -273,20 +273,30 @@ async def seed_model_config() -> None:
 
 async def seed_system_configs() -> None:
     """Seed default system configs when missing."""
-    from app.services.system_config_service import CHAT_GUARDRAIL_CONFIG_KEY, DEFAULT_CHAT_GUARDRAIL_CONFIG
+    from app.services.system_config_service import (
+        CHAT_GUARDRAIL_CONFIG_KEY,
+        DEFAULT_CHAT_GUARDRAIL_CONFIG,
+        SYSTEM_BASIC_CONFIG_KEY,
+        DEFAULT_SYSTEM_BASIC_CONFIG,
+    )
 
     session_factory = get_session_factory()
     async with session_factory() as session:
         result = await session.execute(select(SystemConfig).where(SystemConfig.key == CHAT_GUARDRAIL_CONFIG_KEY))
-        existing = result.scalar_one_or_none()
-        if existing:
-            return
+        if result.scalar_one_or_none() is None:
+            session.add(SystemConfig(
+                key=CHAT_GUARDRAIL_CONFIG_KEY,
+                value=DEFAULT_CHAT_GUARDRAIL_CONFIG,
+                description="聊天风险判定与分级提示词配置",
+            ))
 
-        session.add(SystemConfig(
-            key=CHAT_GUARDRAIL_CONFIG_KEY,
-            value=DEFAULT_CHAT_GUARDRAIL_CONFIG,
-            description="聊天风险判定与分级提示词配置",
-        ))
+        result = await session.execute(select(SystemConfig).where(SystemConfig.key == SYSTEM_BASIC_CONFIG_KEY))
+        if result.scalar_one_or_none() is None:
+            session.add(SystemConfig(
+                key=SYSTEM_BASIC_CONFIG_KEY,
+                value=DEFAULT_SYSTEM_BASIC_CONFIG,
+                description="系统名称与Logo配置",
+            ))
         await session.commit()
 
 

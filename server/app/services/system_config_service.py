@@ -1,4 +1,4 @@
-"""System config service for chat guardrail and prompt settings."""
+"""System config service for chat guardrail and system settings."""
 
 from __future__ import annotations
 
@@ -8,10 +8,12 @@ from datetime import datetime, timezone
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import settings
 from app.models.system_config import SystemConfig
 
 
 CHAT_GUARDRAIL_CONFIG_KEY = "chat_guardrail"
+SYSTEM_BASIC_CONFIG_KEY = "system_basic"
 
 
 DEFAULT_CHAT_GUARDRAIL_CONFIG = {
@@ -47,8 +49,14 @@ DEFAULT_CHAT_GUARDRAIL_CONFIG = {
     },
 }
 
+DEFAULT_SYSTEM_BASIC_CONFIG = {
+    "system_name": "京师小智",
+    "system_logo": "",
+}
+
 
 _chat_guardrail_cache: dict = deepcopy(DEFAULT_CHAT_GUARDRAIL_CONFIG)
+_system_basic_cache: dict = deepcopy(DEFAULT_SYSTEM_BASIC_CONFIG)
 
 
 def _merge_dict(base: dict, override: dict | None) -> dict:
@@ -90,6 +98,13 @@ def _normalize_chat_guardrail_config(config: dict | None) -> dict:
     return merged
 
 
+def _normalize_system_basic_config(config: dict | None) -> dict:
+    merged = _merge_dict(DEFAULT_SYSTEM_BASIC_CONFIG, config)
+    merged["system_name"] = str(merged.get("system_name", "")).strip() or DEFAULT_SYSTEM_BASIC_CONFIG["system_name"]
+    merged["system_logo"] = str(merged.get("system_logo", "")).strip()
+    return merged
+
+
 def get_chat_guardrail_config_cached() -> dict:
     """Read in-memory chat guardrail config."""
     return deepcopy(_chat_guardrail_cache)
@@ -98,6 +113,16 @@ def get_chat_guardrail_config_cached() -> dict:
 def _refresh_cache(config: dict) -> None:
     global _chat_guardrail_cache
     _chat_guardrail_cache = _normalize_chat_guardrail_config(config)
+
+
+def get_system_basic_config_cached() -> dict:
+    """Read in-memory system basic config."""
+    return deepcopy(_system_basic_cache)
+
+
+def _refresh_system_basic_cache(config: dict) -> None:
+    global _system_basic_cache
+    _system_basic_cache = _normalize_system_basic_config(config)
 
 
 async def ensure_chat_guardrail_config(db: AsyncSession) -> dict:
@@ -151,3 +176,66 @@ async def update_chat_guardrail_config(config: dict, admin_id: str, db: AsyncSes
     await db.commit()
     _refresh_cache(normalized)
     return get_chat_guardrail_config_cached()
+
+
+async def ensure_system_basic_config(db: AsyncSession) -> dict:
+    """Ensure system basic config exists in DB, returning normalized value."""
+    result = await db.execute(select(SystemConfig).where(SystemConfig.key == SYSTEM_BASIC_CONFIG_KEY))
+    item = result.scalar_one_or_none()
+    if item is None:
+        value = deepcopy(DEFAULT_SYSTEM_BASIC_CONFIG)
+        item = SystemConfig(
+            key=SYSTEM_BASIC_CONFIG_KEY,
+            value=value,
+            description="系统名称与Logo配置",
+        )
+        db.add(item)
+        await db.commit()
+        _refresh_system_basic_cache(value)
+        return get_system_basic_config_cached()
+
+    normalized = _normalize_system_basic_config(item.value)
+    if normalized != item.value:
+        item.value = normalized
+        item.updated_at = datetime.now(timezone.utc)
+        await db.commit()
+    _refresh_system_basic_cache(normalized)
+    return get_system_basic_config_cached()
+
+
+async def get_system_basic_config(db: AsyncSession) -> dict:
+    """Get system basic config from DB and refresh cache."""
+    return await ensure_system_basic_config(db)
+
+
+async def update_system_basic_config(config: dict, admin_id: str, db: AsyncSession) -> dict:
+    """Update system basic config and refresh in-memory cache."""
+    normalized = _normalize_system_basic_config(config)
+    result = await db.execute(select(SystemConfig).where(SystemConfig.key == SYSTEM_BASIC_CONFIG_KEY))
+    item = result.scalar_one_or_none()
+    if item is None:
+        item = SystemConfig(
+            key=SYSTEM_BASIC_CONFIG_KEY,
+            value=normalized,
+            description="系统名称与Logo配置",
+            updated_by=admin_id,
+        )
+        db.add(item)
+    else:
+        item.value = normalized
+        item.updated_by = admin_id
+        item.updated_at = datetime.now(timezone.utc)
+
+    await db.commit()
+    _refresh_system_basic_cache(normalized)
+    return get_system_basic_config_cached()
+
+
+def get_system_version_info() -> dict:
+    """Get backend version metadata."""
+    return {
+        "app_name": settings.APP_NAME,
+        "app_version": settings.APP_VERSION,
+        "git_commit": settings.GIT_COMMIT or "unknown",
+        "build_time": settings.BUILD_TIME or "unknown",
+    }

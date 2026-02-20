@@ -22,14 +22,20 @@ const pkg = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 
   version?: string
 }
 
-const appVersion = pkg.version || '0.0.0'
+const appVersion =
+  process.env.APP_VERSION
+  || pkg.version
+  || '0.0.0'
 const gitCommit =
-  process.env.GITHUB_SHA?.slice(0, 7)
+  process.env.GIT_COMMIT?.slice(0, 7)
+  || process.env.GITHUB_SHA?.slice(0, 7)
   || process.env.CI_COMMIT_SHA?.slice(0, 7)
   || safeGit('git rev-parse --short HEAD')
   || 'unknown'
 const gitCommitDate =
-  safeGit("git log -1 --format=%cd --date=format:'%Y-%m-%d %H:%M'")
+  process.env.GIT_COMMIT_DATE
+  || process.env.BUILD_TIME
+  || safeGit("git log -1 --format=%cd --date=format:'%Y-%m-%d %H:%M'")
   || 'unknown'
 
 // https://vite.dev/config/

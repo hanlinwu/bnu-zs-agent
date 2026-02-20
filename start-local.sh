@@ -10,6 +10,26 @@ PROJECT_ROOT="$(cd "$(dirname "$0")" && pwd)"
 SERVER_DIR="$PROJECT_ROOT/server"
 CLIENT_DIR="$PROJECT_ROOT/client"
 
+get_app_version() {
+    if command -v node >/dev/null 2>&1; then
+        node -p "require('${CLIENT_DIR}/package.json').version" 2>/dev/null || echo "0.0.0"
+    else
+        echo "0.0.0"
+    fi
+}
+
+get_git_commit() {
+    if command -v git >/dev/null 2>&1; then
+        git -C "$PROJECT_ROOT" rev-parse --short HEAD 2>/dev/null || echo "unknown"
+    else
+        echo "unknown"
+    fi
+}
+
+get_build_time() {
+    date -u +"%Y-%m-%dT%H:%M:%SZ"
+}
+
 # 颜色输出
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
@@ -147,11 +167,21 @@ setup_backend() {
     SMS_ALIYUN_TEMPLATE_MIN_VALUE="${SMS_ALIYUN_TEMPLATE_MIN_VALUE:-5}"
     SMS_ALIYUN_ENDPOINT_VALUE="${SMS_ALIYUN_ENDPOINT_VALUE:-dypnsapi.aliyuncs.com}"
 
+    local APP_VERSION_VALUE
+    local GIT_COMMIT_VALUE
+    local BUILD_TIME_VALUE
+    APP_VERSION_VALUE="$(get_app_version)"
+    GIT_COMMIT_VALUE="$(get_git_commit)"
+    BUILD_TIME_VALUE="$(get_build_time)"
+
     cat > "$TMP_ENV" <<EOF
 DATABASE_URL=postgresql+asyncpg://postgres:postgres@localhost:5432/bnu_admission
 REDIS_URL=redis://localhost:6379/0
 JWT_SECRET_KEY=change-me-in-production
 JWT_ALGORITHM=HS256
+APP_VERSION=${APP_VERSION_VALUE}
+GIT_COMMIT=${GIT_COMMIT_VALUE}
+BUILD_TIME=${BUILD_TIME_VALUE}
 SMS_MOCK=${SMS_MOCK_VALUE}
 SMS_ALIYUN_ACCESS_KEY_ID=${SMS_ALIYUN_ACCESS_KEY_ID_VALUE}
 SMS_ALIYUN_ACCESS_KEY_SECRET=${SMS_ALIYUN_ACCESS_KEY_SECRET_VALUE}
@@ -178,7 +208,8 @@ EOF
 
     # 建表：先尝试 Alembic，失败则用 create_all
     info "初始化数据库表..."
-    .venv/bin/alembic upgrade head 2>/dev/null || {
+    DATABASE_URL="postgresql+asyncpg://postgres:postgres@localhost:5432/bnu_admission" \
+        PYTHONPATH="$SERVER_DIR" .venv/bin/alembic upgrade head 2>/dev/null || {
         warn "Alembic 迁移无可用版本，使用 create_all 建表..."
         # 确保 pgvector 扩展已启用
         PGPASSWORD=postgres psql -h localhost -U postgres -d bnu_admission -c "CREATE EXTENSION IF NOT EXISTS vector;" 2>/dev/null || true
@@ -242,9 +273,19 @@ start_services() {
     info "启动开发服务器..."
     info "=========================================="
 
+    local APP_VERSION_VALUE
+    local GIT_COMMIT_VALUE
+    local BUILD_TIME_VALUE
+    APP_VERSION_VALUE="$(get_app_version)"
+    GIT_COMMIT_VALUE="$(get_git_commit)"
+    BUILD_TIME_VALUE="$(get_build_time)"
+
     # 后端
     cd "$SERVER_DIR"
     info "启动后端 (http://localhost:8001)..."
+    APP_VERSION="${APP_VERSION_VALUE}" \
+    GIT_COMMIT="${GIT_COMMIT_VALUE}" \
+    BUILD_TIME="${BUILD_TIME_VALUE}" \
     .venv/bin/uvicorn app.main:app --reload --host 0.0.0.0 --port 8001 &
     BACKEND_PID=$!
 
@@ -256,6 +297,10 @@ start_services() {
     # 前端
     cd "$CLIENT_DIR"
     info "启动前端 (http://localhost:5173)..."
+    APP_VERSION="${APP_VERSION_VALUE}" \
+    GIT_COMMIT="${GIT_COMMIT_VALUE}" \
+    GIT_COMMIT_DATE="${BUILD_TIME_VALUE}" \
+    BUILD_TIME="${BUILD_TIME_VALUE}" \
     npx vite --host 0.0.0.0 &
     FRONTEND_PID=$!
 

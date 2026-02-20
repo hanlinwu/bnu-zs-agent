@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { useAdminStore } from '@/stores/admin'
-import { computed } from 'vue'
+import { computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
   Odometer,
@@ -15,16 +15,23 @@ import {
   Document,
   ChatLineRound,
   SetUp,
+  Setting,
 } from '@element-plus/icons-vue'
 import { markRaw, type Component } from 'vue'
+import { useSystemStore } from '@/stores/system'
 
 const props = defineProps<{
   collapsed: boolean
 }>()
 
 const adminStore = useAdminStore()
+const systemStore = useSystemStore()
 const route = useRoute()
 const router = useRouter()
+const systemName = computed(() => systemStore.basic.system_name || '京师小智')
+const systemLogo = computed(() => systemStore.basic.system_logo || '')
+const defaultLogo = '/images/default-logo-shi.svg'
+const displayLogo = computed(() => systemLogo.value || defaultLogo)
 
 interface MenuItem {
   index: string
@@ -66,7 +73,8 @@ const menuGroups: MenuGroup[] = [
     label: '系统配置',
     items: [
       { index: '/admin/model', title: '模型配置', icon: markRaw(Cpu), permission: 'model:read' },
-      { index: '/admin/system-config', title: '风险与Prompt', icon: markRaw(SetUp), permission: 'system_config:read' },
+      { index: '/admin/system-config', title: '风险与Prompt配置', icon: markRaw(SetUp), permission: 'system_config:read' },
+      { index: '/admin/system-settings', title: '系统设置', icon: markRaw(Setting), permission: 'system_config:read' },
       { index: '/admin/sensitive', title: '敏感词库', icon: markRaw(Warning), permission: 'sensitive:read' },
     ],
   },
@@ -100,16 +108,20 @@ function handleMenuSelect(index: string) {
   if (!index || route.path === index) return
   router.push(index)
 }
+
+onMounted(() => {
+  systemStore.fetchBasic()
+})
 </script>
 
 <template>
   <div class="admin-sidebar" :class="{ 'admin-sidebar--collapsed': props.collapsed }">
     <div class="sidebar-logo">
-      <div class="logo-icon">
-        <span class="logo-text-icon">京</span>
+      <div class="logo-icon logo-icon--image">
+        <img :src="displayLogo" :alt="`${systemName} Logo`" class="logo-image">
       </div>
       <transition name="fade">
-        <span v-if="!props.collapsed" class="logo-title">京师小智管理</span>
+        <span v-if="!props.collapsed" class="logo-title">{{ systemName }}管理</span>
       </transition>
     </div>
 
@@ -175,10 +187,15 @@ function handleMenuSelect(index: string) {
   justify-content: center;
 }
 
-.logo-text-icon {
-  color: #ffffff;
-  font-size: 1rem;
-  font-weight: 700;
+.logo-icon--image {
+  background: #ffffff;
+}
+
+.logo-image {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  border-radius: 8px;
 }
 
 .logo-title {

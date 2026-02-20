@@ -143,6 +143,18 @@ export interface ChatGuardrailConfig {
   prompts: ChatGuardrailPromptConfig
 }
 
+export interface SystemBasicConfig {
+  system_name: string
+  system_logo: string
+}
+
+export interface BackendVersionInfo {
+  app_name: string
+  app_version: string
+  git_commit: string
+  build_time: string
+}
+
 /** 分页参数 */
 export interface PaginationParams {
   page: number

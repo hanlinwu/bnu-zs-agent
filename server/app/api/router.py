@@ -21,6 +21,7 @@ from app.api.v1 import (
     admin_dashboard,
     admin_workflow,
     admin_knowledge_base,
+    system,
 )
 
 api_router = APIRouter(prefix="/api/v1")
@@ -29,6 +30,7 @@ api_router = APIRouter(prefix="/api/v1")
 api_router.include_router(auth.router, prefix="/auth", tags=["用户认证"])
 api_router.include_router(chat.router, prefix="/chat", tags=["智能对话"])
 api_router.include_router(conversation.router, prefix="/conversations", tags=["对话管理"])
+api_router.include_router(system.router, prefix="/system", tags=["系统信息"])
 
 # Admin routes
 api_router.include_router(admin_auth.router, prefix="/admin/auth", tags=["管理员认证"])
