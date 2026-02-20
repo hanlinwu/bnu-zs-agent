@@ -1,5 +1,5 @@
 import request from '../request'
-import type { KnowledgeDocument, KnowledgeChunk, KnowledgeChunkDetail } from '@/types/knowledge'
+import type { KnowledgeDocument, KnowledgeChunk, KnowledgeChunkDetail, KnowledgeCrawlTask } from '@/types/knowledge'
 import type { PaginatedResult } from '@/types/admin'
 
 export const getDocuments = (params: { page: number; pageSize: number; status?: string; kb_id?: string }) =>
@@ -19,6 +19,9 @@ export const reviewDocument = (id: string, data: { action: string; note?: string
 export const batchReviewDocuments = (data: { ids: string[]; action: string; note?: string }) =>
   request.post('/admin/knowledge/batch-review', data)
 
+export const batchDeleteDocuments = (data: { ids: string[] }) =>
+  request.post('/admin/knowledge/batch-delete', data)
+
 export const deleteDocument = (id: string) =>
   request.delete(`/admin/knowledge/${id}`)
 
@@ -30,6 +33,19 @@ export const getChunkDetail = (chunkId: string) =>
 
 export const reembedMissingChunks = (data: { documentId?: string; limit?: number }) =>
   request.post('/admin/knowledge/re-embed-missing', data)
+
+export const createCrawlTask = (data: {
+  kbId: string
+  startUrl: string
+  maxDepth: number
+  sameDomainOnly: boolean
+}) => request.post<KnowledgeCrawlTask>('/admin/knowledge/crawl/tasks', data)
+
+export const getCrawlTasks = (params: { page: number; pageSize: number; kb_id?: string; status?: string }) =>
+  request.get<PaginatedResult<KnowledgeCrawlTask>>('/admin/knowledge/crawl/tasks', { params })
+
+export const getCrawlTask = (id: string) =>
+  request.get<KnowledgeCrawlTask>(`/admin/knowledge/crawl/tasks/${id}`)
 
 export function downloadDocument(id: string) {
   const token = localStorage.getItem('admin_token')

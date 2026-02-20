@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Search } from '@element-plus/icons-vue'
+import { Search, Refresh } from '@element-plus/icons-vue'
 import * as userApi from '@/api/admin/user'
 import type { AdminUser } from '@/types/user'
 import type { TabPaneName } from 'element-plus'
@@ -9,6 +9,7 @@ import type { TabPaneName } from 'element-plus'
 type UserRow = AdminUser & {
   status?: 'active' | 'banned'
   province?: string
+  lastLoginIp?: string
 }
 
 const loading = ref(false)
@@ -17,7 +18,7 @@ const total = ref(0)
 const currentPage = ref(1)
 const pageSize = ref(20)
 const searchKeyword = ref('')
-const detailDialogVisible = ref(false)
+const detailDrawerVisible = ref(false)
 const selectedUser = ref<UserRow | null>(null)
 
 const activeStatus = ref<string>('all')
@@ -49,6 +50,9 @@ async function fetchUsers() {
     })
     users.value = (res.data.items || []).map((item: any) => ({
       ...item,
+      lastLoginAt: item.lastLoginAt ?? item.last_login_at ?? '',
+      lastLoginIp: item.lastLoginIp ?? item.last_login_ip ?? '',
+      createdAt: item.createdAt ?? item.created_at ?? '',
       status: item.status ?? (item.enabled === false ? 'banned' : 'active'),
       province: item.province ?? '',
     }))
@@ -111,7 +115,7 @@ async function handleBatchAction(action: 'ban' | 'unban') {
 
 function viewDetail(user: UserRow) {
   selectedUser.value = user
-  detailDialogVisible.value = true
+  detailDrawerVisible.value = true
 }
 
 async function toggleStatus(user: UserRow) {
@@ -216,6 +220,7 @@ onMounted(() => {
         <el-table-column prop="lastLoginAt" label="最后登录" width="160">
           <template #default="{ row }">{{ formatDate(row.lastLoginAt) }}</template>
         </el-table-column>
+        <el-table-column prop="lastLoginIp" label="最后登录IP" min-width="140" show-overflow-tooltip />
         <el-table-column prop="createdAt" label="注册时间" width="160">
           <template #default="{ row }">{{ formatDate(row.createdAt) }}</template>
         </el-table-column>
@@ -237,6 +242,13 @@ onMounted(() => {
       </el-table>
 
       <div class="pagination-wrapper">
+        <el-button
+          :icon="Refresh"
+          circle
+          size="small"
+          @click="fetchUsers"
+          title="刷新数据"
+        />
         <el-pagination
           v-model:current-page="currentPage"
           :page-size="pageSize"
@@ -247,41 +259,28 @@ onMounted(() => {
       </div>
     </div>
 
-    <el-dialog
-      v-model="detailDialogVisible"
+    <el-drawer
+      v-model="detailDrawerVisible"
       title="用户详情"
-      width="480px"
+      size="560px"
       destroy-on-close
     >
-      <div v-if="selectedUser" class="user-detail">
-        <div class="detail-row">
-          <span class="detail-label">手机号</span>
-          <span class="detail-value">{{ selectedUser.phone }}</span>
-        </div>
-        <div class="detail-row">
-          <span class="detail-label">昵称</span>
-          <span class="detail-value">{{ selectedUser.nickname || '-' }}</span>
-        </div>
-        <div class="detail-row">
-          <span class="detail-label">省份</span>
-          <span class="detail-value">{{ selectedUser.province || '-' }}</span>
-        </div>
-        <div class="detail-row">
-          <span class="detail-label">账号状态</span>
-          <el-tag size="small" :type="selectedUser.status === 'active' ? 'success' : 'danger'">
-            {{ selectedUser.status === 'active' ? '正常' : '封禁' }}
-          </el-tag>
-        </div>
-        <div class="detail-row">
-          <span class="detail-label">注册时间</span>
-          <span class="detail-value">{{ formatDate(selectedUser.createdAt) }}</span>
-        </div>
-        <div class="detail-row">
-          <span class="detail-label">最后登录</span>
-          <span class="detail-value">{{ formatDate(selectedUser.lastLoginAt) }}</span>
-        </div>
-      </div>
-    </el-dialog>
+      <el-descriptions
+        v-if="selectedUser"
+        :column="1"
+        border
+      >
+        <el-descriptions-item label="手机号">{{ selectedUser.phone || '-' }}</el-descriptions-item>
+        <el-descriptions-item label="昵称">{{ selectedUser.nickname || '-' }}</el-descriptions-item>
+        <el-descriptions-item label="省份">{{ selectedUser.province || '-' }}</el-descriptions-item>
+        <el-descriptions-item label="账号状态">
+          {{ selectedUser.status === 'active' ? '正常' : '封禁' }}
+        </el-descriptions-item>
+        <el-descriptions-item label="最后登录时间">{{ formatDate(selectedUser.lastLoginAt) }}</el-descriptions-item>
+        <el-descriptions-item label="最后登录IP">{{ selectedUser.lastLoginIp || '-' }}</el-descriptions-item>
+        <el-descriptions-item label="注册时间">{{ formatDate(selectedUser.createdAt) }}</el-descriptions-item>
+      </el-descriptions>
+    </el-drawer>
   </div>
 </template>
 
@@ -362,32 +361,10 @@ onMounted(() => {
 
 .pagination-wrapper {
   display: flex;
+  align-items: center;
   justify-content: flex-end;
   margin-top: 16px;
+  gap: 12px;
 }
 
-.user-detail {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-
-.detail-row {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-}
-
-.detail-label {
-  width: 80px;
-  flex-shrink: 0;
-  font-size: 0.8125rem;
-  color: var(--text-secondary, #5A5A72);
-}
-
-.detail-value {
-  font-size: 0.875rem;
-  color: var(--text-primary, #1A1A2E);
-  font-weight: 500;
-}
 </style>

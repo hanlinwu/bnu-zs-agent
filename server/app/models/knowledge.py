@@ -55,3 +55,27 @@ class KnowledgeChunk(Base):
     embedding_model: Mapped[str | None] = mapped_column(String(120))
     token_count: Mapped[int | None] = mapped_column(Integer)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=text("NOW()"))
+
+
+class KnowledgeCrawlTask(Base):
+    __tablename__ = "knowledge_crawl_tasks"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()"))
+    kb_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("knowledge_bases.id"), nullable=False)
+    start_url: Mapped[str] = mapped_column(String(1000), nullable=False)
+    # Stores crawler depth limit for compatibility with existing schema.
+    max_pages: Mapped[int] = mapped_column(Integer, nullable=False, default=2, server_default=text("2"))
+    same_domain_only: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default=text("true"))
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="pending", server_default=text("'pending'"))
+    progress: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default=text("0"))
+    total_pages: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default=text("0"))
+    success_pages: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default=text("0"))
+    failed_pages: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default=text("0"))
+    current_url: Mapped[str | None] = mapped_column(String(1000))
+    error_message: Mapped[str | None] = mapped_column(Text)
+    result_document_ids: Mapped[list[str] | None] = mapped_column(JSONB)
+    created_by: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("admin_users.id"), nullable=False)
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=text("NOW()"))
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=text("NOW()"))

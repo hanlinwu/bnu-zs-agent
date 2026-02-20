@@ -28,6 +28,27 @@ from app.services import model_config_service
 router = APIRouter()
 
 
+async def _ensure_single_enabled_group_per_type(
+    group_type: str,
+    db: AsyncSession,
+    exclude_group_id: uuid.UUID | None = None,
+) -> None:
+    if group_type not in ("llm", "embedding", "review"):
+        return
+    stmt = select(ModelGroup).where(ModelGroup.type == group_type, ModelGroup.enabled == True)  # noqa: E712
+    if exclude_group_id is not None:
+        stmt = stmt.where(ModelGroup.id != exclude_group_id)
+    existing = (await db.execute(stmt.limit(1))).scalar_one_or_none()
+    if existing:
+        if group_type == "llm":
+            type_label = "LLM 对话"
+        elif group_type == "embedding":
+            type_label = "Embedding"
+        else:
+            type_label = "审核"
+        raise BizError(code=400, message=f"{type_label} 仅允许一个启用组，请先停用「{existing.name}」")
+
+
 # ── Overview ─────────────────────────────────────────────────────
 
 @router.get("", dependencies=[Depends(require_permission("model:read"))])
@@ -115,6 +136,8 @@ async def create_group(
 ):
     if body.type not in ("llm", "embedding", "review"):
         raise BizError(code=400, message="模型组类型必须为 llm / embedding / review")
+    if body.enabled:
+        await _ensure_single_enabled_group_per_type(body.type, db)
 
     grp = ModelGroup(
         name=body.name,
@@ -149,6 +172,8 @@ async def update_group(
             raise BizError(code=400, message="策略必须为 failover / round_robin / weighted")
         grp.strategy = body.strategy
     if body.enabled is not None:
+        if body.enabled:
+            await _ensure_single_enabled_group_per_type(grp.type, db, exclude_group_id=grp.id)
         grp.enabled = body.enabled
     if body.priority is not None:
         grp.priority = body.priority

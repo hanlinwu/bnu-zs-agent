@@ -3,7 +3,7 @@ from app.models.admin import AdminUser
 from app.models.role import Role, Permission, RolePermission, UserRole, AdminRole
 from app.models.conversation import Conversation
 from app.models.message import Message
-from app.models.knowledge import KnowledgeDocument, KnowledgeChunk
+from app.models.knowledge import KnowledgeDocument, KnowledgeChunk, KnowledgeCrawlTask
 from app.models.sensitive_word import SensitiveWordGroup, SensitiveWord
 from app.models.media import MediaResource
 from app.models.message_media import MessageMedia
@@ -25,6 +25,7 @@ __all__ = [
     "Message",
     "KnowledgeDocument",
     "KnowledgeChunk",
+    "KnowledgeCrawlTask",
     "SensitiveWordGroup",
     "SensitiveWord",
     "MediaResource",

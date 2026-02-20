@@ -2,11 +2,18 @@ import request from '../request'
 
 export interface DashboardStats {
   user_count: number
+  admin_count: number
   conversation_count: number
   active_today: number
+  active_7d: number
   message_count: number
+  message_today: number
+  new_user_7d: number
   knowledge_count: number
+  knowledge_approved_count: number
   pending_review_count: number
+  media_count: number
+  media_pending_review_count: number
 }
 
 export interface TrendItem {

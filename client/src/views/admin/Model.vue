@@ -456,30 +456,28 @@ onMounted(() => {
         </el-button>
       </div>
 
-      <el-alert type="info" :closable="false" class="strategy-alert">
-        <template #title>
-          负载均衡说明：策略仅对「LLM 对话」组生效；Embedding/审核组通常只配置单实例。
-        </template>
-      </el-alert>
-
       <div v-if="groups.length === 0" class="empty-state">
         暂无模型组，请创建
       </div>
 
       <div v-for="grp in groups" :key="grp.id" class="group-card" :class="{ 'group-card--disabled': !grp.enabled }">
         <div class="group-header">
-          <div class="group-title-row">
-            <el-tag :type="(groupTypeTag(grp.type) as any)" size="small" effect="dark">
-              {{ groupTypeLabel(grp.type) }}
-            </el-tag>
-            <h4 class="group-name">{{ grp.name }}</h4>
+          <div class="group-title-block">
+            <div class="group-title-row">
+              <el-tag :type="(groupTypeTag(grp.type) as any)" size="small" effect="dark">
+                {{ groupTypeLabel(grp.type) }}
+              </el-tag>
+              <h4 class="group-name">{{ grp.name }}</h4>
+            </div>
+            <span class="strategy-inline-desc" :title="strategyDescription(grp.strategy)">
+              {{ strategyDescription(grp.strategy) }}
+            </span>
           </div>
           <div class="group-controls">
             <el-select
               :model-value="grp.strategy"
               size="small"
               style="width: 120px"
-              :disabled="grp.type !== 'llm'"
               @change="(val: any) => handleStrategyChange(grp, val)"
             >
               <el-option
@@ -489,11 +487,8 @@ onMounted(() => {
                 :value="opt.value"
               />
             </el-select>
-            <span class="strategy-inline-desc" :title="strategyDescription(grp.strategy)">
-              {{ grp.type === 'llm' ? strategyDescription(grp.strategy) : '仅 LLM 组生效' }}
-            </span>
             <el-button
-              v-if="grp.type === 'llm'"
+              v-if="grp.instances?.length"
               size="small"
               type="primary"
               plain
@@ -601,7 +596,7 @@ onMounted(() => {
           <el-select v-model="grpForm.strategy" style="width: 100%">
             <el-option v-for="opt in strategyOptions" :key="opt.value" :label="opt.label" :value="opt.value" />
           </el-select>
-          <div class="form-hint">仅 LLM 组生效：故障转移按优先级，轮询按顺序，加权随机按权重比例。</div>
+          <div class="form-hint">三类组均生效：故障转移按优先级，轮询按顺序，加权随机按权重比例。</div>
         </el-form-item>
       </el-form>
       <template #footer>
@@ -796,6 +791,13 @@ onMounted(() => {
   gap: 8px;
 }
 
+.group-title-block {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  gap: 4px;
+}
+
 .group-name {
   font-size: 0.9375rem;
   font-weight: 600;
@@ -809,17 +811,14 @@ onMounted(() => {
   gap: 10px;
 }
 
-.strategy-alert {
-  margin-bottom: 12px;
-}
-
 .strategy-inline-desc {
-  max-width: 240px;
+  max-width: 420px;
   font-size: 0.75rem;
   color: var(--text-secondary, #5A5A72);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  line-height: 1.2;
 }
 
 .instance-table {

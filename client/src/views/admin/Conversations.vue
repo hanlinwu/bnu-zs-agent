@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
-import { Search } from '@element-plus/icons-vue'
+import { Search, Refresh } from '@element-plus/icons-vue'
 import * as convApi from '@/api/admin/conversation'
 import type { AdminConversation, AdminMessage, AdminMessageMediaItem } from '@/types/admin'
 import MediaPreview from '@/components/MediaPreview.vue'
@@ -328,6 +328,13 @@ function handleMessageClick(e: MouseEvent, _msg: AdminMessage) {
       </el-table>
 
       <div class="pagination-wrapper">
+        <el-button
+          :icon="Refresh"
+          circle
+          size="small"
+          @click="fetchConversations"
+          title="刷新数据"
+        />
         <el-pagination
           v-model:current-page="currentPage"
           :page-size="pageSize"
@@ -490,8 +497,10 @@ function handleMessageClick(e: MouseEvent, _msg: AdminMessage) {
 
 .pagination-wrapper {
   display: flex;
+  align-items: center;
   justify-content: flex-end;
   margin-top: 16px;
+  gap: 12px;
 }
 
 .conversation-messages {

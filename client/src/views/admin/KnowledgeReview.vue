@@ -2,7 +2,7 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { ArrowLeft, Download, Loading } from '@element-plus/icons-vue'
+import { ArrowLeft, Download, Loading, Refresh } from '@element-plus/icons-vue'
 import * as knowledgeApi from '@/api/admin/knowledge'
 import * as wfApi from '@/api/admin/workflow'
 import type { WorkflowNode, WorkflowAction, WorkflowTransition, ReviewHistoryRecord } from '@/api/admin/workflow'
@@ -426,6 +426,13 @@ onUnmounted(() => {
           </div>
         </div>
         <div class="pagination-wrapper" v-if="chunkTotal > chunkPageSize">
+          <el-button
+            :icon="Refresh"
+            circle
+            size="small"
+            @click="fetchChunks"
+            title="刷新数据"
+          />
           <el-pagination
             v-model:current-page="chunkPage"
             :page-size="chunkPageSize"
@@ -838,8 +845,10 @@ onUnmounted(() => {
 
 .pagination-wrapper {
   display: flex;
-  justify-content: center;
+  align-items: center;
+  justify-content: flex-end;
   margin-top: 16px;
+  gap: 12px;
 }
 
 .review-textarea {

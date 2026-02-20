@@ -17,7 +17,7 @@ from app.schemas.model_config import (
 logger = logging.getLogger(__name__)
 
 # ── Cached embedding config for use by embedding_service ──
-_embedding_config: dict | None = None
+_embedding_runtime: dict | None = None
 
 
 def _mask_key(key: str) -> str:
@@ -89,7 +89,7 @@ async def load_config(db: AsyncSession) -> ModelConfigOverview:
 
 async def reload_router(db: AsyncSession) -> None:
     """Rebuild the LLM router from DB config and update the singleton."""
-    global _embedding_config
+    global _embedding_runtime
 
     grp_result = await db.execute(
         select(ModelGroup)
@@ -115,10 +115,12 @@ async def reload_router(db: AsyncSession) -> None:
     # Mutate the existing singleton so all importers see the update
     router = llm_mod.llm_router
     router.providers.clear()
-    router.review_provider = None
+    router.review_providers.clear()
     router.strategy = "failover"
+    router.review_strategy = "failover"
     router._current_index = 0
-    _embedding_config = None
+    router._review_current_index = 0
+    _embedding_runtime = None
 
     for grp in groups:
         if not grp.enabled:
@@ -129,13 +131,21 @@ async def reload_router(db: AsyncSession) -> None:
             continue
 
         if grp.type == "embedding":
-            # Use the first enabled instance for embedding config
-            inst = enabled_instances[0]
-            ep = inst.endpoint
-            _embedding_config = {
-                "base_url": ep.base_url,
-                "api_key": ep.api_key,
-                "model": inst.model_name,
+            sorted_instances = sorted(enabled_instances, key=lambda i: i.priority)
+            providers: list[dict] = []
+            for inst in sorted_instances:
+                ep = inst.endpoint
+                providers.append({
+                    "base_url": ep.base_url,
+                    "api_key": ep.api_key,
+                    "model": inst.model_name,
+                    "weight": inst.weight or 1,
+                    "name": ep.name,
+                })
+            _embedding_runtime = {
+                "strategy": grp.strategy,
+                "providers": providers,
+                "current_index": 0,
             }
             continue
 
@@ -156,21 +166,53 @@ async def reload_router(db: AsyncSession) -> None:
                 if grp.type == "llm":
                     router.add_provider(provider)
                 elif grp.type == "review":
-                    if router.review_provider is None:
-                        router.set_review_provider(provider)
+                    router.add_review_provider(provider)
 
-            # Apply group strategy to the router (for LLM groups)
+            # Apply group strategy to the router
             if grp.type == "llm":
                 router.strategy = grp.strategy
+            elif grp.type == "review":
+                router.review_strategy = grp.strategy
 
     logger.info(
-        "LLM router reloaded: %d providers, review=%s, strategy=%s",
+        "LLM router reloaded: llm=%d, review=%d, llm_strategy=%s, review_strategy=%s",
         len(router.providers),
-        "yes" if router.review_provider else "no",
+        len(router.review_providers),
         router.strategy,
+        router.review_strategy,
     )
 
 
-def get_embedding_config() -> dict | None:
-    """Return the cached embedding config (set by reload_router)."""
-    return _embedding_config
+def get_embedding_runtime() -> dict | None:
+    """Return cached embedding runtime config (strategy + providers)."""
+    return _embedding_runtime
+
+
+def pick_embedding_provider_sequence() -> list[dict]:
+    """Pick provider sequence for embedding based on configured strategy.
+
+    First provider is the primary candidate; following providers are failover candidates.
+    """
+    runtime = _embedding_runtime
+    if not runtime:
+        raise RuntimeError("Embedding model is not configured in system model settings")
+
+    providers = runtime.get("providers") or []
+    if not providers:
+        raise RuntimeError("Embedding model is not configured in system model settings")
+
+    strategy = runtime.get("strategy") or "failover"
+
+    if strategy == "round_robin":
+        start = runtime.get("current_index", 0) % len(providers)
+        runtime["current_index"] = start + 1
+        return providers[start:] + providers[:start]
+
+    if strategy == "weighted":
+        import random
+        weights = [max(1, int(item.get("weight", 1) or 1)) for item in providers]
+        first = random.choices(providers, weights=weights, k=1)[0]
+        rest = [item for item in providers if item is not first]
+        return [first] + rest
+
+    return providers

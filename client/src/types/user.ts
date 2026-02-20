@@ -26,6 +26,7 @@ export interface AdminUser {
   permissions: string[]
   enabled: boolean
   lastLoginAt?: string
+  lastLoginIp?: string
   createdAt: string
   updatedAt: string
 }

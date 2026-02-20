@@ -14,6 +14,8 @@ from app.models.user import User
 from app.models.conversation import Conversation
 from app.models.message import Message
 from app.models.knowledge import KnowledgeDocument
+from app.models.media import MediaResource
+from app.models.admin import AdminUser as AdminModel
 
 router = APIRouter()
 
@@ -23,9 +25,13 @@ async def get_stats(
     admin: AdminUser = Depends(get_current_admin),
     db: AsyncSession = Depends(get_db),
 ):
-    """统计卡片：用户总数、对话总数、今日活跃用户数"""
+    """统计卡片：用户/对话/消息/知识库/媒体等核心运营指标。"""
     user_count = (
         await db.execute(select(func.count()).select_from(User))
+    ).scalar() or 0
+
+    admin_count = (
+        await db.execute(select(func.count()).select_from(AdminModel).where(AdminModel.status == "active"))
     ).scalar() or 0
 
     conversation_count = (
@@ -35,6 +41,8 @@ async def get_stats(
     ).scalar() or 0
 
     today_start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+    week_start = today_start - timedelta(days=7)
+
     active_today = (
         await db.execute(
             select(func.count(func.distinct(Conversation.user_id)))
@@ -46,15 +54,53 @@ async def get_stats(
         )
     ).scalar() or 0
 
+    active_7d = (
+        await db.execute(
+            select(func.count(func.distinct(Conversation.user_id)))
+            .select_from(Conversation)
+            .where(
+                Conversation.is_deleted == False,
+                Conversation.updated_at >= week_start,
+            )
+        )
+    ).scalar() or 0
+
     message_count = (
         await db.execute(
             select(func.count()).select_from(Message).where(Message.is_deleted == False)
         )
     ).scalar() or 0
 
+    message_today = (
+        await db.execute(
+            select(func.count())
+            .select_from(Message)
+            .where(
+                Message.is_deleted == False,
+                Message.created_at >= today_start,
+            )
+        )
+    ).scalar() or 0
+
+    new_user_7d = (
+        await db.execute(
+            select(func.count())
+            .select_from(User)
+            .where(User.created_at >= week_start)
+        )
+    ).scalar() or 0
+
     knowledge_count = (
         await db.execute(
             select(func.count()).select_from(KnowledgeDocument)
+        )
+    ).scalar() or 0
+
+    knowledge_approved_count = (
+        await db.execute(
+            select(func.count())
+            .select_from(KnowledgeDocument)
+            .where(KnowledgeDocument.status == "approved")
         )
     ).scalar() or 0
 
@@ -66,13 +112,34 @@ async def get_stats(
         )
     ).scalar() or 0
 
+    media_count = (
+        await db.execute(
+            select(func.count()).select_from(MediaResource)
+        )
+    ).scalar() or 0
+
+    media_pending_review_count = (
+        await db.execute(
+            select(func.count())
+            .select_from(MediaResource)
+            .where(MediaResource.status == "pending")
+        )
+    ).scalar() or 0
+
     return {
         "user_count": user_count,
+        "admin_count": admin_count,
         "conversation_count": conversation_count,
         "active_today": active_today,
+        "active_7d": active_7d,
         "message_count": message_count,
+        "message_today": message_today,
+        "new_user_7d": new_user_7d,
         "knowledge_count": knowledge_count,
+        "knowledge_approved_count": knowledge_approved_count,
         "pending_review_count": pending_review_count,
+        "media_count": media_count,
+        "media_pending_review_count": media_pending_review_count,
     }
 
 

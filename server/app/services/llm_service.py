@@ -99,16 +99,18 @@ class LLMRouter:
 
     def __init__(self):
         self.providers: list[LLMProvider] = []
-        self.review_provider: LLMProvider | None = None
+        self.review_providers: list[LLMProvider] = []
         self.strategy: str = "failover"  # failover / round_robin / weighted
+        self.review_strategy: str = "failover"
         self._current_index: int = 0
+        self._review_current_index: int = 0
         self.last_model_name: str | None = None
 
     def add_provider(self, provider: LLMProvider):
         self.providers.append(provider)
 
-    def set_review_provider(self, provider: LLMProvider):
-        self.review_provider = provider
+    def add_review_provider(self, provider: LLMProvider):
+        self.review_providers.append(provider)
 
     def _get_provider(self) -> LLMProvider:
         if not self.providers:
@@ -140,6 +142,23 @@ class LLMRouter:
 
         return self.providers
 
+    def _get_review_provider_sequence(self) -> list[LLMProvider]:
+        if not self.review_providers:
+            raise RuntimeError("No review providers configured")
+
+        if self.review_strategy == "round_robin":
+            start = self._review_current_index % len(self.review_providers)
+            self._review_current_index += 1
+            return self.review_providers[start:] + self.review_providers[:start]
+
+        if self.review_strategy == "weighted":
+            weights = [getattr(p, "weight", 1) for p in self.review_providers]
+            first = random.choices(self.review_providers, weights=weights, k=1)[0]
+            rest = [provider for provider in self.review_providers if provider is not first]
+            return [first] + rest
+
+        return self.review_providers
+
     async def chat(self, messages: list[dict], stream: bool = False) -> AsyncGenerator[str, None] | str:
         last_error = None
         for i, provider in enumerate(self._get_provider_sequence()):
@@ -155,7 +174,18 @@ class LLMRouter:
 
     async def review_chat(self, messages: list[dict]) -> str:
         """Use review model for hallucination checking."""
-        provider = self.review_provider or self._get_provider()
+        if self.review_providers:
+            last_error = None
+            for i, provider in enumerate(self._get_review_provider_sequence()):
+                try:
+                    return await provider.chat(messages, stream=False)
+                except Exception as e:
+                    logger.warning("Review provider %s failed: %s", getattr(provider, 'name', i), e)
+                    last_error = e
+                    continue
+            raise RuntimeError(f"All review providers failed. Last error: {last_error}")
+
+        provider = self._get_provider()
         return await provider.chat(messages, stream=False)
 
     async def embed(self, texts: list[str]) -> list[list[float]]:

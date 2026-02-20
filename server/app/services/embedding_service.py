@@ -14,30 +14,33 @@ async def generate_embeddings_with_model(texts: list[str]) -> tuple[list[list[fl
 
     Returns: (embeddings, model_name)
     """
-    from app.services.model_config_service import get_embedding_config
+    from app.services.model_config_service import pick_embedding_provider_sequence
 
-    config = get_embedding_config()
-    if not config:
-        raise RuntimeError("Embedding model is not configured in system model settings")
+    last_error: Exception | None = None
+    for provider in pick_embedding_provider_sequence():
+        base_url = str(provider.get("base_url", "")).rstrip("/")
+        api_key = provider.get("api_key")
+        model = provider.get("model")
+        if not base_url or not api_key or not model:
+            continue
+        try:
+            resp = await _client.post(
+                f"{base_url}/embeddings",
+                headers={
+                    "Authorization": f"Bearer {api_key}",
+                    "Content-Type": "application/json",
+                },
+                json={"model": model, "input": texts},
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            return [item["embedding"] for item in data["data"]], str(model)
+        except Exception as error:
+            logger.warning("Embedding provider %s failed: %s", provider.get("name") or model, error)
+            last_error = error
+            continue
 
-    base_url = config["base_url"].rstrip("/")
-    api_key = config["api_key"]
-    model = config["model"]
-
-    if not base_url or not api_key:
-        raise RuntimeError("Embedding provider base_url/api_key is missing in system model settings")
-
-    resp = await _client.post(
-        f"{base_url}/embeddings",
-        headers={
-            "Authorization": f"Bearer {api_key}",
-            "Content-Type": "application/json",
-        },
-        json={"model": model, "input": texts},
-    )
-    resp.raise_for_status()
-    data = resp.json()
-    return [item["embedding"] for item in data["data"]], model
+    raise RuntimeError(f"All embedding providers failed. Last error: {last_error}")
 
 
 async def generate_embeddings(texts: list[str]) -> list[list[float]]:

@@ -63,6 +63,7 @@ async def list_users(
                 "school": u.school,
                 "status": u.status,
                 "last_login_at": u.last_login_at.isoformat() if u.last_login_at else None,
+                "last_login_ip": str(u.last_login_ip) if u.last_login_ip else None,
                 "created_at": u.created_at.isoformat(),
             }
             for u in users

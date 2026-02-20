@@ -1,6 +1,6 @@
 """Pydantic schemas for knowledge management."""
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 class KnowledgeDocResponse(BaseModel):
@@ -70,3 +70,46 @@ class ReembedResponse(BaseModel):
     updated: int
     scanned: int
     message: str
+
+
+class CrawlTaskCreateRequest(BaseModel):
+    kbId: str
+    startUrl: str = Field(..., max_length=1000)
+    maxDepth: int = Field(2, ge=0, le=10)
+    maxPages: int | None = Field(None, ge=1, le=200)
+    sameDomainOnly: bool = True
+
+    @model_validator(mode="after")
+    def compat_max_pages(self):
+        # Backward compatibility for old frontend payloads.
+        if self.maxPages is not None and self.maxDepth == 2:
+            self.maxDepth = min(10, max(0, self.maxPages // 10))
+        return self
+
+
+class CrawlTaskResponse(BaseModel):
+    id: str
+    kbId: str
+    startUrl: str
+    maxDepth: int
+    sameDomainOnly: bool
+    status: str
+    progress: int
+    totalPages: int
+    successPages: int
+    failedPages: int
+    currentUrl: str | None = None
+    errorMessage: str | None = None
+    resultDocumentIds: list[str] = []
+    createdBy: str
+    startedAt: str | None = None
+    finishedAt: str | None = None
+    createdAt: str
+    updatedAt: str
+
+
+class CrawlTaskListResponse(BaseModel):
+    items: list[CrawlTaskResponse]
+    total: int
+    page: int
+    pageSize: int

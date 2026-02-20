@@ -11,7 +11,7 @@ export interface KnowledgeBase {
 }
 
 /** 文档状态 */
-export type DocumentStatus = 'pending' | 'reviewing' | 'approved' | 'rejected' | 'processing' | 'active' | 'archived'
+export type DocumentStatus = 'pending' | 'reviewing' | 'approved' | 'rejected' | 'processing' | 'active' | 'archived' | 'deleted'
 
 /** 文件类型 */
 export type DocumentFileType = 'pdf' | 'docx' | 'txt' | 'md'
@@ -51,4 +51,25 @@ export interface KnowledgeChunk {
 
 export interface KnowledgeChunkDetail extends KnowledgeChunk {
   embeddingVector?: string | null
+}
+
+export interface KnowledgeCrawlTask {
+  id: string
+  kbId: string
+  startUrl: string
+  maxDepth: number
+  sameDomainOnly: boolean
+  status: 'pending' | 'running' | 'success' | 'failed'
+  progress: number
+  totalPages: number
+  successPages: number
+  failedPages: number
+  currentUrl?: string
+  errorMessage?: string
+  resultDocumentIds: string[]
+  createdBy: string
+  startedAt?: string
+  finishedAt?: string
+  createdAt: string
+  updatedAt: string
 }

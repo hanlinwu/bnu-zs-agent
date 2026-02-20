@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
-import { Download } from '@element-plus/icons-vue'
+import { Download, Refresh } from '@element-plus/icons-vue'
 import * as logApi from '@/api/admin/log'
 import type { AuditLog } from '@/types/admin'
 
@@ -275,6 +275,13 @@ onMounted(() => {
       </el-table>
 
       <div class="pagination-wrapper">
+        <el-button
+          :icon="Refresh"
+          circle
+          size="small"
+          @click="fetchLogs"
+          title="刷新数据"
+        />
         <el-pagination
           v-model:current-page="currentPage"
           :page-size="pageSize"
@@ -363,8 +370,10 @@ onMounted(() => {
 
 .pagination-wrapper {
   display: flex;
+  align-items: center;
   justify-content: flex-end;
   margin-top: 16px;
+  gap: 12px;
 }
 
 .detail-json {

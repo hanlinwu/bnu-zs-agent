@@ -221,7 +221,8 @@ async function handleDelete(period: CalendarPeriod) {
 onMounted(async () => {
   await fetchYears()
   if (years.value.length > 0) {
-    currentYear.value = years.value[0] ?? ''
+    const thisYear = new Date().getFullYear()
+    currentYear.value = years.value.includes(thisYear) ? thisYear : (years.value[0] ?? '')
   }
   fetchPeriods()
 })

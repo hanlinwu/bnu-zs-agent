@@ -48,7 +48,10 @@ async def list_knowledge_bases(
     for kb in kbs:
         doc_count = (await db.execute(
             select(func.count()).select_from(KnowledgeDocument)
-            .where(KnowledgeDocument.kb_id == kb.id)
+            .where(
+                KnowledgeDocument.kb_id == kb.id,
+                KnowledgeDocument.status == "approved",
+            )
         )).scalar() or 0
         items.append({
             "id": str(kb.id),

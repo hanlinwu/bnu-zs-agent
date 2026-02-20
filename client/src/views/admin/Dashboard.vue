@@ -1,11 +1,16 @@
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, onBeforeUnmount, computed, nextTick } from 'vue'
 import {
   ChatDotRound,
   User,
   Document,
   Clock,
   TrendCharts,
+  UserFilled,
+  ChatLineRound,
+  PictureFilled,
+  DataAnalysis,
+  LocationFilled,
 } from '@element-plus/icons-vue'
 import {
   getDashboardStats,
@@ -15,6 +20,8 @@ import {
   type TrendItem,
   type HotQuestion,
 } from '@/api/admin/dashboard'
+import * as echarts from 'echarts'
+import chinaGeoJson from '@/assets/maps/china.json'
 
 interface StatCard {
   title: string
@@ -26,6 +33,44 @@ interface StatCard {
 
 const loading = ref(true)
 const trendDays = ref<7 | 30>(7)
+const chartRef = ref<HTMLElement | null>(null)
+const mapRef = ref<HTMLElement | null>(null)
+let trendChart: echarts.ECharts | null = null
+let mapChart: echarts.ECharts | null = null
+
+const provinceHeatMock: Array<{ name: string; value: number }> = [
+  { name: '北京市', value: 96 },
+  { name: '天津市', value: 42 },
+  { name: '河北省', value: 68 },
+  { name: '山西省', value: 39 },
+  { name: '内蒙古自治区', value: 24 },
+  { name: '辽宁省', value: 55 },
+  { name: '吉林省', value: 28 },
+  { name: '黑龙江省', value: 22 },
+  { name: '上海市', value: 88 },
+  { name: '江苏省', value: 91 },
+  { name: '浙江省', value: 89 },
+  { name: '安徽省', value: 61 },
+  { name: '福建省', value: 58 },
+  { name: '江西省', value: 43 },
+  { name: '山东省', value: 95 },
+  { name: '河南省', value: 78 },
+  { name: '湖北省', value: 73 },
+  { name: '湖南省', value: 66 },
+  { name: '广东省', value: 98 },
+  { name: '广西壮族自治区', value: 41 },
+  { name: '海南省', value: 19 },
+  { name: '重庆市', value: 64 },
+  { name: '四川省', value: 75 },
+  { name: '贵州省', value: 33 },
+  { name: '云南省', value: 37 },
+  { name: '西藏自治区', value: 8 },
+  { name: '陕西省', value: 52 },
+  { name: '甘肃省', value: 17 },
+  { name: '青海省', value: 11 },
+  { name: '宁夏回族自治区', value: 13 },
+  { name: '新疆维吾尔自治区', value: 21 },
+]
 
 // Real data refs
 const statsData = ref<DashboardStats | null>(null)
@@ -35,29 +80,178 @@ const hotData = ref<HotQuestion[]>([])
 const stats = computed<StatCard[]>(() => {
   const s = statsData.value
   return [
-    { title: '对话总数', value: s?.conversation_count ?? 0, icon: ChatDotRound, color: '#003DA5', bgColor: 'rgba(0, 61, 165, 0.08)' },
-    { title: '今日活跃用户', value: s?.active_today ?? 0, icon: User, color: '#2E7D32', bgColor: 'rgba(46, 125, 50, 0.08)' },
-    { title: '知识库文档数', value: s?.knowledge_count ?? 0, icon: Document, color: '#C4972F', bgColor: 'rgba(196, 151, 47, 0.08)' },
-    { title: '待审核文档', value: s?.pending_review_count ?? 0, icon: Clock, color: '#C62828', bgColor: 'rgba(198, 40, 40, 0.08)' },
+    { title: '用户总数', value: s?.user_count ?? 0, icon: User, color: '#003DA5', bgColor: 'rgba(0, 61, 165, 0.08)' },
+    { title: '近7天新增用户', value: s?.new_user_7d ?? 0, icon: UserFilled, color: '#1B8A5A', bgColor: 'rgba(27, 138, 90, 0.10)' },
+    { title: '对话总数', value: s?.conversation_count ?? 0, icon: ChatDotRound, color: '#2E7D32', bgColor: 'rgba(46, 125, 50, 0.08)' },
+    { title: '今日活跃用户', value: s?.active_today ?? 0, icon: DataAnalysis, color: '#7A5AF8', bgColor: 'rgba(122, 90, 248, 0.10)' },
+    { title: '消息总数', value: s?.message_count ?? 0, icon: ChatLineRound, color: '#C4972F', bgColor: 'rgba(196, 151, 47, 0.08)' },
+    { title: '今日消息数', value: s?.message_today ?? 0, icon: Clock, color: '#F08C00', bgColor: 'rgba(240, 140, 0, 0.10)' },
+    { title: '已通过知识文档', value: s?.knowledge_approved_count ?? 0, icon: Document, color: '#1565C0', bgColor: 'rgba(21, 101, 192, 0.10)' },
+    { title: '待审核内容', value: (s?.pending_review_count ?? 0) + (s?.media_pending_review_count ?? 0), icon: PictureFilled, color: '#C62828', bgColor: 'rgba(198, 40, 40, 0.08)' },
   ]
 })
 
-const chartData = computed(() => {
-  if (trendsData.value.length === 0) return []
-  const maxCount = Math.max(...trendsData.value.map(t => t.count), 1)
-  return trendsData.value.map(t => {
+function buildTrendOption(): echarts.EChartsOption {
+  const labels = trendsData.value.map((t) => {
     const d = new Date(t.date)
     const dayNames = ['日', '一', '二', '三', '四', '五', '六']
-    const label = trendDays.value <= 7
-      ? `周${dayNames[d.getDay()]}`
-      : `${d.getMonth() + 1}/${d.getDate()}`
-    return {
-      label,
-      value: t.count,
-      height: Math.max((t.count / maxCount) * 100, 4),
-    }
+    return trendDays.value === 7 ? `周${dayNames[d.getDay()]}` : `${d.getMonth() + 1}/${d.getDate()}`
   })
-})
+  const values = trendsData.value.map(t => t.count)
+  const xAxisLabelInterval = trendDays.value === 30 ? 4 : 0
+
+  return {
+    animation: true,
+    grid: {
+      left: 24,
+      right: 16,
+      top: 16,
+      bottom: 28,
+      containLabel: true,
+    },
+    tooltip: {
+      trigger: 'axis',
+      axisPointer: { type: 'line' },
+      formatter: (params: any) => {
+        const p = Array.isArray(params) ? params[0] : params
+        return `${p.axisValue}<br/>对话数：${p.data}`
+      },
+    },
+    xAxis: {
+      type: 'category',
+      boundaryGap: false,
+      data: labels,
+      axisLabel: {
+        interval: xAxisLabelInterval,
+        color: '#5A5A72',
+        fontSize: 11,
+      },
+      axisLine: { lineStyle: { color: '#D8DEE8' } },
+      axisTick: { show: false },
+    },
+    yAxis: {
+      type: 'value',
+      minInterval: 1,
+      splitLine: { lineStyle: { color: '#ECF0F6' } },
+      axisLabel: { color: '#5A5A72', fontSize: 11 },
+    },
+    series: [
+      {
+        type: 'line',
+        data: values,
+        smooth: true,
+        symbol: 'circle',
+        symbolSize: 7,
+        lineStyle: { width: 3, color: '#003DA5' },
+        itemStyle: { color: '#003DA5', borderColor: '#fff', borderWidth: 2 },
+        areaStyle: {
+          color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+            { offset: 0, color: 'rgba(0, 61, 165, 0.25)' },
+            { offset: 1, color: 'rgba(0, 61, 165, 0.02)' },
+          ]),
+        },
+      },
+    ],
+    graphic: values.length === 0
+      ? {
+          type: 'text',
+          left: 'center',
+          top: 'middle',
+          style: {
+            text: '暂无数据',
+            fill: '#5A5A72',
+            fontSize: 14,
+          },
+        }
+      : undefined,
+  }
+}
+
+function renderTrendChart() {
+  if (!chartRef.value) return
+  if (!trendChart) {
+    trendChart = echarts.init(chartRef.value)
+  }
+  trendChart.setOption(buildTrendOption(), true)
+}
+
+function buildMapOption(): echarts.EChartsOption {
+  const values = provinceHeatMock.map(x => x.value)
+  const max = Math.max(...values, 100)
+  return {
+    tooltip: {
+      trigger: 'item',
+      formatter: (p: any) => `${p.name}<br/>访问热度：${p.value ?? 0}`,
+    },
+    visualMap: {
+      min: 0,
+      max,
+      text: ['高', '低'],
+      realtime: false,
+      calculable: true,
+      orient: 'horizontal',
+      left: 'center',
+      bottom: 8,
+      inRange: {
+        color: ['#4575B4', '#74ADD1', '#ABD9E9', '#E0F3F8', '#FFF7BC', '#FEE090', '#FDAE61', '#F46D43', '#D73027'],
+      },
+      outOfRange: {
+        color: ['#F2F6FB'],
+      },
+      textStyle: {
+        color: '#5A5A72',
+      },
+    },
+    series: [
+      {
+        name: '访问热度',
+        type: 'map',
+        map: 'china',
+        roam: true,
+        scaleLimit: {
+          min: 0.8,
+          max: 6,
+        },
+        layoutCenter: ['50%', '48%'],
+        layoutSize: '90%',
+        zoom: 1,
+        selectedMode: false,
+        label: {
+          show: false,
+        },
+        itemStyle: {
+          borderColor: '#F7FAFF',
+          borderWidth: 1,
+          areaColor: '#EFF4FA',
+        },
+        emphasis: {
+          label: { show: false },
+          itemStyle: {
+            areaColor: '#C92A2A',
+            borderColor: '#FFFFFF',
+            borderWidth: 1.2,
+            shadowBlur: 14,
+            shadowColor: 'rgba(201, 42, 42, 0.35)',
+          },
+        },
+        data: provinceHeatMock,
+      },
+    ],
+  }
+}
+
+function renderMapChart() {
+  if (!mapRef.value) return
+  if (!mapChart) {
+    mapChart = echarts.init(mapRef.value)
+  }
+  mapChart.setOption(buildMapOption(), true)
+}
+
+function handleResize() {
+  trendChart?.resize()
+  mapChart?.resize()
+}
 
 const hotTopics = computed(() =>
   hotData.value.map((item, idx) => ({
@@ -78,8 +272,12 @@ async function fetchTrends() {
   try {
     const res = await getDashboardTrends(trendDays.value)
     trendsData.value = res.data.items
+    await nextTick()
+    renderTrendChart()
   } catch {
     trendsData.value = []
+    await nextTick()
+    renderTrendChart()
   }
 }
 
@@ -98,9 +296,22 @@ async function handleTrendChange(days: string | number | boolean | undefined) {
 }
 
 onMounted(async () => {
+  echarts.registerMap('china', chinaGeoJson as any)
   loading.value = true
   await Promise.all([fetchStats(), fetchTrends(), fetchHot()])
+  await nextTick()
+  renderTrendChart()
+  renderMapChart()
+  window.addEventListener('resize', handleResize)
   loading.value = false
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('resize', handleResize)
+  trendChart?.dispose()
+  mapChart?.dispose()
+  trendChart = null
+  mapChart = null
 })
 </script>
 
@@ -111,25 +322,27 @@ onMounted(async () => {
       <p class="page-desc">系统运行概览</p>
     </div>
 
-    <div class="stats-grid">
-      <div
-        v-for="stat in stats"
-        :key="stat.title"
-        class="stat-card"
-      >
-        <div class="stat-icon" :style="{ background: stat.bgColor, color: stat.color }">
-          <el-icon :size="28"><component :is="stat.icon" /></el-icon>
+    <div class="core-layout">
+      <div class="side-column side-column--left">
+        <div class="stats-block">
+          <div class="stats-grid">
+            <div
+              v-for="stat in stats.slice(0, 4)"
+              :key="stat.title"
+              class="stat-card"
+            >
+              <div class="stat-icon" :style="{ background: stat.bgColor, color: stat.color }">
+                <el-icon :size="22"><component :is="stat.icon" /></el-icon>
+              </div>
+              <div class="stat-info">
+                <span class="stat-value">{{ loading ? '-' : stat.value.toLocaleString() }}</span>
+                <span class="stat-title">{{ stat.title }}</span>
+              </div>
+            </div>
+          </div>
         </div>
-        <div class="stat-info">
-          <span class="stat-value">{{ loading ? '-' : stat.value.toLocaleString() }}</span>
-          <span class="stat-title">{{ stat.title }}</span>
-        </div>
-      </div>
-    </div>
 
-    <div class="dashboard-grid">
-      <div class="chart-section">
-        <div class="section-card">
+        <div class="section-card floating-card">
           <div class="card-header">
             <h3 class="card-title">
               <el-icon><TrendCharts /></el-icon>
@@ -141,25 +354,45 @@ onMounted(async () => {
             </el-radio-group>
           </div>
           <div class="chart-area">
-            <template v-if="chartData.length > 0">
-              <div class="chart-bars">
-                <div v-for="(bar, idx) in chartData" :key="idx" class="chart-bar-group">
-                  <div class="chart-bar" :style="{ height: bar.height + '%' }">
-                    <span class="chart-bar-value">{{ bar.value }}</span>
-                  </div>
-                  <span class="chart-bar-label">{{ bar.label }}</span>
-                </div>
-              </div>
-            </template>
-            <div v-else class="chart-empty">
-              <span>暂无数据</span>
-            </div>
+            <div ref="chartRef" class="echart-canvas" />
           </div>
         </div>
       </div>
 
-      <div class="topics-section">
-        <div class="section-card">
+      <div class="center-column">
+        <div class="section-card map-core-card">
+          <div class="card-header">
+            <h3 class="card-title">
+              <el-icon><LocationFilled /></el-icon>
+              全国访问热度（Mock）
+            </h3>
+          </div>
+          <div class="map-area">
+            <div ref="mapRef" class="map-canvas" />
+          </div>
+        </div>
+      </div>
+
+      <div class="side-column side-column--right">
+        <div class="stats-block">
+          <div class="stats-grid">
+            <div
+              v-for="stat in stats.slice(4)"
+              :key="stat.title"
+              class="stat-card"
+            >
+              <div class="stat-icon" :style="{ background: stat.bgColor, color: stat.color }">
+                <el-icon :size="22"><component :is="stat.icon" /></el-icon>
+              </div>
+              <div class="stat-info">
+                <span class="stat-value">{{ loading ? '-' : stat.value.toLocaleString() }}</span>
+                <span class="stat-title">{{ stat.title }}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="section-card floating-card">
           <div class="card-header">
             <h3 class="card-title">
               <el-icon><ChatDotRound /></el-icon>
@@ -194,11 +427,8 @@ onMounted(async () => {
 </template>
 
 <style lang="scss" scoped>
-.dashboard-page {
-}
-
 .page-header {
-  margin-bottom: 24px;
+  margin-bottom: 16px;
 }
 
 .page-title {
@@ -214,66 +444,23 @@ onMounted(async () => {
   margin: 0;
 }
 
-.stats-grid {
+.core-layout {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: minmax(320px, 380px) minmax(320px, 1fr) minmax(320px, 380px);
   gap: 16px;
-  margin-bottom: 24px;
+  min-height: 680px;
+  align-items: stretch;
 }
 
-.stat-card {
-  background: var(--bg-primary, #ffffff);
-  border-radius: 12px;
-  padding: 20px;
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  border: 1px solid var(--border-color, #E2E6ED);
-  transition: box-shadow 0.2s;
-
-  &:hover {
-    box-shadow: var(--shadow-sm, 0 2px 8px rgba(0, 0, 0, 0.06));
-  }
-}
-
-.stat-icon {
-  width: 56px;
-  height: 56px;
-  border-radius: 12px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-}
-
-.stat-info {
-  display: flex;
-  flex-direction: column;
-}
-
-.stat-value {
-  font-size: 1.75rem;
-  font-weight: 700;
-  color: var(--text-primary, #1A1A2E);
-  line-height: 1.2;
-}
-
-.stat-title {
-  font-size: 0.8125rem;
-  color: var(--text-secondary, #5A5A72);
-  margin-top: 2px;
-}
-
-.dashboard-grid {
+.side-column {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-rows: auto 1fr;
   gap: 16px;
   min-width: 0;
 }
 
-.chart-section {
+.center-column {
   min-width: 0;
-  overflow: hidden;
 }
 
 .section-card {
@@ -282,6 +469,9 @@ onMounted(async () => {
   border: 1px solid var(--border-color, #E2E6ED);
   overflow: hidden;
   min-width: 0;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
 }
 
 .card-header {
@@ -306,59 +496,94 @@ onMounted(async () => {
   }
 }
 
-.chart-area {
-  height: 320px;
-  padding: 20px;
+.stats-block {
   display: flex;
-  align-items: flex-end;
-  overflow-x: auto;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.stats-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.stat-card {
+  background: var(--bg-primary, #ffffff);
+  border-radius: 12px;
+  padding: 14px 12px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid var(--border-color, #E2E6ED);
+  transition: box-shadow 0.2s;
+
+  &:hover {
+    box-shadow: var(--shadow-sm, 0 2px 8px rgba(0, 0, 0, 0.06));
+  }
+}
+
+.stat-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.stat-info {
+  display: flex;
+  flex-direction: column;
   min-width: 0;
 }
 
-.chart-bars {
-  display: flex;
-  align-items: flex-end;
-  gap: 12px;
-  width: 100%;
-  min-width: 100%;
-  height: 100%;
+.stat-value {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--text-primary, #1A1A2E);
+  line-height: 1.2;
 }
 
-.chart-bar-group {
-  flex: 1 1 0;
-  min-width: 32px;
-  max-width: none;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  height: 100%;
-  justify-content: flex-end;
-  gap: 8px;
-}
-
-.chart-bar {
-  width: 100%;
-  max-width: 48px;
-  min-width: 24px;
-  background: linear-gradient(180deg, var(--bnu-blue, #003DA5), #1A5FBF);
-  border-radius: 6px 6px 0 0;
-  display: flex;
-  align-items: flex-start;
-  justify-content: center;
-  padding-top: 8px;
-  min-height: 24px;
-  transition: height 0.6s ease;
-}
-
-.chart-bar-value {
-  font-size: 0.6875rem;
-  font-weight: 600;
-  color: #ffffff;
-}
-
-.chart-bar-label {
+.stat-title {
   font-size: 0.75rem;
   color: var(--text-secondary, #5A5A72);
+  margin-top: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.chart-area {
+  height: 100%;
+  padding: 8px 12px 10px 8px;
+  overflow: hidden;
+  min-width: 0;
+}
+
+.floating-card {
+  min-height: 0;
+}
+
+.echart-canvas {
+  width: 100%;
+  height: 100%;
+}
+
+.map-core-card {
+  min-height: 680px;
+}
+
+.map-area {
+  flex: 1;
+  min-height: 620px;
+  padding: 4px 8px 0;
+}
+
+.map-canvas {
+  width: 100%;
+  height: 100%;
 }
 
 .chart-empty,
@@ -374,7 +599,7 @@ onMounted(async () => {
 
 .topics-list {
   padding: 8px 0;
-  max-height: 360px;
+  height: 100%;
   overflow-y: auto;
 }
 
@@ -423,18 +648,31 @@ onMounted(async () => {
 }
 
 @media (max-width: 1024px) {
-  .stats-grid {
-    grid-template-columns: repeat(2, 1fr);
+  .core-layout {
+    grid-template-columns: 1fr;
+    min-height: auto;
   }
 
-  .dashboard-grid {
-    grid-template-columns: 1fr;
+  .side-column {
+    grid-template-rows: auto auto;
+  }
+
+  .map-core-card {
+    min-height: 460px;
+  }
+
+  .map-area {
+    min-height: 400px;
   }
 }
 
 @media (max-width: 768px) {
   .stats-grid {
     grid-template-columns: 1fr;
+  }
+
+  .card-header {
+    padding: 14px 16px;
   }
 }
 </style>

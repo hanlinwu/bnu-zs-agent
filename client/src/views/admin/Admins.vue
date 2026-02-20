@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Plus } from '@element-plus/icons-vue'
+import { Plus, Refresh } from '@element-plus/icons-vue'
 import * as adminApi from '@/api/admin/admin'
 import type { AdminItem } from '@/api/admin/admin'
 import type { FormInstance, FormRules } from 'element-plus'
@@ -454,6 +454,13 @@ onMounted(() => {
       </el-table>
 
       <div class="pagination-wrapper">
+        <el-button
+          :icon="Refresh"
+          circle
+          size="small"
+          @click="fetchAdmins"
+          title="刷新数据"
+        />
         <el-pagination
           v-model:current-page="currentPage"
           :page-size="pageSize"
@@ -671,8 +678,10 @@ onMounted(() => {
 
 .pagination-wrapper {
   display: flex;
+  align-items: center;
   justify-content: flex-end;
   margin-top: 16px;
+  gap: 12px;
 }
 
 :deep(.el-table) {

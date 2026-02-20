@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Plus, Delete, Upload, Picture, VideoCamera, Edit, ZoomIn } from '@element-plus/icons-vue'
+import { Plus, Delete, Upload, Picture, VideoCamera, Edit, ZoomIn, Refresh } from '@element-plus/icons-vue'
 import * as mediaApi from '@/api/admin/media'
 import * as wfApi from '@/api/admin/workflow'
 import type { MediaResource } from '@/types/admin'
@@ -594,6 +594,13 @@ onMounted(async () => {
       </div>
 
       <div class="pagination-wrapper" v-if="total > 0">
+        <el-button
+          :icon="Refresh"
+          circle
+          size="small"
+          @click="fetchMedia"
+          title="刷新数据"
+        />
         <el-pagination
           v-model:current-page="currentPage"
           :page-size="pageSize"
@@ -1019,10 +1026,12 @@ onMounted(async () => {
 
 .pagination-wrapper {
   display: flex;
+  align-items: center;
   justify-content: flex-end;
   margin-top: auto;
   padding-top: 16px;
   border-top: 1px solid var(--border-color, #E2E6ED);
+  gap: 12px;
 }
 
 .upload-icon {
