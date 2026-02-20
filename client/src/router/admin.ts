@@ -47,7 +47,7 @@ export const adminRoutes: RouteRecordRaw[] = [
         path: 'system-config',
         name: 'AdminSystemConfig',
         component: () => import('@/views/admin/SystemConfig.vue'),
-        meta: { title: '风险与Prompt配置' },
+        meta: { title: '智能体配置' },
       },
       {
         path: 'system-settings',

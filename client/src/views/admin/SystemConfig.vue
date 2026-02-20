@@ -384,7 +384,7 @@ onMounted(() => {
   <div v-loading="loading" class="system-config-page">
     <div class="page-header">
       <div>
-        <h2 class="page-title">风险与Prompt配置</h2>
+        <h2 class="page-title">智能体配置</h2>
         <p class="page-desc">配置风险判定关键词与低/中/高风险回复模板</p>
       </div>
       <el-button type="primary" :loading="saving" @click="saveConfig">保存配置</el-button>

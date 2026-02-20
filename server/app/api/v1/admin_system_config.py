@@ -28,7 +28,7 @@ ALLOWED_LOGO_TYPES = {"image/jpeg", "image/png", "image/webp", "image/svg+xml"}
 
 
 class ChatGuardrailConfigUpdateRequest(BaseModel):
-    value: dict = Field(..., description="聊天风险判定与分级提示词配置")
+    value: dict = Field(..., description="智能体配置")
 
 
 class SystemBasicConfigUpdateRequest(BaseModel):
@@ -70,7 +70,7 @@ async def get_chat_guardrail(
     admin: AdminUser = Depends(get_current_admin),
     db: AsyncSession = Depends(get_db),
 ):
-    """获取聊天风险判定与Prompt配置。"""
+    """获取智能体配置。"""
     config = await get_chat_guardrail_config(db)
     return {"key": "chat_guardrail", "value": config}
 
@@ -81,7 +81,7 @@ async def put_chat_guardrail(
     admin: AdminUser = Depends(get_current_admin),
     db: AsyncSession = Depends(get_db),
 ):
-    """更新聊天风险判定与Prompt配置。"""
+    """更新智能体配置。"""
     config = await update_chat_guardrail_config(body.value, str(admin.id), db)
     return {"key": "chat_guardrail", "value": config}
 

@@ -73,7 +73,7 @@ const menuGroups: MenuGroup[] = [
     label: '系统配置',
     items: [
       { index: '/admin/model', title: '模型配置', icon: markRaw(Cpu), permission: 'model:read' },
-      { index: '/admin/system-config', title: '风险与Prompt配置', icon: markRaw(SetUp), permission: 'system_config:read' },
+      { index: '/admin/system-config', title: '智能体配置', icon: markRaw(SetUp), permission: 'system_config:read' },
       { index: '/admin/sensitive', title: '敏感词库', icon: markRaw(Warning), permission: 'sensitive:read' },
       { index: '/admin/system-settings', title: '系统设置', icon: markRaw(Setting), permission: 'system_config:read' },
     ],
