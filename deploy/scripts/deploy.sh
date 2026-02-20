@@ -97,6 +97,34 @@ rollback_to_previous() {
   IMAGE_TAG="${PREVIOUS_TAG}" compose ps
 }
 
+print_runtime_diagnostics() {
+  echo "[deploy] diagnostics: compose ps"
+  compose ps || true
+  echo "[deploy] diagnostics: nginx logs"
+  compose logs --tail=120 nginx || true
+  echo "[deploy] diagnostics: app logs"
+  compose logs --tail=120 app || true
+}
+
+health_check_with_retry() {
+  local url="$1"
+  local timeout="${2:-90}"
+  local interval="${3:-3}"
+  local waited=0
+
+  while (( waited < timeout )); do
+    local http_code
+    http_code="$(curl -sS --max-time 10 -o /dev/null -w '%{http_code}' "${url}" || true)"
+    if [[ "${http_code}" =~ ^2[0-9][0-9]$ || "${http_code}" =~ ^3[0-9][0-9]$ ]]; then
+      return 0
+    fi
+    sleep "${interval}"
+    waited=$(( waited + interval ))
+  done
+
+  return 1
+}
+
 ensure_docker_access
 REGISTRY_HOST="$(registry_from_image "${APP_IMAGE}")"
 REGISTRY_USERNAME="${REGISTRY_USERNAME:-${GHCR_USERNAME:-}}"
@@ -130,18 +158,23 @@ fi
 echo "[deploy] starting app/worker/nginx"
 if ! compose up -d app worker nginx; then
   echo "[deploy] failed to start services" >&2
+  print_runtime_diagnostics
   rollback_to_previous || true
   exit 1
 fi
 
 echo "[deploy] health check"
 HEALTH_HOST="${BIND_IP:-127.0.0.1}"
+if [[ "${HEALTH_HOST}" == "0.0.0.0" || "${HEALTH_HOST}" == "::" || "${HEALTH_HOST}" == "[::]" ]]; then
+  HEALTH_HOST="127.0.0.1"
+fi
 HEALTH_PORT="${HTTP_PORT:-80}"
 HEALTH_URL="http://${HEALTH_HOST}:${HEALTH_PORT}/health"
 
-if ! curl -fsS --max-time 10 "${HEALTH_URL}" > /dev/null; then
+if ! health_check_with_retry "${HEALTH_URL}" 120 3; then
   echo "[deploy] health check failed" >&2
   echo "[deploy] checked url: ${HEALTH_URL}" >&2
+  print_runtime_diagnostics
   rollback_to_previous || true
   exit 1
 fi
