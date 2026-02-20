@@ -215,6 +215,20 @@ function markImageError(mediaId: string) {
   }
 }
 
+function registerImageRef(mediaId: string, el: any) {
+  const img = el as HTMLImageElement | null
+  if (!img || isImageLoaded(mediaId) === true) return
+
+  // Cached images may skip load events after filter switch.
+  if (img.complete) {
+    if (img.naturalWidth > 0) {
+      markImageLoaded(mediaId)
+    } else {
+      markImageError(mediaId)
+    }
+  }
+}
+
 async function fetchWorkflow() {
   try {
     const res = await wfApi.getWorkflowForResource('media')
@@ -485,6 +499,7 @@ onMounted(async () => {
             >
               <div v-if="!isImageLoaded(media.id)" class="thumb-skeleton" />
               <img
+                :ref="(el) => registerImageRef(media.id, el)"
                 :src="thumbnailUrl(media)"
                 :alt="media.title"
                 class="thumb-img"

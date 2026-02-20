@@ -20,9 +20,9 @@ const submitting = ref(false)
 const form = reactive({
   id: '',
   period_name: '',
-  start_month: null as number | null,
-  end_month: null as number | null,
   year: new Date().getFullYear(),
+  start_date: '' as string,
+  end_date: '' as string,
   style: 'general' as string,
   description: '',
   keywords: '',
@@ -32,16 +32,11 @@ const form = reactive({
 
 const rules: FormRules = {
   period_name: [{ required: true, message: '请输入阶段名称', trigger: 'blur' }],
-  start_month: [{ required: true, message: '请选择开始月份', trigger: 'change' }],
-  end_month: [{ required: true, message: '请选择结束月份', trigger: 'change' }],
   year: [{ required: true, message: '请输入年度', trigger: 'blur' }],
+  start_date: [{ required: true, message: '请选择开始日期', trigger: 'change' }],
+  end_date: [{ required: true, message: '请选择结束日期', trigger: 'change' }],
   style: [{ required: true, message: '请选择话术风格', trigger: 'change' }],
 }
-
-const monthOptions = Array.from({ length: 12 }, (_, i) => ({
-  label: `${i + 1}月`,
-  value: i + 1,
-}))
 
 const dialogTitle = computed(() => dialogMode.value === 'create' ? '新增招生阶段' : '编辑招生阶段')
 
@@ -85,20 +80,13 @@ function periodColor(style: string) {
   return map[style] || '#6B7B8D'
 }
 
-function formatMonthRange(period: CalendarPeriod) {
-  return `${period.start_month}月 — ${period.end_month}月`
+function formatDateRange(period: CalendarPeriod) {
+  return `${period.start_date} — ${period.end_date}`
 }
 
 function isCurrentPeriod(period: CalendarPeriod) {
-  const now = new Date()
-  const currentMonth = now.getMonth() + 1
-  const currentYearVal = now.getFullYear()
-  if (period.year !== currentYearVal) return false
-  if (period.start_month <= period.end_month) {
-    return currentMonth >= period.start_month && currentMonth <= period.end_month
-  }
-  // Cross-year range (e.g., 11 -> 2)
-  return currentMonth >= period.start_month || currentMonth <= period.end_month
+  const today = new Date().toISOString().slice(0, 10)
+  return today >= period.start_date && today <= period.end_date
 }
 
 async function fetchYears() {
@@ -131,9 +119,9 @@ function openCreate() {
   dialogMode.value = 'create'
   form.id = ''
   form.period_name = ''
-  form.start_month = null
-  form.end_month = null
   form.year = currentYear.value || new Date().getFullYear()
+  form.start_date = ''
+  form.end_date = ''
   form.style = 'general'
   form.description = ''
   form.keywords = ''
@@ -146,9 +134,9 @@ function openEdit(period: CalendarPeriod) {
   dialogMode.value = 'edit'
   form.id = period.id
   form.period_name = period.period_name
-  form.start_month = period.start_month
-  form.end_month = period.end_month
   form.year = period.year
+  form.start_date = period.start_date
+  form.end_date = period.end_date
   form.style = period.tone_config?.style || 'general'
   form.description = period.tone_config?.description || ''
   form.keywords = (period.tone_config?.keywords || []).join(', ')
@@ -172,9 +160,9 @@ async function handleSubmit() {
     if (dialogMode.value === 'create') {
       await calendarApi.createPeriod({
         period_name: form.period_name,
-        start_month: form.start_month!,
-        end_month: form.end_month!,
         year: form.year,
+        start_date: form.start_date,
+        end_date: form.end_date,
         tone_config: toneConfig,
         additional_prompt: form.additional_prompt || null,
         is_active: form.is_active,
@@ -183,9 +171,9 @@ async function handleSubmit() {
     } else {
       await calendarApi.updatePeriod(form.id, {
         period_name: form.period_name,
-        start_month: form.start_month!,
-        end_month: form.end_month!,
         year: form.year,
+        start_date: form.start_date,
+        end_date: form.end_date,
         tone_config: toneConfig,
         additional_prompt: form.additional_prompt || null,
         is_active: form.is_active,
@@ -292,7 +280,7 @@ onMounted(async () => {
               </div>
             </div>
             <div class="period-dates">
-              {{ period.year }}年 {{ formatMonthRange(period) }}
+              {{ period.year }}年 {{ formatDateRange(period) }}
             </div>
             <p v-if="period.tone_config?.description" class="period-desc">
               {{ period.tone_config.description }}
@@ -333,25 +321,23 @@ onMounted(async () => {
         <el-form-item label="年度" prop="year">
           <el-input-number v-model="form.year" :min="2020" :max="2099" style="width: 100%" />
         </el-form-item>
-        <el-form-item label="开始月份" prop="start_month">
-          <el-select v-model="form.start_month" placeholder="选择月份" style="width: 100%">
-            <el-option
-              v-for="m in monthOptions"
-              :key="m.value"
-              :label="m.label"
-              :value="m.value"
-            />
-          </el-select>
+        <el-form-item label="开始日期" prop="start_date">
+          <el-date-picker
+            v-model="form.start_date"
+            type="date"
+            placeholder="选择开始日期"
+            value-format="YYYY-MM-DD"
+            style="width: 100%"
+          />
         </el-form-item>
-        <el-form-item label="结束月份" prop="end_month">
-          <el-select v-model="form.end_month" placeholder="选择月份" style="width: 100%">
-            <el-option
-              v-for="m in monthOptions"
-              :key="m.value"
-              :label="m.label"
-              :value="m.value"
-            />
-          </el-select>
+        <el-form-item label="结束日期" prop="end_date">
+          <el-date-picker
+            v-model="form.end_date"
+            type="date"
+            placeholder="选择结束日期"
+            value-format="YYYY-MM-DD"
+            style="width: 100%"
+          />
         </el-form-item>
         <el-form-item label="话术风格" prop="style">
           <el-select v-model="form.style" style="width: 100%">

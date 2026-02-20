@@ -9,9 +9,9 @@ export const getYears = () =>
 
 export const createPeriod = (data: {
   period_name: string
-  start_month: number
-  end_month: number
   year: number
+  start_date: string
+  end_date: string
   tone_config: Record<string, unknown>
   additional_prompt?: string | null
   is_active?: boolean
@@ -19,9 +19,9 @@ export const createPeriod = (data: {
 
 export const updatePeriod = (id: string, data: {
   period_name?: string
-  start_month?: number
-  end_month?: number
   year?: number
+  start_date?: string
+  end_date?: string
   tone_config?: Record<string, unknown>
   additional_prompt?: string | null
   is_active?: boolean

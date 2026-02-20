@@ -37,6 +37,11 @@ const chartRef = ref<HTMLElement | null>(null)
 const mapRef = ref<HTMLElement | null>(null)
 let trendChart: echarts.ECharts | null = null
 let mapChart: echarts.ECharts | null = null
+let autoHoverTimer: ReturnType<typeof setInterval> | null = null
+let currentHoverIndex = -1
+let isMapHoverPaused = false
+let danmakuSpawnTimer: ReturnType<typeof setTimeout> | null = null
+let danmakuId = 0
 
 const provinceHeatMock: Array<{ name: string; value: number }> = [
   { name: '北京市', value: 96 },
@@ -76,6 +81,36 @@ const provinceHeatMock: Array<{ name: string; value: number }> = [
 const statsData = ref<DashboardStats | null>(null)
 const trendsData = ref<TrendItem[]>([])
 const hotData = ref<HotQuestion[]>([])
+const animatedValues = ref<number[]>([0, 0, 0, 0, 0, 0, 0, 0])
+const danmakuContainerRef = ref<HTMLElement | null>(null)
+const danmakuContainerWidth = ref(1200)
+
+interface DanmakuItem {
+  id: number
+  text: string
+  track: number
+  duration: number
+  offset: number
+}
+
+const danmakuTracks = ref<DanmakuItem[][]>([[], [], []])
+const danmakuMessages = [
+  '北师大心理学专业录取分数线是多少？',
+  '请问今年有哪些新增专业？',
+  '珠海校区和北京校区有什么区别？',
+  '转专业政策是怎样的？',
+  '公费师范生和普通师范生培养区别？',
+  '宿舍条件和床位规格可以介绍一下吗？',
+  '是否支持双学位或辅修专业申请？',
+  '提前批和普通批志愿填报有何差异？',
+  '外语语种限制对报考影响大吗？',
+  '奖学金覆盖比例和评定标准是什么？',
+  '新生入学后可以申请转校区吗？',
+  '教育学部有哪些热门研究方向？',
+  '保研政策和推免比例大概是多少？',
+  '国际交流项目的申请门槛高吗？',
+  '今年招生章程预计何时发布？',
+]
 
 const stats = computed<StatCard[]>(() => {
   const s = statsData.value
@@ -248,9 +283,128 @@ function renderMapChart() {
   mapChart.setOption(buildMapOption(), true)
 }
 
+function stopAutoHover() {
+  if (autoHoverTimer) {
+    clearInterval(autoHoverTimer)
+    autoHoverTimer = null
+  }
+}
+
+function runAutoHoverStep() {
+  if (!mapChart || provinceHeatMock.length === 0) return
+  if (currentHoverIndex >= 0) {
+    mapChart.dispatchAction({ type: 'downplay', seriesIndex: 0, dataIndex: currentHoverIndex })
+  }
+  currentHoverIndex = (currentHoverIndex + 1) % provinceHeatMock.length
+  mapChart.dispatchAction({ type: 'highlight', seriesIndex: 0, dataIndex: currentHoverIndex })
+  mapChart.dispatchAction({ type: 'showTip', seriesIndex: 0, dataIndex: currentHoverIndex })
+}
+
+function startAutoHover() {
+  if (!mapChart || autoHoverTimer || isMapHoverPaused || provinceHeatMock.length === 0) return
+  if (currentHoverIndex < 0) {
+    runAutoHoverStep()
+  }
+  autoHoverTimer = setInterval(() => {
+    runAutoHoverStep()
+  }, 2000)
+}
+
+function handleMapMouseOver(params: any) {
+  if (params?.componentType !== 'series') return
+  isMapHoverPaused = true
+  stopAutoHover()
+}
+
+function handleMapMouseOut(params: any) {
+  if (params?.componentType !== 'series') return
+  isMapHoverPaused = false
+  startAutoHover()
+}
+
+function bindMapHoverEvents() {
+  if (!mapChart) return
+  mapChart.off('mouseover', handleMapMouseOver)
+  mapChart.off('mouseout', handleMapMouseOut)
+  mapChart.on('mouseover', handleMapMouseOver)
+  mapChart.on('mouseout', handleMapMouseOut)
+}
+
+function animateNumbers() {
+  const targets = stats.value.map(s => s.value)
+  const duration = 1500
+  const start = performance.now()
+
+  function tick(now: number) {
+    const elapsed = now - start
+    const progress = Math.min(elapsed / duration, 1)
+    const eased = 1 - Math.pow(1 - progress, 3)
+    animatedValues.value = targets.map(t => Math.round(t * eased))
+    if (progress < 1) {
+      requestAnimationFrame(tick)
+    }
+  }
+
+  requestAnimationFrame(tick)
+}
+
+function updateDanmakuContainerWidth() {
+  danmakuContainerWidth.value = danmakuContainerRef.value?.clientWidth ?? 1200
+}
+
+function spawnDanmaku() {
+  if (danmakuMessages.length === 0 || danmakuTracks.value.length === 0) return
+  const message = danmakuMessages[Math.floor(Math.random() * danmakuMessages.length)]
+  const track = Math.floor(Math.random() * danmakuTracks.value.length)
+  const duration = Math.floor(Math.random() * 8) + 8
+  const offset = Math.floor(Math.random() * 160)
+  const trackItems = danmakuTracks.value[track]
+  if (!message || !trackItems) return
+  trackItems.push({
+    id: ++danmakuId,
+    text: message,
+    track,
+    duration,
+    offset,
+  })
+}
+
+function scheduleDanmakuSpawn() {
+  const delay = 1500 + Math.floor(Math.random() * 1000)
+  danmakuSpawnTimer = setTimeout(() => {
+    spawnDanmaku()
+    scheduleDanmakuSpawn()
+  }, delay)
+}
+
+function startDanmaku() {
+  if (danmakuSpawnTimer) return
+  for (let i = 0; i < danmakuTracks.value.length; i += 1) {
+    spawnDanmaku()
+  }
+  scheduleDanmakuSpawn()
+}
+
+function stopDanmaku() {
+  if (danmakuSpawnTimer) {
+    clearTimeout(danmakuSpawnTimer)
+    danmakuSpawnTimer = null
+  }
+}
+
+function removeDanmaku(trackIndex: number, id: number) {
+  const track = danmakuTracks.value[trackIndex]
+  if (!track) return
+  const index = track.findIndex(item => item.id === id)
+  if (index >= 0) {
+    track.splice(index, 1)
+  }
+}
+
 function handleResize() {
   trendChart?.resize()
   mapChart?.resize()
+  updateDanmakuContainerWidth()
 }
 
 const hotTopics = computed(() =>
@@ -302,12 +456,21 @@ onMounted(async () => {
   await nextTick()
   renderTrendChart()
   renderMapChart()
+  bindMapHoverEvents()
+  startAutoHover()
+  updateDanmakuContainerWidth()
+  startDanmaku()
   window.addEventListener('resize', handleResize)
   loading.value = false
+  animateNumbers()
 })
 
 onBeforeUnmount(() => {
+  stopAutoHover()
+  stopDanmaku()
   window.removeEventListener('resize', handleResize)
+  mapChart?.off('mouseover', handleMapMouseOver)
+  mapChart?.off('mouseout', handleMapMouseOut)
   trendChart?.dispose()
   mapChart?.dispose()
   trendChart = null
@@ -318,8 +481,31 @@ onBeforeUnmount(() => {
 <template>
   <div class="dashboard-page">
     <div class="page-header">
-      <h2 class="page-title">仪表盘</h2>
-      <p class="page-desc">系统运行概览</p>
+      <div class="page-heading">
+        <h2 class="page-title">仪表盘</h2>
+        <p class="page-desc">系统运行概览</p>
+      </div>
+      <div ref="danmakuContainerRef" class="danmaku-floating">
+        <div
+          v-for="(trackItems, trackIndex) in danmakuTracks"
+          :key="trackIndex"
+          class="danmaku-track"
+        >
+          <span
+            v-for="item in trackItems"
+            :key="item.id"
+            class="danmaku-item"
+            :style="{
+              '--duration': `${item.duration}s`,
+              '--offset': `${item.offset}px`,
+              '--track-width': `${danmakuContainerWidth}px`,
+            }"
+            @animationend="removeDanmaku(trackIndex, item.id)"
+          >
+            {{ item.text }}
+          </span>
+        </div>
+      </div>
     </div>
 
     <div class="core-layout">
@@ -327,7 +513,7 @@ onBeforeUnmount(() => {
         <div class="stats-block">
           <div class="stats-grid">
             <div
-              v-for="stat in stats.slice(0, 4)"
+              v-for="(stat, index) in stats.slice(0, 4)"
               :key="stat.title"
               class="stat-card"
             >
@@ -335,7 +521,7 @@ onBeforeUnmount(() => {
                 <el-icon :size="22"><component :is="stat.icon" /></el-icon>
               </div>
               <div class="stat-info">
-                <span class="stat-value">{{ loading ? '-' : stat.value.toLocaleString() }}</span>
+                <span class="stat-value">{{ loading ? '-' : (animatedValues[index] ?? 0).toLocaleString() }}</span>
                 <span class="stat-title">{{ stat.title }}</span>
               </div>
             </div>
@@ -377,7 +563,7 @@ onBeforeUnmount(() => {
         <div class="stats-block">
           <div class="stats-grid">
             <div
-              v-for="stat in stats.slice(4)"
+              v-for="(stat, index) in stats.slice(4)"
               :key="stat.title"
               class="stat-card"
             >
@@ -385,7 +571,7 @@ onBeforeUnmount(() => {
                 <el-icon :size="22"><component :is="stat.icon" /></el-icon>
               </div>
               <div class="stat-info">
-                <span class="stat-value">{{ loading ? '-' : stat.value.toLocaleString() }}</span>
+                <span class="stat-value">{{ loading ? '-' : (animatedValues[index + 4] ?? 0).toLocaleString() }}</span>
                 <span class="stat-title">{{ stat.title }}</span>
               </div>
             </div>
@@ -423,12 +609,25 @@ onBeforeUnmount(() => {
         </div>
       </div>
     </div>
+
   </div>
 </template>
 
 <style lang="scss" scoped>
+.dashboard-page {
+  position: relative;
+}
+
 .page-header {
+  display: grid;
+  grid-template-columns: minmax(220px, auto) minmax(420px, 1fr);
+  align-items: start;
+  gap: 16px;
   margin-bottom: 16px;
+}
+
+.page-heading {
+  min-width: 0;
 }
 
 .page-title {
@@ -450,6 +649,46 @@ onBeforeUnmount(() => {
   gap: 16px;
   min-height: 680px;
   align-items: stretch;
+}
+
+.danmaku-floating {
+  position: relative;
+  height: 74px;
+  overflow: hidden;
+  padding: 2px 0;
+  pointer-events: none;
+}
+
+.danmaku-track {
+  position: relative;
+  height: 22px;
+  overflow: hidden;
+}
+
+.danmaku-item {
+  position: absolute;
+  left: calc(100% + var(--offset, 0px));
+  top: 1px;
+  white-space: nowrap;
+  font-size: 0.8125rem;
+  line-height: 1.25;
+  color: #2c3e50;
+  padding: 1px 10px 2px;
+  border-radius: 999px;
+  border: 1px solid rgba(0, 61, 165, 0.14);
+  background: rgba(255, 255, 255, 0.82);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  animation: danmaku-scroll var(--duration) linear forwards;
+}
+
+@keyframes danmaku-scroll {
+  from {
+    transform: translateX(0);
+  }
+
+  to {
+    transform: translateX(calc(-1 * (var(--track-width, 1200px) + 120%)));
+  }
 }
 
 .side-column {
@@ -648,6 +887,11 @@ onBeforeUnmount(() => {
 }
 
 @media (max-width: 1024px) {
+  .page-header {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
   .core-layout {
     grid-template-columns: 1fr;
     min-height: auto;
@@ -673,6 +917,14 @@ onBeforeUnmount(() => {
 
   .card-header {
     padding: 14px 16px;
+  }
+
+  .danmaku-floating {
+    height: 108px;
+  }
+
+  .danmaku-track {
+    height: 34px;
   }
 }
 </style>

@@ -1,7 +1,7 @@
 """Time-aware calendar service for admission-phase tone injection."""
 
 import logging
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 
 from sqlalchemy import select, and_
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -69,8 +69,8 @@ async def get_current_tone(db: AsyncSession | None = None) -> dict:
         pass
 
     now = datetime.now(timezone.utc)
+    today = now.date()
     month = now.month
-    year = now.year
 
     tone_config = None
 
@@ -79,9 +79,8 @@ async def get_current_tone(db: AsyncSession | None = None) -> dict:
         try:
             stmt = select(AdmissionCalendar).where(
                 and_(
-                    AdmissionCalendar.year == year,
-                    AdmissionCalendar.start_month <= month,
-                    AdmissionCalendar.end_month >= month,
+                    AdmissionCalendar.start_date <= today,
+                    AdmissionCalendar.end_date >= today,
                     AdmissionCalendar.is_active == True,
                 )
             )

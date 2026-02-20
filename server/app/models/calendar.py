@@ -1,7 +1,7 @@
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 
-from sqlalchemy import String, Integer, Boolean, ForeignKey, DateTime, text, Text
+from sqlalchemy import String, Integer, Boolean, ForeignKey, DateTime, Date, text, Text
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -13,9 +13,9 @@ class AdmissionCalendar(Base):
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()"))
     period_name: Mapped[str] = mapped_column(String(50), nullable=False)
-    start_month: Mapped[int] = mapped_column(Integer, nullable=False)
-    end_month: Mapped[int] = mapped_column(Integer, nullable=False)
     year: Mapped[int] = mapped_column(Integer, nullable=False)
+    start_date: Mapped[date] = mapped_column(Date, nullable=False)
+    end_date: Mapped[date] = mapped_column(Date, nullable=False)
     tone_config: Mapped[dict] = mapped_column(JSONB, nullable=False)
     additional_prompt: Mapped[str | None] = mapped_column(Text, nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)

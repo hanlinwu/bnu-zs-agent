@@ -1,10 +1,10 @@
 """Admission calendar management API for administrators."""
 
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
-from sqlalchemy import select, text
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
@@ -19,9 +19,9 @@ router = APIRouter()
 
 class CalendarCreateRequest(BaseModel):
     period_name: str
-    start_month: int
-    end_month: int
     year: int
+    start_date: date
+    end_date: date
     tone_config: dict
     additional_prompt: str | None = None
     is_active: bool = True
@@ -29,12 +29,27 @@ class CalendarCreateRequest(BaseModel):
 
 class CalendarUpdateRequest(BaseModel):
     period_name: str | None = None
-    start_month: int | None = None
-    end_month: int | None = None
     year: int | None = None
+    start_date: date | None = None
+    end_date: date | None = None
     tone_config: dict | None = None
     additional_prompt: str | None = None
     is_active: bool | None = None
+
+
+def _serialize_calendar(c: AdmissionCalendar) -> dict:
+    return {
+        "id": str(c.id),
+        "period_name": c.period_name,
+        "year": c.year,
+        "start_date": c.start_date.isoformat(),
+        "end_date": c.end_date.isoformat(),
+        "tone_config": c.tone_config,
+        "additional_prompt": c.additional_prompt,
+        "is_active": c.is_active,
+        "updated_by": str(c.updated_by) if c.updated_by else None,
+        "updated_at": c.updated_at.isoformat(),
+    }
 
 
 @router.get("", dependencies=[Depends(require_permission("calendar:read"))])
@@ -47,28 +62,12 @@ async def list_calendars(
     stmt = select(AdmissionCalendar)
     if year:
         stmt = stmt.where(AdmissionCalendar.year == year)
-    stmt = stmt.order_by(AdmissionCalendar.year.desc(), AdmissionCalendar.start_month)
+    stmt = stmt.order_by(AdmissionCalendar.year.desc(), AdmissionCalendar.start_date)
 
     result = await db.execute(stmt)
     calendars = result.scalars().all()
 
-    return {
-        "items": [
-            {
-                "id": str(c.id),
-                "period_name": c.period_name,
-                "start_month": c.start_month,
-                "end_month": c.end_month,
-                "year": c.year,
-                "tone_config": c.tone_config,
-                "additional_prompt": c.additional_prompt,
-                "is_active": c.is_active,
-                "updated_by": str(c.updated_by) if c.updated_by else None,
-                "updated_at": c.updated_at.isoformat(),
-            }
-            for c in calendars
-        ]
-    }
+    return {"items": [_serialize_calendar(c) for c in calendars]}
 
 
 @router.get("/years", dependencies=[Depends(require_permission("calendar:read"))])
@@ -91,16 +90,14 @@ async def create_calendar(
     db: AsyncSession = Depends(get_db),
 ):
     """创建招生日历时段"""
-    if not 1 <= body.start_month <= 12:
-        raise BizError(code=400, message="start_month 必须在 1-12 之间")
-    if not 1 <= body.end_month <= 12:
-        raise BizError(code=400, message="end_month 必须在 1-12 之间")
+    if body.start_date > body.end_date:
+        raise BizError(code=400, message="开始日期不能晚于结束日期")
 
     cal = AdmissionCalendar(
         period_name=body.period_name,
-        start_month=body.start_month,
-        end_month=body.end_month,
         year=body.year,
+        start_date=body.start_date,
+        end_date=body.end_date,
         tone_config=body.tone_config,
         additional_prompt=body.additional_prompt,
         is_active=body.is_active,
@@ -110,17 +107,7 @@ async def create_calendar(
     await db.commit()
     await db.refresh(cal)
 
-    return {
-        "id": str(cal.id),
-        "period_name": cal.period_name,
-        "start_month": cal.start_month,
-        "end_month": cal.end_month,
-        "year": cal.year,
-        "tone_config": cal.tone_config,
-        "additional_prompt": cal.additional_prompt,
-        "is_active": cal.is_active,
-        "updated_at": cal.updated_at.isoformat(),
-    }
+    return _serialize_calendar(cal)
 
 
 @router.put("/{calendar_id}", dependencies=[Depends(require_permission("calendar:update"))])
@@ -138,16 +125,12 @@ async def update_calendar(
 
     if body.period_name is not None:
         cal.period_name = body.period_name
-    if body.start_month is not None:
-        if not 1 <= body.start_month <= 12:
-            raise BizError(code=400, message="start_month 必须在 1-12 之间")
-        cal.start_month = body.start_month
-    if body.end_month is not None:
-        if not 1 <= body.end_month <= 12:
-            raise BizError(code=400, message="end_month 必须在 1-12 之间")
-        cal.end_month = body.end_month
     if body.year is not None:
         cal.year = body.year
+    if body.start_date is not None:
+        cal.start_date = body.start_date
+    if body.end_date is not None:
+        cal.end_date = body.end_date
     if body.tone_config is not None:
         cal.tone_config = body.tone_config
     if body.additional_prompt is not None:
@@ -155,23 +138,16 @@ async def update_calendar(
     if body.is_active is not None:
         cal.is_active = body.is_active
 
+    # Validate date order after applying updates
+    if cal.start_date > cal.end_date:
+        raise BizError(code=400, message="开始日期不能晚于结束日期")
+
     cal.updated_by = admin.id
     cal.updated_at = datetime.now(timezone.utc)
     await db.commit()
     await db.refresh(cal)
 
-    return {
-        "id": str(cal.id),
-        "period_name": cal.period_name,
-        "start_month": cal.start_month,
-        "end_month": cal.end_month,
-        "year": cal.year,
-        "tone_config": cal.tone_config,
-        "additional_prompt": cal.additional_prompt,
-        "is_active": cal.is_active,
-        "updated_by": str(cal.updated_by),
-        "updated_at": cal.updated_at.isoformat(),
-    }
+    return _serialize_calendar(cal)
 
 
 @router.delete("/{calendar_id}", dependencies=[Depends(require_permission("calendar:delete"))])

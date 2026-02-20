@@ -103,6 +103,77 @@
 }
 
 // ------------------------------------------------------------------
+// Element Plus table tuning for dark theme
+// ------------------------------------------------------------------
+[data-theme='dark'] .el-table {
+  --el-table-text-color: var(--text-primary);
+  --el-table-header-text-color: #cfd7e6;
+  --el-table-bg-color: #161a23;
+  --el-table-tr-bg-color: #161a23;
+  --el-table-header-bg-color: #1d2330;
+  --el-table-expanded-cell-bg-color: #161a23;
+  --el-table-border-color: #2b3343;
+  --el-table-row-hover-bg-color: #242c3b;
+  --el-table-current-row-bg-color: #263041;
+  --el-table-fixed-box-shadow: 0 0 12px rgba(0, 0, 0, 0.45);
+}
+
+[data-theme='dark'] .el-table--striped .el-table__body tr.el-table__row--striped td.el-table__cell {
+  background-color: #1b212d;
+}
+
+[data-theme='dark'] .el-table .el-table__body tr:hover > td.el-table__cell {
+  background-color: var(--el-table-row-hover-bg-color) !important;
+}
+
+[data-theme='dark'] .el-table .el-table__body tr.current-row > td.el-table__cell {
+  background-color: var(--el-table-current-row-bg-color) !important;
+}
+
+// ------------------------------------------------------------------
+// Theme switch animation (View Transitions API)
+// ------------------------------------------------------------------
+:root {
+  --theme-switch-x: 50vw;
+  --theme-switch-y: 50vh;
+  --theme-switch-r: 120vmax;
+  --theme-reveal-duration: 520ms;
+}
+
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation: none;
+  mix-blend-mode: normal;
+}
+
+::view-transition-new(root) {
+  clip-path: circle(0 at var(--theme-switch-x) var(--theme-switch-y));
+  will-change: clip-path;
+  animation: theme-reveal var(--theme-reveal-duration) cubic-bezier(0.2, 0.85, 0.22, 1) forwards;
+}
+
+@keyframes theme-reveal {
+  to {
+    clip-path: circle(calc(var(--theme-switch-r) + 1px) at var(--theme-switch-x) var(--theme-switch-y));
+  }
+}
+
+/* Safari/WebKit: slightly longer reveal to reduce perceived abruptness */
+@supports (-webkit-touch-callout: none) {
+  :root {
+    --theme-reveal-duration: 640ms;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-old(root),
+  ::view-transition-new(root) {
+    animation: none !important;
+    clip-path: none !important;
+  }
+}
+
+// ------------------------------------------------------------------
 // CSS Reset
 // ------------------------------------------------------------------
 *,

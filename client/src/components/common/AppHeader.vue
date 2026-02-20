@@ -55,6 +55,10 @@ function handleFontSize(size: number) {
   themeStore.setFontSize(size as 14 | 16 | 18 | 20)
 }
 
+function handleThemeToggle(e: MouseEvent) {
+  themeStore.toggleTheme(e)
+}
+
 onMounted(() => {
   systemStore.fetchBasic()
 })
@@ -120,7 +124,7 @@ onMounted(() => {
       </el-dropdown>
 
       <!-- Theme toggle -->
-      <el-button class="header-action-btn" text @click="themeStore.toggleTheme()">
+      <el-button class="header-action-btn" text @click="handleThemeToggle">
         <el-icon :size="18">
           <Moon v-if="!isDark" />
           <Sunny v-else />

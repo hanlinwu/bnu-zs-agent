@@ -167,17 +167,89 @@ async def seed_roles_and_permissions() -> None:
         await session.commit()
 
 
-# Default calendar periods
+# Default calendar periods (day-precise)
+from datetime import date as _date
+
 CALENDAR_PERIODS = [
-    {"period_name": "备考期", "start_month": 1, "end_month": 5, "year": 2026, "tone_config": {"style": "motivational", "description": "激励、备考建议、专业前景", "keywords": ["高考加油", "备考建议", "专业介绍"]}, "is_active": True},
-    {"period_name": "高考后/报名期", "start_month": 6, "end_month": 7, "year": 2026, "tone_config": {"style": "guidance", "description": "志愿填报、分数线预测、报名指南", "keywords": ["志愿填报", "分数线", "报名指南"]}, "is_active": True},
-    {"period_name": "录取查询期", "start_month": 8, "end_month": 9, "year": 2026, "tone_config": {"style": "enrollment", "description": "录取结果查询、入学准备清单", "keywords": ["录取查询", "入学准备", "报到须知"]}, "is_active": True},
-    {"period_name": "常态期", "start_month": 10, "end_month": 12, "year": 2026, "tone_config": {"style": "general", "description": "校园文化、师资力量、国际交流", "keywords": ["校园文化", "师资力量", "国际交流"]}, "is_active": True},
+    {"period_name": "备考期", "year": 2026, "start_date": _date(2026, 1, 1), "end_date": _date(2026, 5, 31), "tone_config": {"style": "motivational", "description": "激励、备考建议、专业前景", "keywords": ["高考加油", "备考建议", "专业介绍"]}, "is_active": True},
+    {"period_name": "高考后/报名期", "year": 2026, "start_date": _date(2026, 6, 1), "end_date": _date(2026, 7, 31), "tone_config": {"style": "guidance", "description": "志愿填报、分数线预测、报名指南", "keywords": ["志愿填报", "分数线", "报名指南"]}, "is_active": True},
+    {"period_name": "录取查询期", "year": 2026, "start_date": _date(2026, 8, 1), "end_date": _date(2026, 9, 30), "tone_config": {"style": "enrollment", "description": "录取结果查询、入学准备清单", "keywords": ["录取查询", "入学准备", "报到须知"]}, "is_active": True},
+    {"period_name": "常态期", "year": 2026, "start_date": _date(2026, 10, 1), "end_date": _date(2026, 12, 31), "tone_config": {"style": "general", "description": "校园文化、师资力量、国际交流", "keywords": ["校园文化", "师资力量", "国际交流"]}, "is_active": True},
 ]
+
+
+async def _migrate_calendar_columns() -> None:
+    """Ensure admission_calendar has year + start_date/end_date columns."""
+    from sqlalchemy import text as sa_text
+
+    session_factory = get_session_factory()
+    async with session_factory() as session:
+        # Check which columns exist
+        result = await session.execute(sa_text(
+            "SELECT column_name FROM information_schema.columns "
+            "WHERE table_name = 'admission_calendar'"
+        ))
+        columns = {row[0] for row in result.all()}
+        if not columns:
+            return  # table doesn't exist yet
+
+        changed = False
+
+        # --- Phase 1: old month-based → date-based ---
+        if "start_month" in columns:
+            if "start_date" not in columns:
+                await session.execute(sa_text(
+                    "ALTER TABLE admission_calendar ADD COLUMN start_date DATE"
+                ))
+                await session.execute(sa_text(
+                    "ALTER TABLE admission_calendar ADD COLUMN end_date DATE"
+                ))
+            # Migrate data from month columns
+            await session.execute(sa_text(
+                "UPDATE admission_calendar "
+                "SET start_date = make_date(year, start_month, 1), "
+                "    end_date = (make_date(year, end_month, 1) + interval '1 month' - interval '1 day')::date "
+                "WHERE start_date IS NULL"
+            ))
+            await session.execute(sa_text(
+                "ALTER TABLE admission_calendar ALTER COLUMN start_date SET NOT NULL"
+            ))
+            await session.execute(sa_text(
+                "ALTER TABLE admission_calendar ALTER COLUMN end_date SET NOT NULL"
+            ))
+            await session.execute(sa_text("ALTER TABLE admission_calendar DROP COLUMN start_month"))
+            await session.execute(sa_text("ALTER TABLE admission_calendar DROP COLUMN end_month"))
+            changed = True
+
+        # --- Phase 2: ensure year column exists ---
+        # Re-check columns after phase 1
+        if changed:
+            result = await session.execute(sa_text(
+                "SELECT column_name FROM information_schema.columns "
+                "WHERE table_name = 'admission_calendar'"
+            ))
+            columns = {row[0] for row in result.all()}
+
+        if "year" not in columns and "start_date" in columns:
+            await session.execute(sa_text(
+                "ALTER TABLE admission_calendar ADD COLUMN year INTEGER"
+            ))
+            await session.execute(sa_text(
+                "UPDATE admission_calendar SET year = EXTRACT(YEAR FROM start_date)::int"
+            ))
+            await session.execute(sa_text(
+                "ALTER TABLE admission_calendar ALTER COLUMN year SET NOT NULL"
+            ))
+            changed = True
+
+        if changed:
+            await session.commit()
 
 
 async def seed_calendar_periods() -> None:
     """Seed default calendar periods if none exist."""
+    await _migrate_calendar_columns()
+
     session_factory = get_session_factory()
     async with session_factory() as session:
         count_result = await session.execute(select(func.count()).select_from(AdmissionCalendar))

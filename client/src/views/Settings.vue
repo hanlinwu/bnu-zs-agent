@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { ArrowLeft, Moon, Sunny, Edit } from '@element-plus/icons-vue'
+import { ArrowLeft, Edit } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { useThemeStore } from '@/stores/theme'
 import { useUserStore } from '@/stores/user'
@@ -10,12 +10,16 @@ const router = useRouter()
 const themeStore = useThemeStore()
 const userStore = useUserStore()
 
-const isDark = computed(() => themeStore.mode === 'dark')
 const fontSizeOptions = [
   { label: '小', value: 14 as const },
   { label: '标准', value: 16 as const },
   { label: '大', value: 18 as const },
   { label: '特大', value: 20 as const },
+]
+const themeModeOptions = [
+  { label: '浅色', value: 'light' as const },
+  { label: '深色', value: 'dark' as const },
+  { label: '跟随系统', value: 'system' as const },
 ]
 
 const isEditingNickname = ref(false)
@@ -61,15 +65,22 @@ onMounted(() => {
 
       <div class="setting-item">
         <div class="setting-label">
-          <span>夜间模式</span>
-          <span class="setting-desc">切换明暗主题</span>
+          <span>主题模式</span>
+          <span class="setting-desc">浅色、深色或跟随系统</span>
         </div>
-        <el-switch
-          :model-value="isDark"
-          :active-action-icon="Moon"
-          :inactive-action-icon="Sunny"
-          @change="themeStore.toggleTheme()"
-        />
+        <el-radio-group
+          :model-value="themeStore.themePreference"
+          size="small"
+          @change="(val: string | number | boolean | undefined) => themeStore.setThemePreference(val as 'light' | 'dark' | 'system')"
+        >
+          <el-radio-button
+            v-for="opt in themeModeOptions"
+            :key="opt.value"
+            :value="opt.value"
+          >
+            {{ opt.label }}
+          </el-radio-button>
+        </el-radio-group>
       </div>
 
       <div class="setting-item">

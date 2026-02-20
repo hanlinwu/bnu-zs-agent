@@ -10,43 +10,25 @@ export function useTheme() {
 
   const isDark = computed(() => store.mode === 'dark')
 
-  function toggleTheme() {
-    store.toggleTheme()
+  function toggleTheme(e?: MouseEvent) {
+    store.toggleTheme(e)
+  }
+
+  function setThemePreference(mode: 'light' | 'dark' | 'system') {
+    store.setThemePreference(mode)
   }
 
   function setFontSize(size: 14 | 16 | 18 | 20) {
     store.setFontSize(size)
   }
 
-  function detectSystemPreference() {
-    if (localStorage.getItem('theme_mode')) return // user has explicit preference
-    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches
-    if (prefersDark && store.mode !== 'dark') {
-      store.toggleTheme()
-    }
-  }
-
-  // Listen for OS-level theme changes
-  function watchSystemTheme() {
-    const mq = window.matchMedia('(prefers-color-scheme: dark)')
-    const handler = (e: MediaQueryListEvent) => {
-      if (!localStorage.getItem('theme_mode')) {
-        // Only auto-switch if user hasn't set an explicit preference
-        if (e.matches && store.mode !== 'dark') store.toggleTheme()
-        if (!e.matches && store.mode !== 'light') store.toggleTheme()
-      }
-    }
-    mq.addEventListener('change', handler)
-    return () => mq.removeEventListener('change', handler)
-  }
-
   return {
     mode: computed(() => store.mode),
+    themePreference: computed(() => store.themePreference),
     fontSize: computed(() => store.fontSize),
     isDark,
     toggleTheme,
+    setThemePreference,
     setFontSize,
-    detectSystemPreference,
-    watchSystemTheme,
   }
 }

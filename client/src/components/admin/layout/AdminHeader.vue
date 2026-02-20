@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { useAdminStore } from '@/stores/admin'
+import { useThemeStore } from '@/stores/theme'
 import { useRoute, useRouter } from 'vue-router'
 import { computed } from 'vue'
 import {
@@ -8,6 +9,8 @@ import {
   SwitchButton,
   User,
   ArrowDown,
+  Sunny,
+  Moon,
 } from '@element-plus/icons-vue'
 import { ElMessageBox } from 'element-plus'
 
@@ -20,6 +23,7 @@ const emit = defineEmits<{
 }>()
 
 const adminStore = useAdminStore()
+const themeStore = useThemeStore()
 const route = useRoute()
 const router = useRouter()
 
@@ -32,6 +36,7 @@ const breadcrumbs = computed(() => {
 })
 
 const adminName = computed(() => adminStore.adminInfo?.display_name || adminStore.adminInfo?.username || '管理员')
+const isDark = computed(() => themeStore.mode === 'dark')
 
 async function handleLogout() {
   try {
@@ -53,6 +58,10 @@ function handleCommand(command: string) {
   } else if (command === 'profile') {
     router.push('/admin/profile')
   }
+}
+
+function handleThemeToggle(e: MouseEvent) {
+  themeStore.toggleTheme(e)
 }
 </script>
 
@@ -82,6 +91,18 @@ function handleCommand(command: string) {
     </div>
 
     <div class="header-right">
+      <el-button
+        text
+        class="theme-toggle-btn"
+        @click="handleThemeToggle"
+        :title="isDark ? '切换浅色主题' : '切换深色主题'"
+      >
+        <el-icon :size="18">
+          <Moon v-if="!isDark" />
+          <Sunny v-else />
+        </el-icon>
+      </el-button>
+
       <el-dropdown trigger="click" @command="handleCommand">
         <div class="admin-profile">
           <el-avatar :size="32" class="admin-avatar">
@@ -133,6 +154,18 @@ function handleCommand(command: string) {
 .header-right {
   display: flex;
   align-items: center;
+  gap: 6px;
+}
+
+.theme-toggle-btn {
+  color: var(--text-secondary, #5A5A72);
+  border-radius: 8px;
+  padding: 6px;
+
+  &:hover {
+    background: var(--bg-secondary, #F4F6FA);
+    color: var(--text-primary, #1A1A2E);
+  }
 }
 
 .admin-profile {
