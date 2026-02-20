@@ -23,9 +23,7 @@ const MAX_CHARS = 2000
 const MAX_LINES = 6
 const LINE_HEIGHT = 22
 
-const charCount = computed(() => content.value.length)
-const isOverLimit = computed(() => charCount.value > MAX_CHARS)
-const canSend = computed(() => content.value.trim().length > 0 && !isOverLimit.value && !props.disabled)
+const canSend = computed(() => content.value.trim().length > 0 && content.value.length <= MAX_CHARS && !props.disabled)
 
 function handleKeydown(e: KeyboardEvent) {
   if (e.key === 'Enter' && !e.shiftKey) {
@@ -61,24 +59,17 @@ watch(content, () => {
 
 <template>
   <div class="message-input" :class="{ 'is-disabled': disabled }">
-    <div class="input-wrapper">
-      <textarea
-        ref="textareaRef"
-        v-model="content"
-        class="input-textarea"
-        :placeholder="disabled ? 'AI正在回复中...' : '输入你的问题，按 Enter 发送'"
-        :disabled="disabled"
-        rows="1"
-        @keydown="handleKeydown"
-      ></textarea>
-
-      <div class="input-footer">
-        <span
-          class="char-count"
-          :class="{ 'is-over': isOverLimit }"
-        >
-          {{ charCount }} / {{ MAX_CHARS }}
-        </span>
+    <div class="input-wrapper" @click="textareaRef?.focus()">
+      <div class="input-row">
+        <textarea
+          ref="textareaRef"
+          v-model="content"
+          class="input-textarea"
+          :placeholder="disabled ? 'AI正在回复中...' : '输入你的问题，按 Enter 发送'"
+          :disabled="disabled"
+          rows="1"
+          @keydown="handleKeydown"
+        ></textarea>
         <el-button
           v-if="disabled"
           class="stop-btn"
@@ -105,9 +96,8 @@ watch(content, () => {
 
 <style scoped lang="scss">
 .message-input {
-  padding: 12px 16px 16px;
-  background: var(--bg-primary, #fff);
-  border-top: 1px solid var(--border-color, #e2e6ed);
+  padding: 8px 16px 20px;
+  background: transparent;
 
   &.is-disabled {
     opacity: 0.85;
@@ -117,25 +107,34 @@ watch(content, () => {
 .input-wrapper {
   max-width: 800px;
   margin: 0 auto;
-  background: var(--bg-secondary, #f4f6fa);
+  background: var(--bg-primary, #fff);
   border: 1px solid var(--border-color, #e2e6ed);
-  border-radius: 16px;
-  padding: 12px 16px 8px;
+  border-radius: 20px;
+  padding: 10px 10px 10px 16px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
   transition: border-color 0.2s, box-shadow 0.2s;
+  cursor: text;
 
   &:focus-within {
     border-color: var(--bnu-blue, #003DA5);
-    box-shadow: 0 0 0 2px rgba(0, 61, 165, 0.1);
+    box-shadow: 0 2px 16px rgba(0, 61, 165, 0.12);
   }
 }
 
+.input-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .input-textarea {
-  width: 100%;
+  flex: 1;
   border: none;
   outline: none;
   resize: none;
   font-size: 0.875rem;
   line-height: 22px;
+  padding: 7px 0;
   color: var(--text-primary, #1a1a2e);
   background: transparent;
   font-family: inherit;
@@ -148,23 +147,6 @@ watch(content, () => {
 
   &:disabled {
     cursor: not-allowed;
-  }
-}
-
-.input-footer {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-top: 4px;
-}
-
-.char-count {
-  font-size: 0.75rem;
-  color: var(--text-secondary, #9e9eb3);
-
-  &.is-over {
-    color: #c62828;
-    font-weight: 500;
   }
 }
 

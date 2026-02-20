@@ -60,3 +60,29 @@ export const batchUpdateAdminStatus = (data: { ids: string[]; status: 'active' |
 
 export const batchDeleteAdmins = (data: { ids: string[] }) =>
   request.post('/admin/admins/batch-delete', data)
+
+// 个人信息相关
+export const updateProfile = (data: {
+  real_name?: string
+  employee_id?: string
+  department?: string
+  title?: string
+  email?: string
+}) => request.put('/admin/auth/profile', data)
+
+export const sendPasswordChangeSms = () =>
+  request.post('/admin/auth/password/sms/send')
+
+export const changePassword = (data: {
+  old_password: string
+  new_password: string
+  sms_code: string
+}) => request.put('/admin/auth/password', data)
+
+export const sendPhoneChangeSms = (new_phone: string) =>
+  request.post('/admin/auth/phone/change/send', { new_phone })
+
+export const changePhone = (data: {
+  new_phone: string
+  sms_code: string
+}) => request.put('/admin/auth/phone', data)

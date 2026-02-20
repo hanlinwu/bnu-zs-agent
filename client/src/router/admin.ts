@@ -103,6 +103,12 @@ export const adminRoutes: RouteRecordRaw[] = [
         component: () => import('@/views/admin/Logs.vue'),
         meta: { title: '审计日志' },
       },
+      {
+        path: 'profile',
+        name: 'AdminProfile',
+        component: () => import('@/views/admin/Profile.vue'),
+        meta: { title: '个人信息' },
+      },
     ],
   },
 ]

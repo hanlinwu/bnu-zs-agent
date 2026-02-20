@@ -16,7 +16,7 @@ const riskLevelFilter = ref('')
 const sensitiveLevelFilter = ref('')
 const dateRange = ref<[string, string] | null>(null)
 
-const detailDialogVisible = ref(false)
+const detailDrawerVisible = ref(false)
 const detailLoading = ref(false)
 const detailTitle = ref('')
 const detailMessages = ref<AdminMessage[]>([])
@@ -111,7 +111,7 @@ function handlePageChange(page: number) {
 }
 
 async function viewDetail(conv: AdminConversation) {
-  detailDialogVisible.value = true
+  detailDrawerVisible.value = true
   detailLoading.value = true
   detailTitle.value = conv.title || '未命名对话'
   detailMessages.value = []
@@ -138,16 +138,18 @@ function renderMessageContent(msg: AdminMessage): string {
     return escapeHtml(content).replace(/\n/g, '<br>')
   }
 
+  // Normalize media fields from backend payload.
+  // Chat pipeline stores `url`, while this page expects `file_url`.
+  const normalizedMediaItems = msg.media_items.map((item: AdminMessageMediaItem, index: number) => ({
+    ...item,
+    slot_key: item.slot_key || `slot_${index}`,
+    file_url: item.file_url || (item as any).url || ''
+  }))
+
   // Build media map
   const mediaMap = new Map()
-  msg.media_items?.forEach((item: AdminMessageMediaItem, index: number) => {
-    const key = item.slot_key || `slot_${index}`
-    // Normalize URL field - API returns 'url' but we use 'file_url' in type
-    const normalizedItem = {
-      ...item,
-      file_url: item.file_url || (item as any).url || ''
-    }
-    mediaMap.set(key, normalizedItem)
+  normalizedMediaItems.forEach((item) => {
+    mediaMap.set(item.slot_key, item)
   })
 
   // Replace [[MEDIA_ITEM:slot_key]] with image HTML
@@ -177,7 +179,7 @@ function renderMessageContent(msg: AdminMessage): string {
     if (slotKey) usedKeys.add(slotKey)
   }
 
-  const unusedMedia = msg.media_items?.filter((item: AdminMessageMediaItem) => !usedKeys.has(item.slot_key)) ?? []
+  const unusedMedia = normalizedMediaItems.filter((item: AdminMessageMediaItem) => !usedKeys.has(item.slot_key))
   if (unusedMedia.length > 0) {
     result += '\n\n'
     result += unusedMedia.map((item: AdminMessageMediaItem) =>
@@ -345,10 +347,11 @@ function handleMessageClick(e: MouseEvent, _msg: AdminMessage) {
       </div>
     </div>
 
-    <el-dialog
-      v-model="detailDialogVisible"
+    <el-drawer
+      v-model="detailDrawerVisible"
       :title="`对话详情 — ${detailTitle}`"
-      width="720px"
+      size="560px"
+      class="conversation-detail-drawer"
       destroy-on-close
     >
       <div v-loading="detailLoading" class="conversation-messages">
@@ -393,7 +396,7 @@ function handleMessageClick(e: MouseEvent, _msg: AdminMessage) {
           ></div>
         </div>
       </div>
-    </el-dialog>
+    </el-drawer>
 
     <MediaPreview
       :visible="previewVisible"
@@ -504,9 +507,9 @@ function handleMessageClick(e: MouseEvent, _msg: AdminMessage) {
 }
 
 .conversation-messages {
-  max-height: 60vh;
+  flex: 1;
+  min-height: 0;
   overflow-y: auto;
-  min-height: 120px;
 }
 
 .empty-messages {
@@ -588,5 +591,11 @@ function handleMessageClick(e: MouseEvent, _msg: AdminMessage) {
     text-decoration: underline;
     margin-left: 4px;
   }
+}
+
+:deep(.conversation-detail-drawer .el-drawer__body) {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
 }
 </style>

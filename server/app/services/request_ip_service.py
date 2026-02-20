@@ -80,19 +80,36 @@ def get_client_ip(request: Request) -> str | None:
     if not settings.TRUST_PROXY_HEADERS or not _is_trusted_proxy(peer_ip):
         return peer_ip
 
+    def _pick_from_chain(candidates: list[str]) -> str | None:
+        # Standard proxy-chain extraction:
+        # walk from right to left, skip trusted proxies, first untrusted is client.
+        for ip in reversed(candidates):
+            if not _is_trusted_proxy(ip):
+                return ip
+        # If all are trusted, fallback to first value in chain.
+        return candidates[0] if candidates else None
+
     forwarded = request.headers.get("forwarded")
     if forwarded:
+        forwarded_chain: list[str] = []
         for part in forwarded.split(","):
             candidate = _parse_ip(part)
             if candidate:
-                return candidate
+                forwarded_chain.append(candidate)
+        candidate = _pick_from_chain(forwarded_chain)
+        if candidate:
+            return candidate
 
     xff = request.headers.get("x-forwarded-for")
     if xff:
+        xff_chain: list[str] = []
         for part in xff.split(","):
             candidate = _parse_ip(part)
             if candidate:
-                return candidate
+                xff_chain.append(candidate)
+        candidate = _pick_from_chain(xff_chain)
+        if candidate:
+            return candidate
 
     x_real_ip = _parse_ip(request.headers.get("x-real-ip"))
     if x_real_ip:

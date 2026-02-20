@@ -51,7 +51,7 @@ function handleCommand(command: string) {
   if (command === 'logout') {
     handleLogout()
   } else if (command === 'profile') {
-    router.push('/admin/dashboard')
+    router.push('/admin/profile')
   }
 }
 </script>

@@ -12,12 +12,10 @@ const emit = defineEmits<{
 
 const chatStore = useChatStore()
 const scrollContainerRef = ref<HTMLElement | null>(null)
-const lastUserMessageRef = ref<HTMLElement | null>(null)
 const isEmpty = computed(() => chatStore.messages.length === 0 && !chatStore.isStreaming)
 
-// Track if user has manually scrolled up (to disable auto-scroll)
-const isUserScrolledUp = ref(false)
-const lastScrollTop = ref(0)
+// If user leaves bottom area manually, pause auto-scroll.
+const autoScrollLocked = ref(false)
 
 // 无限滚动状态
 const isLoadingHistory = computed(() => chatStore.isLoadingHistory)
@@ -80,7 +78,7 @@ const displayMessages = computed<Message[]>(() => {
 const streamingMessage = computed(() => {
   if (!chatStore.isStreaming) return null
   const lastMsg = chatStore.messages[chatStore.messages.length - 1]
-  if (lastMsg && lastMsg.role === 'assistant' && lastMsg.loading) {
+  if (lastMsg && lastMsg.role === 'assistant') {
     return lastMsg
   }
   return null
@@ -97,7 +95,7 @@ const nonStreamingMessages = computed<Message[]>(() => {
 function isNearBottom(): boolean {
   const el = scrollContainerRef.value
   if (!el) return true
-  const threshold = 100
+  const threshold = 80
   return el.scrollHeight - el.scrollTop - el.clientHeight < threshold
 }
 
@@ -134,55 +132,41 @@ async function handleScroll() {
     }
   }
 
-  // User scrolled up if scrollTop decreased or if not near bottom
-  if (scrollTop < lastScrollTop.value || !isNearBottom()) {
-    isUserScrolledUp.value = true
-  } else if (isNearBottom()) {
-    isUserScrolledUp.value = false
-  }
-  lastScrollTop.value = scrollTop
-}
-
-// Scroll element to top of visible area
-function scrollElementToTop(element: HTMLElement) {
-  const container = scrollContainerRef.value
-  if (!container || !element) return
-
-  // Use scrollIntoView with block: 'start' to scroll element to top
-  element.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  // Always update lock state based on actual scroll position.
+  // If user scrolls back to bottom, auto-scroll resumes automatically.
+  autoScrollLocked.value = !isNearBottom()
 }
 
 // Auto-scroll to bottom during streaming
-function autoScrollToBottom() {
-  // Only auto-scroll if user hasn't manually scrolled up
-  if (isUserScrolledUp.value) return
+function autoScrollToBottom(behavior: ScrollBehavior = 'auto') {
+  if (autoScrollLocked.value) return
 
   nextTick(() => {
     const el = scrollContainerRef.value
     if (el) {
       el.scrollTo({
         top: el.scrollHeight,
-        behavior: 'smooth'
+        behavior,
       })
     }
   })
 }
 
-// Watch for new messages - scroll user message to top when ref is set
-watch(lastUserMessageRef, (el) => {
-  if (el) {
-    // Reset user scroll flag for new user message
-    isUserScrolledUp.value = false
-    // Small delay to ensure DOM is ready
-    setTimeout(() => scrollElementToTop(el), 50)
-  }
-})
-
 // Watch streaming content - auto-scroll if near bottom
 watch(
-  () => streamingMessage.value?.content,
+  () => chatStore.isStreaming && chatStore.messages[chatStore.messages.length - 1]?.content,
   () => {
-    autoScrollToBottom()
+    if (chatStore.isStreaming) {
+      autoScrollToBottom('auto')
+    }
+  }
+)
+
+// Auto scroll on new message append when unlocked.
+watch(
+  () => chatStore.messages.length,
+  () => {
+    autoScrollToBottom('smooth')
   }
 )
 
@@ -190,10 +174,9 @@ watch(
 watch(
   () => chatStore.currentConversationId,
   () => {
-    isUserScrolledUp.value = false
-    lastScrollTop.value = 0
-    lastUserMessageRef.value = null
+    autoScrollLocked.value = false
     oldScrollPosition.value = 0
+    autoScrollToBottom('auto')
   }
 )
 
@@ -213,17 +196,6 @@ onUnmounted(() => {
 
 function handleSelectQuestion(question: string) {
   emit('selectQuestion', question)
-}
-
-// Set ref for the last user message
-function setMessageRef(el: HTMLElement | null, msg: Message) {
-  if (el && msg.role === 'user') {
-    // 找最后一个用户消息
-    const lastUserMsg = [...chatStore.messages].reverse().find(m => m.role === 'user')
-    if (lastUserMsg && lastUserMsg.id === msg.id) {
-      lastUserMessageRef.value = el
-    }
-  }
 }
 </script>
 
@@ -247,7 +219,6 @@ function setMessageRef(el: HTMLElement | null, msg: Message) {
         <div
           v-for="msg in nonStreamingMessages"
           :key="msg.id"
-          :ref="(el) => setMessageRef(el as HTMLElement, msg)"
           class="message-item"
         >
           <MessageBubble :message="msg" />

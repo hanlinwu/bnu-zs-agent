@@ -48,3 +48,26 @@ class AdminInfoResponse(BaseModel):
     avatar_url: str
     status: str
     permissions: list[str]
+
+
+class AdminProfileUpdateRequest(BaseModel):
+    real_name: str | None = Field(None, min_length=1, max_length=50)
+    employee_id: str | None = Field(None, max_length=30)
+    department: str | None = Field(None, max_length=100)
+    title: str | None = Field(None, max_length=50)
+    email: str | None = Field(None, max_length=100)
+
+
+class AdminPasswordChangeRequest(BaseModel):
+    old_password: str = Field(..., min_length=1)
+    new_password: str = Field(..., min_length=8, max_length=128)
+    sms_code: str = Field(..., min_length=6, max_length=6)
+
+
+class AdminPhoneSmsSendRequest(BaseModel):
+    new_phone: str = Field(..., pattern=r"^1[3-9]\d{9}$")
+
+
+class AdminPhoneChangeRequest(BaseModel):
+    new_phone: str = Field(..., pattern=r"^1[3-9]\d{9}$")
+    sms_code: str = Field(..., min_length=6, max_length=6)

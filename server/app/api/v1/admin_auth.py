@@ -1,5 +1,6 @@
 """Admin authentication routes."""
 
+import re
 from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends
@@ -10,7 +11,7 @@ from starlette.requests import Request
 from app.config import settings
 from app.core.database import get_db
 from app.core.exceptions import UnauthorizedError, BizError
-from app.core.security import verify_password, verify_mfa_code, create_access_token
+from app.core.security import verify_password, verify_mfa_code, create_access_token, hash_password
 from app.core.permissions import get_admin_permissions
 from app.dependencies import get_current_admin
 from app.models.admin import AdminUser
@@ -21,6 +22,10 @@ from app.schemas.admin import (
     AdminSmsSendRequest,
     AdminBindPhoneSendRequest,
     AdminBindPhoneConfirmRequest,
+    AdminProfileUpdateRequest,
+    AdminPasswordChangeRequest,
+    AdminPhoneSmsSendRequest,
+    AdminPhoneChangeRequest,
 )
 from app.services.request_ip_service import get_client_ip
 from app.services.sms_service import send_sms_code, verify_sms_code
@@ -89,7 +94,7 @@ async def admin_bind_phone_send_code(
     if admin.phone:
         raise BizError(code=400, message="当前账号已绑定手机号，请直接使用登录验证码流程")
 
-    send_result = await send_sms_code(body.phone)
+    send_result = await send_sms_code(body.phone, purpose="bind_phone")
     if not send_result.get("success"):
         _raise_sms_send_error(send_result.get("message") or "验证码发送失败")
 
@@ -122,7 +127,7 @@ async def admin_bind_phone_confirm(
         if not verify_mfa_code(admin.mfa_secret, body.mfa_code):
             raise UnauthorizedError("MFA 验证码错误")
 
-    if not await verify_sms_code(body.phone, body.sms_code):
+    if not await verify_sms_code(body.phone, body.sms_code, purpose="bind_phone"):
         raise UnauthorizedError("手机号验证码错误或已过期")
 
     admin.phone = body.phone
@@ -163,7 +168,7 @@ async def admin_send_sms_code(
     if not admin.phone:
         raise BizError(code=400, message="首次登录需绑定手机号")
 
-    send_result = await send_sms_code(admin.phone)
+    send_result = await send_sms_code(admin.phone, purpose="login")
     if not send_result.get("success"):
         _raise_sms_send_error(send_result.get("message") or "验证码发送失败")
 
@@ -207,7 +212,7 @@ async def admin_login(body: AdminLoginRequest, request: Request, db: AsyncSessio
             raise BizError(code=400, message="首次登录需绑定手机号")
         if not body.sms_code:
             raise UnauthorizedError("需要手机号验证码")
-        if not await verify_sms_code(admin.phone, body.sms_code):
+        if not await verify_sms_code(admin.phone, body.sms_code, purpose="login"):
             raise UnauthorizedError("手机号验证码错误或已过期")
 
     # Generate token
@@ -253,3 +258,110 @@ async def admin_get_me(
         status=admin.status,
         permissions=sorted(permissions),
     )
+
+
+@router.put("/profile")
+async def admin_update_profile(
+    body: AdminProfileUpdateRequest,
+    admin: AdminUser = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """修改个人信息"""
+    update_data = body.model_dump(exclude_unset=True)
+    if not update_data:
+        raise BizError(code=400, message="没有需要更新的字段")
+
+    for field, value in update_data.items():
+        setattr(admin, field, value)
+
+    admin.updated_at = datetime.now(timezone.utc)
+    await db.commit()
+    return {"success": True, "message": "个人信息已更新"}
+
+
+@router.post("/password/sms/send")
+async def admin_password_sms_send(
+    admin: AdminUser = Depends(get_current_admin),
+):
+    """修改密码：发送验证码到已绑定手机号"""
+    if not admin.phone:
+        raise BizError(code=400, message="当前账号未绑定手机号，无法进行短信验证")
+
+    send_result = await send_sms_code(admin.phone, purpose="password")
+    if not send_result.get("success"):
+        _raise_sms_send_error(send_result.get("message") or "验证码发送失败")
+
+    return {
+        "success": True,
+        "message": send_result.get("message") or "验证码已发送",
+        "phone_masked": _mask_phone(admin.phone),
+    }
+
+
+@router.put("/password")
+async def admin_change_password(
+    body: AdminPasswordChangeRequest,
+    admin: AdminUser = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """修改密码（需手机号验证）"""
+    if not admin.phone:
+        raise BizError(code=400, message="当前账号未绑定手机号，无法修改密码")
+
+    if not await verify_sms_code(admin.phone, body.sms_code, purpose="password"):
+        raise BizError(code=400, message="验证码错误或已过期")
+
+    if not verify_password(body.old_password, admin.password_hash):
+        raise BizError(code=400, message="原密码错误")
+
+    if body.old_password == body.new_password:
+        raise BizError(code=400, message="新密码不能与原密码相同")
+
+    # 密码强度校验：需包含大小写字母、数字和特殊字符
+    pwd = body.new_password
+    checks = [
+        bool(re.search(r"[a-z]", pwd)),
+        bool(re.search(r"[A-Z]", pwd)),
+        bool(re.search(r"\d", pwd)),
+        bool(re.search(r"[^A-Za-z0-9]", pwd)),
+    ]
+    if not all(checks):
+        raise BizError(code=400, message="密码需包含大小写字母、数字和特殊字符")
+
+    admin.password_hash = hash_password(body.new_password)
+    admin.updated_at = datetime.now(timezone.utc)
+    await db.commit()
+    return {"success": True, "message": "密码已修改"}
+
+
+@router.post("/phone/change/send")
+async def admin_phone_change_send(
+    body: AdminPhoneSmsSendRequest,
+    admin: AdminUser = Depends(get_current_admin),
+):
+    """修改手机号：发送验证码到新手机号"""
+    send_result = await send_sms_code(body.new_phone, purpose="phone_change")
+    if not send_result.get("success"):
+        _raise_sms_send_error(send_result.get("message") or "验证码发送失败")
+
+    return {
+        "success": True,
+        "message": send_result.get("message") or "验证码已发送",
+        "phone_masked": _mask_phone(body.new_phone),
+    }
+
+
+@router.put("/phone")
+async def admin_change_phone(
+    body: AdminPhoneChangeRequest,
+    admin: AdminUser = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """修改绑定手机号"""
+    if not await verify_sms_code(body.new_phone, body.sms_code, purpose="phone_change"):
+        raise BizError(code=400, message="验证码错误或已过期")
+
+    admin.phone = body.new_phone
+    admin.updated_at = datetime.now(timezone.utc)
+    await db.commit()
+    return {"success": True, "message": "手机号已更换"}

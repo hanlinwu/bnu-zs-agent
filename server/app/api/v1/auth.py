@@ -24,7 +24,7 @@ router = APIRouter()
 @router.post("/sms/send", response_model=SmsSendResponse)
 async def api_send_sms(body: SmsSendRequest):
     """发送短信验证码"""
-    result = await send_sms_code(body.phone)
+    result = await send_sms_code(body.phone, purpose="user_login")
     return result
 
 

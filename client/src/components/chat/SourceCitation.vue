@@ -1,37 +1,33 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import type { SourceReference } from '@/types/chat'
 
-defineProps<{
+const props = defineProps<{
   sources: SourceReference[]
 }>()
 
-const emit = defineEmits<{
-  click: [source: SourceReference]
-}>()
-
-function handleClick(source: SourceReference) {
-  emit('click', source)
-}
+// Deduplicate sources by title — show each document only once
+const uniqueSources = computed(() => {
+  const seen = new Set<string>()
+  return props.sources.filter((s) => {
+    const key = s.title
+    if (seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
+})
 </script>
 
 <template>
   <div class="source-citation">
-    <el-tooltip
-      v-for="(source, index) in sources"
+    <span
+      v-for="(source, index) in uniqueSources"
       :key="index"
-      :content="source.snippet"
-      placement="top"
-      :show-after="300"
-      max-width="320"
+      class="source-tag"
     >
-      <span
-        class="source-tag"
-        @click="handleClick(source)"
-      >
-        <span class="source-icon">&#128196;</span>
-        <span class="source-title">{{ source.title }}</span>
-      </span>
-    </el-tooltip>
+      <span class="source-icon">&#128196;</span>
+      <span class="source-title">{{ source.title }}</span>
+    </span>
   </div>
 </template>
 
@@ -52,18 +48,7 @@ function handleClick(source: SourceReference) {
   border-radius: 12px;
   font-size: 0.75rem;
   color: var(--text-secondary, #5a5a72);
-  cursor: pointer;
-  transition: background-color 0.2s, color 0.2s;
-  max-width: 200px;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-
-  &:hover {
-    background: var(--bnu-blue, #003DA5);
-    color: #fff;
-    border-color: var(--bnu-blue, #003DA5);
-  }
+  max-width: 100%;
 }
 
 .source-icon {
@@ -72,8 +57,6 @@ function handleClick(source: SourceReference) {
 }
 
 .source-title {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  word-break: break-all;
 }
 </style>

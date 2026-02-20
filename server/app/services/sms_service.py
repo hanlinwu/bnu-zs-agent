@@ -83,14 +83,20 @@ async def _send_sms_with_aliyun(phone: str, code: str) -> tuple[bool, str]:
         return False, f"短信服务调用失败: {error}"
 
 
-async def send_sms_code(phone: str) -> dict:
-    """Send SMS verification code. In mock mode, code is always 123456."""
-    # Check cooldown
-    cooldown_key = f"sms_cooldown:{phone}"
+async def send_sms_code(phone: str, purpose: str = "default") -> dict:
+    """Send SMS verification code. In mock mode, code is always 123456.
+
+    Args:
+        phone: Target phone number.
+        purpose: Usage scene (e.g. "login", "password", "phone_change").
+                 Different purposes have independent cooldowns and codes.
+    """
+    # Check cooldown (per purpose)
+    cooldown_key = f"sms_cooldown:{purpose}:{phone}"
     if await redis_client.exists(cooldown_key):
         return {"success": False, "message": "发送过于频繁，请60秒后重试"}
 
-    # Check rate limit
+    # Check rate limit (shared per phone across all purposes)
     rate_key = f"sms_limit:{phone}"
     count = await redis_client.get(rate_key)
     if count and int(count) >= SMS_RATE_LIMIT_MAX:
@@ -110,8 +116,8 @@ async def send_sms_code(phone: str) -> dict:
     if not sent:
         return {"success": False, "message": send_message}
 
-    # Store code in Redis
-    await redis_client.set(f"sms:{phone}", code, ex=SMS_CODE_TTL)
+    # Store code in Redis (per purpose)
+    await redis_client.set(f"sms:{purpose}:{phone}", code, ex=SMS_CODE_TTL)
     await redis_client.set(cooldown_key, "1", ex=SMS_COOLDOWN)
 
     # Increment rate limit
@@ -123,22 +129,29 @@ async def send_sms_code(phone: str) -> dict:
     return {"success": True, "message": send_message}
 
 
-async def verify_sms_code(phone: str, code: str) -> bool:
+async def verify_sms_code(phone: str, code: str, purpose: str = "default") -> bool:
     """Verify SMS code against stored value.
 
     In mock mode, accept MOCK_CODE directly without requiring send first.
+
+    Args:
+        phone: Target phone number.
+        code: The code to verify.
+        purpose: Must match the purpose used when sending.
     """
+    code_key = f"sms:{purpose}:{phone}"
+
     # Mock mode: accept fixed code without needing to send first
     if settings.SMS_MOCK and code == MOCK_CODE:
         # Clean up any stored code if exists
-        await redis_client.delete(f"sms:{phone}")
+        await redis_client.delete(code_key)
         return True
 
-    stored_code = await redis_client.get(f"sms:{phone}")
+    stored_code = await redis_client.get(code_key)
     if not stored_code:
         return False
     if stored_code != code:
         return False
     # Delete code after successful verification
-    await redis_client.delete(f"sms:{phone}")
+    await redis_client.delete(code_key)
     return True

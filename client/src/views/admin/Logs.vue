@@ -6,7 +6,7 @@ import * as logApi from '@/api/admin/log'
 import type { AuditLog } from '@/types/admin'
 
 const loading = ref(false)
-const logs = ref<AuditLog[]>([])
+const logs = ref<LogRow[]>([])
 const total = ref(0)
 const currentPage = ref(1)
 const pageSize = ref(20)
@@ -15,8 +15,16 @@ const dateRange = ref<[string, string] | null>(null)
 const actionFilter = ref<string>('')
 const moduleFilter = ref<string>('')
 const exporting = ref(false)
-const detailDialogVisible = ref(false)
-const currentDetailText = ref('')
+const detailDrawerVisible = ref(false)
+const currentDetailTitle = ref('')
+const currentDetailEntries = ref<Array<{ label: string; value: string }>>([])
+
+type LogRow = AuditLog & {
+  detailObj: Record<string, unknown> | null
+  url: string
+  code: string
+  duration: string
+}
 
 const actionOptions = [
   { label: '全部操作', value: '' },
@@ -74,30 +82,93 @@ function formatDateTime(date: string) {
   })
 }
 
-function formatDetail(detail: unknown): string {
-  if (!detail) return '-'
-  if (typeof detail === 'string') return detail
+function parseDetail(detail: unknown): Record<string, unknown> | null {
+  if (!detail) return null
+  if (typeof detail === 'object') {
+    return detail as Record<string, unknown>
+  }
+  if (typeof detail === 'string') {
+    try {
+      const parsed = JSON.parse(detail)
+      if (parsed && typeof parsed === 'object') return parsed as Record<string, unknown>
+    } catch {
+      return { raw: detail }
+    }
+    return { raw: detail }
+  }
+  return { raw: String(detail) }
+}
+
+function stringifyValue(value: unknown): string {
+  if (value === null || value === undefined || value === '') return '-'
+  if (typeof value === 'string') return value
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value)
+  if (Array.isArray(value)) return value.map(v => stringifyValue(v)).join(', ')
   try {
-    return JSON.stringify(detail)
+    return JSON.stringify(value)
   } catch {
-    return String(detail)
+    return String(value)
   }
 }
 
-function openDetail(log: AuditLog) {
-  const raw = log.detail
-  if (!raw || raw === '-') {
-    currentDetailText.value = '无详情'
-    detailDialogVisible.value = true
-    return
+function pickFirst(detail: Record<string, unknown> | null, keys: string[]): unknown {
+  if (!detail) return undefined
+  for (const key of keys) {
+    if (detail[key] !== undefined && detail[key] !== null && detail[key] !== '') {
+      return detail[key]
+    }
   }
+  return undefined
+}
 
-  try {
-    currentDetailText.value = JSON.stringify(JSON.parse(raw), null, 2)
-  } catch {
-    currentDetailText.value = raw
-  }
-  detailDialogVisible.value = true
+function normalizeDuration(raw: unknown): string {
+  if (raw === undefined || raw === null || raw === '') return '-'
+  if (typeof raw === 'number') return `${raw} ms`
+  const text = String(raw).trim()
+  if (!text) return '-'
+  if (/ms$/i.test(text)) return text
+  if (/^\d+(\.\d+)?$/.test(text)) return `${text} ms`
+  return text
+}
+
+function moduleLabel(moduleValue: string): string {
+  const opt = moduleOptions.find(o => o.value === moduleValue)
+  return opt?.label || moduleValue || '-'
+}
+
+function buildDetailEntries(row: LogRow): Array<{ label: string; value: string }> {
+  const detail = row.detailObj || {}
+  const hiddenKeys = new Set(['path', 'url', 'request_url', 'status_code', 'code', 'duration_ms', 'duration', 'elapsed_ms'])
+  const entries: Array<{ label: string; value: string }> = [
+    { label: '时间', value: formatDateTime(row.createdAt) },
+    { label: '操作人', value: row.userName || '-' },
+    { label: '模块', value: moduleLabel(row.module) },
+    { label: '操作', value: actionLabel(row.action) },
+    { label: 'IP 地址', value: row.ip || '-' },
+    { label: 'URL', value: row.url || '-' },
+    { label: '状态码', value: row.code || '-' },
+    { label: '耗时', value: row.duration || '-' },
+  ]
+
+  Object.entries(detail).forEach(([key, value]) => {
+    if (hiddenKeys.has(key)) return
+    if (key === 'query' && value && typeof value === 'object' && !Array.isArray(value)) {
+      const queryText = Object.entries(value as Record<string, unknown>)
+        .map(([k, v]) => `${k}=${stringifyValue(v)}`)
+        .join(' , ')
+      entries.push({ label: '查询参数', value: queryText || '-' })
+      return
+    }
+    entries.push({ label: key, value: stringifyValue(value) })
+  })
+
+  return entries
+}
+
+function openDetail(log: LogRow) {
+  currentDetailTitle.value = `${actionLabel(log.action)} · ${moduleLabel(log.module)}`
+  currentDetailEntries.value = buildDetailEntries(log)
+  detailDrawerVisible.value = true
 }
 
 async function fetchLogs() {
@@ -122,16 +193,27 @@ async function fetchLogs() {
     }
     const res = await logApi.getLogs(params)
     const rawItems = (res.data.items || []) as any[]
-    logs.value = rawItems.map((item) => ({
+    logs.value = rawItems.map((item) => {
+      const detailObj = parseDetail(item.detail)
+      const url = stringifyValue(pickFirst(detailObj, ['path', 'url', 'request_url']))
+      const code = stringifyValue(pickFirst(detailObj, ['status_code', 'code']))
+      const duration = normalizeDuration(pickFirst(detailObj, ['duration_ms', 'duration', 'elapsed_ms']))
+
+      return {
       id: String(item.id),
       userId: item.user_id || item.admin_id || '',
       userName: item.admin_id ? `管理员:${String(item.admin_id).slice(0, 8)}` : (item.user_id ? `用户:${String(item.user_id).slice(0, 8)}` : '-'),
       ip: item.ip_address || '-',
       action: item.action || 'query',
       module: item.resource || '-',
-      detail: formatDetail(item.detail),
+      detail: stringifyValue(item.detail),
+      detailObj,
+      url,
+      code,
+      duration,
       createdAt: item.created_at,
-    }))
+    } as LogRow
+    })
     total.value = res.data.total
   } catch {
     ElMessage.error('加载审计日志失败')
@@ -247,7 +329,7 @@ onMounted(() => {
         class="log-table"
         height="100%"
       >
-        <el-table-column prop="createdAt" label="时间" width="170">
+        <el-table-column prop="createdAt" label="时间" width="170" class-name="time-column">
           <template #default="{ row }">
             <span class="log-time">{{ formatDateTime(row.createdAt) }}</span>
           </template>
@@ -266,7 +348,9 @@ onMounted(() => {
           </template>
         </el-table-column>
         <el-table-column prop="ip" label="IP 地址" width="140" />
-        <el-table-column prop="detail" label="详情" min-width="240" show-overflow-tooltip />
+        <el-table-column prop="url" label="URL" min-width="260" show-overflow-tooltip />
+        <el-table-column prop="code" label="状态码" width="90" align="center" />
+        <el-table-column prop="duration" label="耗时" width="110" align="right" />
         <el-table-column label="操作" width="100" align="center" fixed="right">
           <template #default="{ row }">
             <el-button type="primary" text size="small" @click="openDetail(row)">查看详情</el-button>
@@ -291,13 +375,30 @@ onMounted(() => {
         />
       </div>
 
-      <el-dialog
-        v-model="detailDialogVisible"
-        title="审计详情"
-        width="720px"
+      <el-drawer
+        v-model="detailDrawerVisible"
+        :title="`审计详情 · ${currentDetailTitle}`"
+        size="560px"
+        destroy-on-close
       >
-        <pre class="detail-json">{{ currentDetailText }}</pre>
-      </el-dialog>
+        <el-descriptions
+          v-if="currentDetailEntries.length"
+          :column="1"
+          border
+        >
+          <el-descriptions-item
+            v-for="(item, index) in currentDetailEntries"
+            :key="`${item.label}-${index}`"
+            :label="item.label"
+          >
+            <span
+              class="detail-value"
+              :class="{ 'detail-value--nowrap': item.label === '时间' }"
+            >{{ item.value }}</span>
+          </el-descriptions-item>
+        </el-descriptions>
+        <div v-else class="detail-empty">无详情</div>
+      </el-drawer>
     </div>
   </div>
 </template>
@@ -366,6 +467,12 @@ onMounted(() => {
   font-size: 0.8125rem;
   font-family: monospace;
   color: var(--text-secondary, #5A5A72);
+  white-space: nowrap;
+  display: inline-block;
+}
+
+:deep(.time-column .cell) {
+  white-space: nowrap;
 }
 
 .pagination-wrapper {
@@ -376,18 +483,23 @@ onMounted(() => {
   gap: 12px;
 }
 
-.detail-json {
-  margin: 0;
-  max-height: 420px;
-  overflow: auto;
-  padding: 12px;
-  border-radius: 8px;
-  background: var(--bg-secondary, #F4F6FA);
+.detail-value {
   color: var(--text-primary, #1A1A2E);
   font-size: 0.8125rem;
-  line-height: 1.6;
+  line-height: 1.5;
   white-space: pre-wrap;
   word-break: break-word;
+}
+
+.detail-value--nowrap {
+  white-space: nowrap;
+  word-break: normal;
+}
+
+.detail-empty {
+  text-align: center;
+  color: var(--text-secondary, #5A5A72);
+  padding: 24px 0;
 }
 
 @media (max-width: 768px) {

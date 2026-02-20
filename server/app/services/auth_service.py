@@ -24,7 +24,7 @@ async def login_or_register(
 ) -> dict:
     """Verify SMS code and login or register user."""
     # Verify SMS code
-    if not await verify_sms_code(phone, code):
+    if not await verify_sms_code(phone, code, purpose="user_login"):
         return {"success": False, "message": "验证码错误或已过期"}
 
     # Check if user exists
