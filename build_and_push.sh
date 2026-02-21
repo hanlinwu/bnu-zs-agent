@@ -29,6 +29,7 @@ fi
 
 APP_IMAGE="${TCR_REGISTRY}/${TCR_NAMESPACE}/bnu-admission-chatbot-app"
 NGINX_IMAGE="${TCR_REGISTRY}/${TCR_NAMESPACE}/bnu-admission-chatbot-nginx"
+SEARCH_SERVICE_IMAGE="${TCR_REGISTRY}/${TCR_NAMESPACE}/bnu-search-service"
 
 echo "[build] login ${TCR_REGISTRY}"
 echo "$TCR_PASSWORD" | $DOCKER_CMD login "$TCR_REGISTRY" -u "$TCR_USERNAME" --password-stdin
@@ -47,6 +48,13 @@ $DOCKER_CMD build \
 	-f nginx/Dockerfile.prod \
 	.
 
+echo "[build] build search-service image"
+$DOCKER_CMD build \
+	-t "${SEARCH_SERVICE_IMAGE}:${IMAGE_TAG}" \
+	-t "${SEARCH_SERVICE_IMAGE}:latest" \
+	-f search-service/Dockerfile \
+	search-service
+
 echo "[build] push app image"
 $DOCKER_CMD push "${APP_IMAGE}:${IMAGE_TAG}"
 $DOCKER_CMD push "${APP_IMAGE}:latest"
@@ -55,6 +63,11 @@ echo "[build] push nginx image"
 $DOCKER_CMD push "${NGINX_IMAGE}:${IMAGE_TAG}"
 $DOCKER_CMD push "${NGINX_IMAGE}:latest"
 
+echo "[build] push search-service image"
+$DOCKER_CMD push "${SEARCH_SERVICE_IMAGE}:${IMAGE_TAG}"
+$DOCKER_CMD push "${SEARCH_SERVICE_IMAGE}:latest"
+
 echo "[build] done"
 echo "[build] app:   ${APP_IMAGE}:${IMAGE_TAG}"
 echo "[build] nginx: ${NGINX_IMAGE}:${IMAGE_TAG}"
+echo "[build] search: ${SEARCH_SERVICE_IMAGE}:${IMAGE_TAG}"

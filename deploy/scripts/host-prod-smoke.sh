@@ -17,6 +17,7 @@ KEEP_STACK="false"
 IMAGE_TAG="hosttest"
 APP_IMAGE="local/bnu-admission-chatbot-app"
 NGINX_IMAGE="local/bnu-admission-chatbot-nginx"
+SEARCH_SERVICE_IMAGE="local/bnu-search-service"
 
 usage() {
   cat <<EOF
@@ -140,11 +141,15 @@ docker build -t "${APP_IMAGE}:${IMAGE_TAG}" ./server
 echo "[host-smoke] build nginx image: ${NGINX_IMAGE}:${IMAGE_TAG}"
 docker build -t "${NGINX_IMAGE}:${IMAGE_TAG}" -f ./nginx/Dockerfile.prod .
 
+echo "[host-smoke] build search-service image: ${SEARCH_SERVICE_IMAGE}:${IMAGE_TAG}"
+docker build -t "${SEARCH_SERVICE_IMAGE}:${IMAGE_TAG}" -f ./search-service/Dockerfile ./search-service
+
 echo "[host-smoke] prepare env file: ${ENV_FILE}"
 cp "${ENV_TEMPLATE}" "${ENV_FILE}"
 
 sed -i "s#^APP_IMAGE=.*#APP_IMAGE=${APP_IMAGE}#" "${ENV_FILE}"
 sed -i "s#^NGINX_IMAGE=.*#NGINX_IMAGE=${NGINX_IMAGE}#" "${ENV_FILE}"
+sed -i "s#^SEARCH_SERVICE_IMAGE=.*#SEARCH_SERVICE_IMAGE=${SEARCH_SERVICE_IMAGE}#" "${ENV_FILE}"
 sed -i "s#^IMAGE_TAG=.*#IMAGE_TAG=${IMAGE_TAG}#" "${ENV_FILE}"
 sed -i "s#^BIND_IP=.*#BIND_IP=127.0.0.1#" "${ENV_FILE}"
 sed -i "s#^HTTP_PORT=.*#HTTP_PORT=${HTTP_PORT}#" "${ENV_FILE}"
@@ -163,15 +168,31 @@ compose exec -T db bash -lc 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "CREA
 echo "[host-smoke] run migrations"
 compose run --rm app sh -lc 'cd /app && PYTHONPATH=/app alembic -c /app/alembic.ini upgrade head'
 
-echo "[host-smoke] start app, worker, nginx"
-compose up -d app worker nginx
+echo "[host-smoke] start app, worker, nginx, meilisearch, search-service"
+compose up -d app worker nginx meilisearch search-service
 wait_for_service_healthy app 180
+wait_for_service_healthy meilisearch 120
+wait_for_service_healthy search-service 120
 
 echo "[host-smoke] health check"
 curl -fsS --max-time 10 "http://127.0.0.1:${HTTP_PORT}/health" >/dev/null
+compose exec -T app sh -lc 'python - <<'"'"'PY'"'"'
+import os
+import sys
+import urllib.request
+
+url = (os.getenv("SEARCH_SERVICE_URL") or "http://search-service:8002").rstrip("/") + "/health"
+try:
+    with urllib.request.urlopen(url, timeout=10) as resp:
+        if 200 <= resp.status < 400:
+            sys.exit(0)
+except Exception:
+    pass
+sys.exit(1)
+PY'
 
 echo "[host-smoke] smoke test passed"
 compose ps
-compose logs --tail=80 app worker nginx
+compose logs --tail=80 app worker nginx search-service meilisearch
 
 cleanup

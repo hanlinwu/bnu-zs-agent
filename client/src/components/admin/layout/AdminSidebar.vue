@@ -16,6 +16,7 @@ import {
   ChatLineRound,
   SetUp,
   Setting,
+  Search,
 } from '@element-plus/icons-vue'
 import { markRaw, type Component } from 'vue'
 import { useSystemStore } from '@/stores/system'
@@ -76,6 +77,7 @@ const menuGroups: MenuGroup[] = [
       { index: '/admin/system-config', title: '智能体配置', icon: markRaw(SetUp), permission: 'system_config:read' },
       { index: '/admin/sensitive', title: '敏感词库', icon: markRaw(Warning), permission: 'sensitive:read' },
       { index: '/admin/system-settings', title: '系统设置', icon: markRaw(Setting), permission: 'system_config:read' },
+      { index: '/admin/web-search', title: '网页搜索', icon: markRaw(Search), permission: 'web_search:read' },
     ],
   },
   {

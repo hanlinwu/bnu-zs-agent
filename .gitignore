@@ -42,3 +42,13 @@ Thumbs.db
 htmlcov/
 .claude/
 tmp/**
+
+# Local Meilisearch data/logs (should not be tracked)
+.meili-data/
+.meili-data-local/
+.meili-data2/
+.meili.log
+.server.log
+.search.log
+meilisearch
+dumps/

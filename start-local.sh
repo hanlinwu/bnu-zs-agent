@@ -9,6 +9,9 @@ set -e
 PROJECT_ROOT="$(cd "$(dirname "$0")" && pwd)"
 SERVER_DIR="$PROJECT_ROOT/server"
 CLIENT_DIR="$PROJECT_ROOT/client"
+SEARCH_DIR="$PROJECT_ROOT/search-service"
+MEILI_BIN="$PROJECT_ROOT/meilisearch"
+MEILI_DATA_DIR="/data/meilisearch-local"
 
 get_app_version() {
     if command -v node >/dev/null 2>&1; then
@@ -47,6 +50,10 @@ install_system_deps() {
     info "检查并安装系统依赖..."
 
     local NEED_UPDATE=false
+    local APT_PREFIX=""
+    if [ "$(id -u)" -ne 0 ]; then
+        APT_PREFIX="sudo"
+    fi
 
     if ! command -v pg_isready &>/dev/null; then
         NEED_UPDATE=true
@@ -57,12 +64,14 @@ install_system_deps() {
     if ! command -v python3 &>/dev/null || ! python3 -c "import venv" 2>/dev/null; then
         NEED_UPDATE=true
     fi
+    if ! python3 -m ensurepip --version >/dev/null 2>&1; then
+        NEED_UPDATE=true
+    fi
 
     if $NEED_UPDATE; then
         info "安装缺失的系统包..."
-        apt-get update -qq
-        apt-get install -y -qq postgresql postgresql-client redis-server python3-venv 2>/dev/null || \
-        sudo apt-get install -y -qq postgresql postgresql-client redis-server python3-venv 2>/dev/null
+        $APT_PREFIX apt-get update -qq
+        $APT_PREFIX apt-get install -y -qq postgresql postgresql-client redis-server python3-venv python3.11-venv
     fi
 
     info "系统依赖就绪 ✓"
@@ -192,19 +201,30 @@ SMS_ALIYUN_SCHEME_NAME=${SMS_ALIYUN_SCHEME_NAME_VALUE}
 SMS_ALIYUN_ENDPOINT=${SMS_ALIYUN_ENDPOINT_VALUE}
 CELERY_BROKER_URL=redis://localhost:6379/1
 CELERY_RESULT_BACKEND=redis://localhost:6379/2
+SEARCH_SERVICE_URL=http://127.0.0.1:8002
+SEARCH_SERVICE_API_KEY=
 EOF
-    mv "$TMP_ENV" "$EXISTING_ENV"
+    mv -f "$TMP_ENV" "$EXISTING_ENV"
     info "已写入最小 server/.env（保留短信配置）"
 
-    # 创建虚拟环境
+    # 创建/修复虚拟环境
     if [ ! -d .venv ]; then
         python3 -m venv .venv
         info "已创建 Python 虚拟环境"
     fi
+    if [ ! -x .venv/bin/pip ]; then
+        warn "检测到 server/.venv 缺少 pip，尝试修复..."
+        .venv/bin/python3 -m ensurepip --upgrade >/dev/null 2>&1 || true
+    fi
+    if [ ! -x .venv/bin/pip ]; then
+        warn "server/.venv 修复失败，重建虚拟环境..."
+        rm -rf .venv
+        python3 -m venv .venv
+    fi
 
     # 安装依赖
     info "安装 Python 依赖..."
-    .venv/bin/pip install -q -r requirements.txt
+    .venv/bin/python3 -m pip install -q -r requirements.txt
 
     # 建表：先尝试 Alembic，失败则用 create_all
     info "初始化数据库表..."
@@ -237,7 +257,104 @@ asyncio.run(create_tables())
 }
 
 # ----------------------------------------------------------
-# 5. 配置前端
+# 5.1 配置搜索服务
+# ----------------------------------------------------------
+setup_search_service() {
+    info "配置搜索服务..."
+
+    cd "$SEARCH_DIR"
+
+    # 生成最小 .env（优先复用已有配置）
+    local EXISTING_ENV=".env"
+    local TMP_ENV=".env.minimal.tmp"
+    local MEILISEARCH_URL_VALUE="http://127.0.0.1:7700"
+    local MEILISEARCH_API_KEY_VALUE="changeme"
+    local API_KEY_VALUE=""
+    local SQLITE_DB_PATH_VALUE="/data/search-service.db"
+    local CRAWL_INDEX_NAME_VALUE="web_pages"
+
+    read_env_value() {
+        local key="$1"
+        local file="$2"
+        if [ ! -f "$file" ]; then
+            return
+        fi
+        grep -E "^${key}=" "$file" | tail -n 1 | cut -d'=' -f2-
+    }
+
+    if [ -f "$EXISTING_ENV" ]; then
+        MEILISEARCH_URL_VALUE="$(read_env_value MEILISEARCH_URL "$EXISTING_ENV")"
+        MEILISEARCH_API_KEY_VALUE="$(read_env_value MEILISEARCH_API_KEY "$EXISTING_ENV")"
+        API_KEY_VALUE="$(read_env_value API_KEY "$EXISTING_ENV")"
+        SQLITE_DB_PATH_VALUE="$(read_env_value SQLITE_DB_PATH "$EXISTING_ENV")"
+        CRAWL_INDEX_NAME_VALUE="$(read_env_value CRAWL_INDEX_NAME "$EXISTING_ENV")"
+    fi
+
+    MEILISEARCH_URL_VALUE="${MEILISEARCH_URL_VALUE:-http://127.0.0.1:7700}"
+    if [ "${MEILISEARCH_URL_VALUE}" = "http://localhost:7700" ]; then
+        MEILISEARCH_URL_VALUE="http://127.0.0.1:7700"
+    fi
+    MEILISEARCH_API_KEY_VALUE="${MEILISEARCH_API_KEY_VALUE:-changeme}"
+    SQLITE_DB_PATH_VALUE="${SQLITE_DB_PATH_VALUE:-/data/search-service.db}"
+    CRAWL_INDEX_NAME_VALUE="${CRAWL_INDEX_NAME_VALUE:-web_pages}"
+
+    cat > "$TMP_ENV" <<EOF
+MEILISEARCH_URL=${MEILISEARCH_URL_VALUE}
+MEILISEARCH_API_KEY=${MEILISEARCH_API_KEY_VALUE}
+API_KEY=${API_KEY_VALUE}
+SQLITE_DB_PATH=${SQLITE_DB_PATH_VALUE}
+CRAWL_INDEX_NAME=${CRAWL_INDEX_NAME_VALUE}
+EOF
+    mv -f "$TMP_ENV" "$EXISTING_ENV"
+    info "已写入最小 search-service/.env"
+
+    if [ ! -d .venv ]; then
+        python3 -m venv .venv
+        info "已创建搜索服务 Python 虚拟环境"
+    fi
+    if [ ! -x .venv/bin/pip ]; then
+        warn "检测到 search-service/.venv 缺少 pip，尝试修复..."
+        .venv/bin/python3 -m ensurepip --upgrade >/dev/null 2>&1 || true
+    fi
+    if [ ! -x .venv/bin/pip ]; then
+        warn "search-service/.venv 修复失败，重建虚拟环境..."
+        rm -rf .venv
+        python3 -m venv .venv
+    fi
+
+    info "安装搜索服务 Python 依赖..."
+    .venv/bin/python3 -m pip install -q -r requirements.txt
+
+    # Crawl4AI/Playwright 浏览器依赖（首次本地运行需要）
+    if [ ! -x /home/node/.cache/ms-playwright/chromium-1208/chrome-linux/chrome ]; then
+        info "首次安装 Crawl4AI 浏览器依赖（可能需要几分钟）..."
+        .venv/bin/crawl4ai-setup
+    fi
+
+    sudo mkdir -p /data 2>/dev/null || true
+    sudo chmod -R 777 /data 2>/dev/null || true
+
+    info "搜索服务配置完成 ✓"
+}
+
+# ----------------------------------------------------------
+# 6. 配置 Meilisearch
+# ----------------------------------------------------------
+setup_meilisearch() {
+    info "配置 Meilisearch..."
+
+    if [ ! -x "$MEILI_BIN" ]; then
+        info "未检测到 Meilisearch 二进制，开始下载..."
+        (cd "$PROJECT_ROOT" && curl -fsSL https://install.meilisearch.com | sh)
+        chmod +x "$MEILI_BIN"
+    fi
+
+    mkdir -p "$MEILI_DATA_DIR"
+    info "Meilisearch 配置完成 ✓"
+}
+
+# ----------------------------------------------------------
+# 7. 配置前端
 # ----------------------------------------------------------
 setup_frontend() {
     info "配置前端..."
@@ -265,7 +382,7 @@ EOF
 }
 
 # ----------------------------------------------------------
-# 6. 启动所有开发服务器
+# 8. 启动所有开发服务器
 # ----------------------------------------------------------
 start_services() {
     echo ""
@@ -280,6 +397,57 @@ start_services() {
     GIT_COMMIT_VALUE="$(get_git_commit)"
     BUILD_TIME_VALUE="$(get_build_time)"
 
+    # Meilisearch
+    local STARTED_MEILI=0
+    if curl -fsS -m 2 http://localhost:7700/health >/dev/null 2>&1; then
+        info "Meilisearch 已在运行 (http://localhost:7700)"
+    else
+        info "启动 Meilisearch (http://localhost:7700)..."
+        "$MEILI_BIN" --env development --master-key changeme --http-addr 127.0.0.1:7700 --db-path "$MEILI_DATA_DIR" \
+            >/tmp/meilisearch-local.log 2>&1 &
+        MEILI_PID=$!
+        STARTED_MEILI=1
+        local MEILI_OK=0
+        for _ in $(seq 1 20); do
+            if curl -fsS -m 2 http://localhost:7700/health >/dev/null 2>&1; then
+                MEILI_OK=1
+                break
+            fi
+            sleep 1
+        done
+
+        # Auto-recover local dev data directory on version-incompatible state.
+        if [ "$MEILI_OK" = "0" ] && grep -q "failed to infer the version of the database" /tmp/meilisearch-local.log 2>/dev/null; then
+            warn "检测到 Meilisearch 数据目录版本不兼容，自动备份并重建本地索引目录..."
+            kill "$MEILI_PID" 2>/dev/null || true
+            wait "$MEILI_PID" 2>/dev/null || true
+
+            local backup_dir="${MEILI_DATA_DIR}.backup.$(date +%Y%m%d%H%M%S)"
+            if ! mv "$MEILI_DATA_DIR" "$backup_dir" 2>/dev/null; then
+                sudo mv "$MEILI_DATA_DIR" "$backup_dir" 2>/dev/null || true
+            fi
+            mkdir -p "$MEILI_DATA_DIR"
+            sudo chmod -R 777 "$MEILI_DATA_DIR" 2>/dev/null || true
+
+            "$MEILI_BIN" --env development --master-key changeme --http-addr 127.0.0.1:7700 --db-path "$MEILI_DATA_DIR" \
+                >/tmp/meilisearch-local.log 2>&1 &
+            MEILI_PID=$!
+            for _ in $(seq 1 20); do
+                if curl -fsS -m 2 http://localhost:7700/health >/dev/null 2>&1; then
+                    MEILI_OK=1
+                    break
+                fi
+                sleep 1
+            done
+        fi
+
+        if [ "$MEILI_OK" = "0" ]; then
+            warn "Meilisearch 日志（最后 40 行）："
+            tail -n 40 /tmp/meilisearch-local.log 2>/dev/null || true
+            error "Meilisearch 启动失败"
+        fi
+    fi
+
     # 后端
     cd "$SERVER_DIR"
     info "启动后端 (http://localhost:8001)..."
@@ -293,6 +461,12 @@ start_services() {
     info "启动 Celery Worker..."
     .venv/bin/celery -A app.tasks.celery_app worker --loglevel=warning --concurrency=2 &
     CELERY_PID=$!
+
+    # 搜索服务
+    cd "$SEARCH_DIR"
+    info "启动搜索服务 (http://localhost:8002)..."
+    .venv/bin/uvicorn main:app --reload --host 0.0.0.0 --port 8002 &
+    SEARCH_PID=$!
 
     # 前端
     cd "$CLIENT_DIR"
@@ -319,6 +493,9 @@ start_services() {
     info "  前端:         http://localhost:5173"
     info "  后端 API:     http://localhost:8001"
     info "  API 文档:     http://localhost:8001/api/docs"
+    info "  Meilisearch:  http://localhost:7700"
+    info "  搜索服务:     http://localhost:8002"
+    info "  搜索健康检查: http://localhost:8002/health"
     info ""
     info "  默认管理员:   admin / admin123"
     info "  短信配置:     ${SMS_STATUS}"
@@ -330,8 +507,12 @@ start_services() {
     cleanup() {
         echo ""
         info "正在停止服务..."
-        kill $BACKEND_PID $CELERY_PID $FRONTEND_PID 2>/dev/null
-        wait $BACKEND_PID $CELERY_PID $FRONTEND_PID 2>/dev/null
+        kill $BACKEND_PID $CELERY_PID $SEARCH_PID $FRONTEND_PID 2>/dev/null
+        wait $BACKEND_PID $CELERY_PID $SEARCH_PID $FRONTEND_PID 2>/dev/null
+        if [ "${STARTED_MEILI}" = "1" ]; then
+            kill $MEILI_PID 2>/dev/null || true
+            wait $MEILI_PID 2>/dev/null || true
+        fi
         info "已停止"
         exit 0
     }
@@ -353,6 +534,8 @@ main() {
     start_postgres
     start_redis
     setup_backend
+    setup_search_service
+    setup_meilisearch
     setup_frontend
     start_services
 }

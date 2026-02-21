@@ -48,6 +48,7 @@ RESOURCES = [
     "dashboard",
     "conversation",
     "system_config",
+    "web_search",
 ]
 ACTIONS = ["create", "read", "update", "delete", "approve", "export", "ban"]
 
@@ -73,6 +74,7 @@ ROLE_PERMISSIONS = {
         "calendar": ["read"],
         "dashboard": ["read"],
         "conversation": ["read"],
+        "web_search": ["read", "create", "update", "delete"],
     },
     "teacher": {
         "knowledge": ["read"],

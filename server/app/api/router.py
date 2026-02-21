@@ -21,6 +21,7 @@ from app.api.v1 import (
     admin_dashboard,
     admin_workflow,
     admin_knowledge_base,
+    admin_web_search,
     system,
 )
 
@@ -48,3 +49,4 @@ api_router.include_router(admin_log.router, prefix="/admin/logs", tags=["审计�
 api_router.include_router(admin_dashboard.router, prefix="/admin/dashboard", tags=["仪表盘"])
 api_router.include_router(admin_conversation.router, prefix="/admin/conversations", tags=["对话审核"])
 api_router.include_router(admin_workflow.router, prefix="/admin", tags=["审核流程"])
+api_router.include_router(admin_web_search.router, prefix="/admin/web-search", tags=["网页搜索"])

@@ -71,6 +71,10 @@ class Settings(BaseSettings):
     # Audit (daily sqlite shards)
     AUDIT_SQLITE_DIR: str = "/data/audit_logs"
 
+    # Search microservice
+    SEARCH_SERVICE_URL: str = "http://search-service:8002"
+    SEARCH_SERVICE_API_KEY: str = ""
+
 
 
 settings = Settings()

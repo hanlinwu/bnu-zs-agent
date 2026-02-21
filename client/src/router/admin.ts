@@ -98,6 +98,12 @@ export const adminRoutes: RouteRecordRaw[] = [
         meta: { title: '招生日历' },
       },
       {
+        path: 'web-search',
+        name: 'AdminWebSearch',
+        component: () => import('@/views/admin/WebSearch.vue'),
+        meta: { title: '网页搜索' },
+      },
+      {
         path: 'logs',
         name: 'AdminLogs',
         component: () => import('@/views/admin/Logs.vue'),
