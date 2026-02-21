@@ -4,6 +4,7 @@ import uuid
 import logging
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
+from urllib.parse import urlparse
 
 from fastapi import FastAPI, Depends, HTTPException, Header, Query
 
@@ -24,6 +25,18 @@ from models import (
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+
+def _normalize_domain(domain_or_url: str) -> str:
+    """Normalize domain input to hostname-only form."""
+    if not domain_or_url:
+        return ""
+    s = domain_or_url.strip().lower()
+    if "://" in s:
+        s = urlparse(s).netloc or s
+    else:
+        s = s.split("/", 1)[0]
+    return s.strip()
 
 
 # ── Auth dependency ──────────────────────────────────────────
@@ -149,13 +162,14 @@ async def create_site(body: CrawlSiteCreate):
     try:
         site_id = str(uuid.uuid4())
         now = datetime.now(timezone.utc).isoformat()
+        domain = _normalize_domain(body.domain)
         await db.execute(
             """INSERT INTO crawl_sites
                (id, domain, name, start_url, max_depth, max_pages, same_domain_only,
                 crawl_frequency_minutes, enabled, created_at, updated_at)
                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (
-                site_id, body.domain, body.name, body.start_url,
+                site_id, domain, body.name, body.start_url,
                 body.max_depth, body.max_pages, int(body.same_domain_only),
                 body.crawl_frequency_minutes, int(body.enabled), now, now,
             ),
@@ -189,6 +203,8 @@ async def update_site(site_id: str, body: CrawlSiteUpdate):
             updates["enabled"] = int(body.enabled)
 
         if updates:
+            if "domain" in updates:
+                updates["domain"] = _normalize_domain(updates["domain"])
             updates["updated_at"] = datetime.now(timezone.utc).isoformat()
             sets = ", ".join(f"{k} = ?" for k in updates)
             vals = list(updates.values()) + [site_id]
@@ -242,7 +258,7 @@ async def trigger_site_crawl(site_id: str):
             max_depth=site["max_depth"],
             max_pages=site["max_pages"],
             same_domain_only=bool(site["same_domain_only"]),
-            domain_restriction=site["domain"],
+            domain_restriction=_normalize_domain(site["domain"]),
             site_id=site_id,
         )
         return {"task_id": task_id, "status": "pending"}

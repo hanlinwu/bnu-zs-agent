@@ -2,6 +2,7 @@
 
 import logging
 from datetime import datetime, timezone
+from urllib.parse import urlparse
 
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
@@ -19,6 +20,15 @@ from app.services import search_client
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+
+def _normalize_domain(domain_or_url: str) -> str:
+    s = (domain_or_url or "").strip().lower()
+    if "://" in s:
+        s = urlparse(s).netloc or s
+    else:
+        s = s.split("/", 1)[0]
+    return s
 
 
 # ── Request schemas ──────────────────────────────────────────
@@ -74,7 +84,7 @@ async def create_site(
 ):
     """创建搜索站点"""
     site = WebSearchSite(
-        domain=body.domain,
+        domain=_normalize_domain(body.domain),
         name=body.name,
         start_url=body.start_url,
         max_depth=body.max_depth,
@@ -91,7 +101,7 @@ async def create_site(
     # Sync to search microservice
     try:
         remote = await search_client.create_site({
-            "domain": body.domain,
+            "domain": _normalize_domain(body.domain),
             "name": body.name,
             "start_url": body.start_url,
             "max_depth": body.max_depth,

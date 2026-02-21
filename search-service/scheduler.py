@@ -13,6 +13,16 @@ logger = logging.getLogger(__name__)
 scheduler = AsyncIOScheduler()
 
 
+def _normalize_domain(domain_or_url: str) -> str:
+    s = (domain_or_url or "").strip().lower()
+    if "://" in s:
+        from urllib.parse import urlparse
+        s = urlparse(s).netloc or s
+    else:
+        s = s.split("/", 1)[0]
+    return s
+
+
 async def check_and_schedule_crawls():
     """Check all enabled crawl sites and trigger re-crawl if overdue."""
     db = await get_db()
@@ -42,7 +52,7 @@ async def check_and_schedule_crawls():
                 max_depth=site["max_depth"],
                 max_pages=site["max_pages"],
                 same_domain_only=bool(site["same_domain_only"]),
-                domain_restriction=site["domain"],
+                domain_restriction=_normalize_domain(site["domain"]),
                 site_id=site["id"],
             )
     except Exception:

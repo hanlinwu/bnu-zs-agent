@@ -60,6 +60,16 @@ compose() {
   ${DOCKER_CMD} compose --env-file "${ENV_FILE}" -f "${COMPOSE_FILE}" "$@"
 }
 
+rewrite_ghcr_mirror() {
+  local image_ref="$1"
+  local mirror_prefix="${GHCR_MIRROR_PREFIX:-ghcr.nju.edu.cn}"
+  if [[ "${image_ref}" == ghcr.io/* ]]; then
+    echo "${mirror_prefix}/${image_ref#ghcr.io/}"
+    return
+  fi
+  echo "${image_ref}"
+}
+
 wait_for_service_healthy() {
   local service="$1"
   local timeout="${2:-120}"
@@ -152,6 +162,14 @@ persist_release_metadata() {
 }
 
 ensure_docker_access
+APP_IMAGE="$(rewrite_ghcr_mirror "${APP_IMAGE}")"
+NGINX_IMAGE="$(rewrite_ghcr_mirror "${NGINX_IMAGE}")"
+SEARCH_SERVICE_IMAGE="$(rewrite_ghcr_mirror "${SEARCH_SERVICE_IMAGE}")"
+
+echo "[deploy] APP_IMAGE=${APP_IMAGE}"
+echo "[deploy] NGINX_IMAGE=${NGINX_IMAGE}"
+echo "[deploy] SEARCH_SERVICE_IMAGE=${SEARCH_SERVICE_IMAGE}"
+
 REGISTRY_HOST="$(registry_from_image "${APP_IMAGE}")"
 REGISTRY_USERNAME="${REGISTRY_USERNAME:-${GHCR_USERNAME:-}}"
 REGISTRY_PASSWORD="${REGISTRY_PASSWORD:-${GHCR_TOKEN:-}}"
@@ -164,7 +182,10 @@ else
 fi
 
 echo "[deploy] pulling target images"
-compose pull app worker nginx search-service
+if ! compose pull app worker nginx search-service; then
+  echo "[deploy] cannot pull required images; check registry connectivity and mirror prefix settings" >&2
+  exit 1
+fi
 
 echo "[deploy] ensuring db/redis/meilisearch/search-service are running"
 compose up -d db redis meilisearch search-service

@@ -2,12 +2,16 @@
 
 import asyncio
 import logging
+import re
 import uuid
+from asyncio.subprocess import PIPE
 from collections import deque
 from datetime import datetime, timezone
+from html import unescape
 from urllib.parse import urljoin, urlparse
 
 import aiosqlite
+import httpx
 from crawl4ai import AsyncWebCrawler, BrowserConfig, CrawlerRunConfig
 
 from config import settings
@@ -29,10 +33,101 @@ async def _update_task(db: aiosqlite.Connection, task_id: str, **fields):
     await db.commit()
 
 
+def _normalize_domain(domain_or_url: str) -> str:
+    """Normalize domain or URL into a lower-case hostname."""
+    if not domain_or_url:
+        return ""
+    s = domain_or_url.strip().lower()
+    if "://" in s:
+        s = urlparse(s).netloc or s
+    else:
+        # Handle accidental path-like input without scheme.
+        s = s.split("/", 1)[0]
+    return s.strip()
+
+
+def _html_to_text(html: str) -> str:
+    """Best-effort HTML to plain text for fallback indexing."""
+    if not html:
+        return ""
+    text = re.sub(r"(?is)<(script|style|noscript).*?>.*?</\\1>", " ", html)
+    text = re.sub(r"(?is)<br\\s*/?>", "\n", text)
+    text = re.sub(r"(?is)</(p|div|li|h[1-6]|tr|section|article)>", "\n", text)
+    text = re.sub(r"(?is)<[^>]+>", " ", text)
+    text = unescape(text)
+    text = re.sub(r"[ \\t\\r\\f\\v]+", " ", text)
+    text = re.sub(r"\\n{2,}", "\n", text)
+    return text.strip()
+
+
+def _extract_title(html: str) -> str | None:
+    m = re.search(r"(?is)<title[^>]*>(.*?)</title>", html or "")
+    if not m:
+        return None
+    return unescape(m.group(1)).strip()
+
+
+async def _fallback_fetch_page(url: str) -> tuple[str | None, str | None]:
+    """Fallback fetch via HTTP when browser crawling fails."""
+    try:
+        async with httpx.AsyncClient(timeout=20.0, follow_redirects=True) as client:
+            resp = await client.get(url)
+            if resp.status_code >= 400:
+                return None, None
+            html = resp.text or ""
+            title = _extract_title(html)
+            text = _html_to_text(html)
+            if len(text) < 20:
+                return title, None
+            return title, text
+    except Exception as e:
+        logger.warning("HTTP fallback failed for %s: %s", url, e)
+
+    # In some environments Playwright/httpx TLS stacks fail while curl still works.
+    # Try curl as a final fallback to keep indexing available.
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            "curl",
+            "-fsSL",
+            "--max-time",
+            "20",
+            "-A",
+            (
+                "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
+                "(KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36"
+            ),
+            url,
+            stdout=PIPE,
+            stderr=PIPE,
+        )
+        stdout, stderr = await proc.communicate()
+        if proc.returncode != 0:
+            logger.warning(
+                "Curl fallback failed for %s: rc=%s err=%s",
+                url,
+                proc.returncode,
+                (stderr or b"").decode(errors="ignore")[:200],
+            )
+            return None, None
+
+        html = (stdout or b"").decode(errors="ignore")
+        title = _extract_title(html)
+        text = _html_to_text(html)
+        if len(text) < 20:
+            return title, None
+        return title, text
+    except FileNotFoundError:
+        logger.warning("Curl is not installed; cannot run curl fallback for %s", url)
+        return None, None
+    except Exception as e:
+        logger.warning("Unexpected curl fallback error for %s: %s", url, e)
+        return None, None
+
+
 def _same_domain(url: str, domain: str) -> bool:
     """Check if url belongs to the given domain (including subdomains)."""
     host = urlparse(url).netloc.lower()
-    domain = domain.lower()
+    domain = _normalize_domain(domain)
     return host == domain or host.endswith("." + domain)
 
 
@@ -50,7 +145,7 @@ async def run_crawl(
         now = datetime.now(timezone.utc).isoformat()
         await _update_task(db, task_id, status="running", started_at=now)
 
-        base_domain = domain_restriction or urlparse(start_url).netloc.lower()
+        base_domain = _normalize_domain(domain_restriction or urlparse(start_url).netloc)
         visited: set[str] = set()
         queue: deque[tuple[str, int]] = deque([(start_url, 0)])
         success = 0
@@ -89,13 +184,33 @@ async def run_crawl(
 
                 try:
                     result = await crawler.arun(url=url, config=crawl_config)
+                    page_title = url
+                    page_content = ""
+                    discovered_links = []
 
                     if result.success and result.markdown:
+                        page_title = result.metadata.get("title", url) if result.metadata else url
+                        page_content = result.markdown
+                        discovered_links = (result.links or {}).get("internal", [])
+                    elif result.success and getattr(result, "cleaned_html", None):
+                        page_title = result.metadata.get("title", url) if result.metadata else url
+                        page_content = _html_to_text(result.cleaned_html)
+                        discovered_links = (result.links or {}).get("internal", [])
+                    else:
+                        fb_title, fb_text = await _fallback_fetch_page(url)
+                        if fb_text:
+                            page_title = fb_title or (result.metadata.get("title", url) if result and result.metadata else url)
+                            page_content = fb_text
+                        else:
+                            err = getattr(result, "error_message", None)
+                            logger.warning("No indexable content for %s (crawler_success=%s, error=%s)", url, result.success, err)
+
+                    if page_content:
                         doc = {
                             "id": url_to_doc_id(url),
                             "url": url,
-                            "title": result.metadata.get("title", url) if result.metadata else url,
-                            "content": result.markdown[:50000],  # Cap content length
+                            "title": page_title,
+                            "content": page_content[:50000],  # Cap content length
                             "domain": base_domain,
                             "crawled_at": datetime.now(timezone.utc).isoformat(),
                         }
@@ -108,8 +223,8 @@ async def run_crawl(
                             batch = []
 
                         # Enqueue discovered links if not at max depth
-                        if depth < max_depth and result.links:
-                            internal = result.links.get("internal", [])
+                        if depth < max_depth and discovered_links:
+                            internal = discovered_links
                             for link_info in internal:
                                 href = link_info.get("href", "") if isinstance(link_info, dict) else str(link_info)
                                 abs_url = urljoin(url, href).split("#")[0].rstrip("/")
