@@ -1,9 +1,29 @@
 <script setup lang="ts">
+import { computed, watch } from 'vue'
+import { useRoute } from 'vue-router'
 import { useThemeStore } from './stores/theme'
+import { useSystemStore } from './stores/system'
 import { routeLoading } from './router'
 
 // Theme is auto-applied on store creation
 useThemeStore()
+
+const route = useRoute()
+const systemStore = useSystemStore()
+void systemStore.fetchBasic()
+
+const pageTitle = computed(() => (route.meta.title as string | undefined) || '')
+const systemName = computed(() => systemStore.basic.system_name || '京师小智')
+
+watch(
+  [systemName, pageTitle],
+  () => {
+    document.title = pageTitle.value
+      ? `${systemName.value} - ${pageTitle.value}`
+      : systemName.value
+  },
+  { immediate: true },
+)
 </script>
 
 <template>

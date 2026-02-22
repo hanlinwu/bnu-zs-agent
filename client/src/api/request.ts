@@ -14,7 +14,7 @@ function parseRetryAfterSeconds(value?: string): number {
 }
 
 /**
- * Handle 401 unauthorized — clear token and redirect to login.
+ * Handle 401 unauthorized — clear token and route by current context.
  * Exported so non-axios code (e.g. fetch) can reuse the same logic.
  */
 export function handleUnauthorized() {
@@ -29,7 +29,13 @@ export function handleUnauthorized() {
   }
 
   ElMessage.error('登录已过期，请重新登录')
-  router.replace(isAdmin ? '/admin/login' : '/login').finally(() => {
+  if (!isAdmin && router.currentRoute.value.path.startsWith('/chat')) {
+    window.dispatchEvent(new CustomEvent('user-auth-required'))
+    isRedirecting = false
+    return
+  }
+
+  router.replace(isAdmin ? '/admin/login' : '/').finally(() => {
     isRedirecting = false
   })
 }

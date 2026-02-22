@@ -1,15 +1,20 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { Promotion } from '@element-plus/icons-vue'
+import { useSystemStore } from '@/stores/system'
+import { setPendingChatQuestion } from '@/utils/chatNavigation'
 
 const router = useRouter()
+const systemStore = useSystemStore()
 const inputContent = ref('')
+const systemName = computed(() => systemStore.basic.system_name || '京师小智')
 
 function handleSend() {
   const text = inputContent.value.trim()
   if (!text) return
-  router.push({ path: '/chat', query: { q: text } })
+  setPendingChatQuestion(text)
+  router.push('/chat')
 }
 
 function handleKeydown(e: KeyboardEvent) {
@@ -44,7 +49,7 @@ function handleKeydown(e: KeyboardEvent) {
 
       <h1 class="hero-title">
         <span class="title-line">你好，我是</span>
-        <span class="title-highlight">京师小智</span>
+        <span class="title-highlight">{{ systemName }}</span>
       </h1>
 
       <p class="hero-subtitle">
@@ -80,7 +85,7 @@ function handleKeydown(e: KeyboardEvent) {
           v-for="chip in ['录取分数线', '公费师范生', '优势专业', '奖学金政策']"
           :key="chip"
           class="hero-chip"
-          @click="router.push({ path: '/chat', query: { q: chip } })"
+          @click="setPendingChatQuestion(chip); router.push('/chat')"
         >
           {{ chip }}
         </button>

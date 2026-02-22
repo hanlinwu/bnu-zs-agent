@@ -11,6 +11,7 @@ import {
   Postcard,
 } from '@element-plus/icons-vue'
 import { markRaw, type Component } from 'vue'
+import { setPendingChatQuestion } from '@/utils/chatNavigation'
 
 const router = useRouter()
 
@@ -33,7 +34,8 @@ const questions: HotQuestion[] = [
 ]
 
 function askQuestion(query: string) {
-  router.push({ path: '/chat', query: { q: query } })
+  setPendingChatQuestion(query)
+  router.push('/chat')
 }
 </script>
 

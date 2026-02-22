@@ -98,7 +98,11 @@ def _setup_stubs():
     svc_knowledge.format_sources_for_citation = lambda *_a, **_kw: []
 
     svc_system_cfg = _make_module("app.services.system_config_service")
-    svc_system_cfg.get_chat_guardrail_config_cached = lambda: {}
+    svc_system_cfg.get_chat_guardrail_config_cached = lambda: {
+        "prompts": {
+            "high_risk_response": "高风险固定回复",
+        }
+    }
     svc_system_cfg.get_system_basic_config_cached = lambda: {"system_name": "京师小智"}
 
     svc_llm = _make_module("app.services.llm_service")
@@ -186,7 +190,7 @@ class ChatDecisionUnitTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(len(events), 1)
         self.assertEqual(events[0].get("type"), "sensitive_block")
-        self.assertEqual(events[0].get("content"), "命中拦截词")
+        self.assertEqual(events[0].get("content"), "高风险固定回复")
         self.assertEqual(db.commits, 1)
         mocked_decision.assert_not_called()
 

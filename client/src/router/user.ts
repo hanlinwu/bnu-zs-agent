@@ -2,16 +2,10 @@ import type { RouteRecordRaw } from 'vue-router'
 
 export const userRoutes: RouteRecordRaw[] = [
   {
-    path: '/login',
-    name: 'Login',
-    component: () => import('@/views/Login.vue'),
-    meta: { title: '登录', requiresAuth: false },
-  },
-  {
     path: '/',
     name: 'Home',
     component: () => import('@/views/Home.vue'),
-    meta: { title: '首页', requiresAuth: true },
+    meta: { title: '首页', requiresAuth: false },
   },
   {
     path: '/chat',

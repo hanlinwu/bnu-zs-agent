@@ -125,6 +125,14 @@ type Step = 'login'
 
 const router = useRouter()
 const userStore = useUserStore()
+const props = withDefaults(defineProps<{
+  redirectOnSuccess?: boolean
+}>(), {
+  redirectOnSuccess: true,
+})
+const emit = defineEmits<{
+  success: []
+}>()
 
 // Form state
 const phone = ref('')
@@ -243,7 +251,10 @@ async function handleLogin() {
       profileDialogVisible.value = true
       return
     }
-    router.push('/')
+    emit('success')
+    if (props.redirectOnSuccess) {
+      router.push('/')
+    }
   } catch (error: any) {
     // 403 表示账号被禁用，直接显示后端返回的消息
     if (error?.response?.status === 403) {
@@ -284,7 +295,10 @@ async function saveProfileAndEnter() {
       admission_stages: profileAdmissionStage.value ? [profileAdmissionStage.value] : [],
     })
     profileDialogVisible.value = false
-    router.push('/')
+    emit('success')
+    if (props.redirectOnSuccess) {
+      router.push('/')
+    }
   } catch {
     ElMessage.error('保存失败，请重试')
   } finally {

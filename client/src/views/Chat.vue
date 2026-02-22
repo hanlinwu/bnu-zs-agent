@@ -1,19 +1,22 @@
 <script setup lang="ts">
 import { ref, onMounted, computed, onBeforeUnmount } from 'vue'
-import { useRoute } from 'vue-router'
 import { useConversationStore } from '@/stores/conversation'
 import { useChatStore } from '@/stores/chat'
+import { useUserStore } from '@/stores/user'
 import AppHeader from '@/components/common/AppHeader.vue'
 import AppSidebar from '@/components/common/AppSidebar.vue'
 import ChatContainer from '@/components/chat/ChatContainer.vue'
+import LoginForm from '@/components/auth/LoginForm.vue'
+import { consumePendingChatQuestion } from '@/utils/chatNavigation'
 
-const route = useRoute()
 const conversationStore = useConversationStore()
 const chatStore = useChatStore()
+const userStore = useUserStore()
 
 const sidebarCollapsed = ref(false)
 const isMobile = ref(false)
 const mobileDrawerVisible = ref(false)
+const loginDialogVisible = ref(false)
 
 function checkMobile() {
   isMobile.value = window.innerWidth < 768
@@ -36,15 +39,21 @@ function handleDrawerClose() {
 
 const showDesktopSidebar = computed(() => !isMobile.value)
 const showMobileDrawer = computed(() => isMobile.value)
+const isLoggedIn = computed(() => !!userStore.token)
 
 async function initializeChatPage() {
-  const initialQuery = route.query.q as string | undefined
+  if (!isLoggedIn.value) {
+    loginDialogVisible.value = true
+    return
+  }
 
-  if (initialQuery?.trim()) {
+  const initialQuery = consumePendingChatQuestion()
+
+  if (initialQuery) {
     chatStore.setConversationId(null)
     chatStore.clearMessages()
     void conversationStore.fetchConversations()
-    await chatStore.sendMessage(initialQuery.trim())
+    await chatStore.sendMessage(initialQuery)
     return
   }
 
@@ -63,14 +72,25 @@ async function initializeChatPage() {
   await chatStore.loadMessages(target.id)
 }
 
+function handleAuthRequired() {
+  loginDialogVisible.value = true
+}
+
+async function handleLoginSuccess() {
+  loginDialogVisible.value = false
+  await initializeChatPage()
+}
+
 onMounted(() => {
   checkMobile()
   window.addEventListener('resize', checkMobile)
+  window.addEventListener('user-auth-required', handleAuthRequired)
   void initializeChatPage()
 })
 
 onBeforeUnmount(() => {
   window.removeEventListener('resize', checkMobile)
+  window.removeEventListener('user-auth-required', handleAuthRequired)
 })
 </script>
 
@@ -115,9 +135,24 @@ onBeforeUnmount(() => {
       </template>
 
       <main class="chat-main">
-        <ChatContainer />
+        <ChatContainer v-if="isLoggedIn" />
+        <div v-else class="chat-auth-placeholder">
+          <el-empty description="登录后即可开始对话">
+            <el-button type="primary" @click="loginDialogVisible = true">立即登录</el-button>
+          </el-empty>
+        </div>
       </main>
     </div>
+
+    <el-dialog
+      v-model="loginDialogVisible"
+      title="登录后继续对话"
+      width="460px"
+      :close-on-click-modal="false"
+      destroy-on-close
+    >
+      <LoginForm :redirect-on-success="false" @success="handleLoginSuccess" />
+    </el-dialog>
   </div>
 </template>
 
@@ -144,6 +179,13 @@ onBeforeUnmount(() => {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+}
+
+.chat-auth-placeholder {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .mobile-menu-btn {

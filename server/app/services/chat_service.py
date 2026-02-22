@@ -325,6 +325,10 @@ async def process_message(
     - {"type": "done", "sources": list, "risk_level": str, "review_passed": bool}
     """
 
+    guardrail_config = get_chat_guardrail_config_cached()
+    prompts_cfg = guardrail_config.get("prompts", {})
+    high_risk_response = prompts_cfg.get("high_risk_response", "")
+
     # Step 1: Sensitive word pre-filter
     filter_result = await check_sensitive(user_message, db)
     sensitive_level = filter_result.highest_level if filter_result.matched_words else None
@@ -332,7 +336,7 @@ async def process_message(
     # Hard short-circuit: once blocked by sensitive interception, do not call any model/tool.
     is_sensitive_block = (filter_result.action == "block") or (sensitive_level == "block")
     if is_sensitive_block:
-        block_message = filter_result.message or "消息触发敏感词拦截，无法继续处理。"
+        block_message = high_risk_response or "该问题属于高风险内容，建议咨询招生办获取权威答复。"
         # Save blocked message
         msg = Message(
             conversation_id=conversation.id,
@@ -356,10 +360,6 @@ async def process_message(
         return
 
     # Step 2: Decision model classification (risk + tool chain)
-    guardrail_config = get_chat_guardrail_config_cached()
-    prompts_cfg = guardrail_config.get("prompts", {})
-
-    high_risk_response = prompts_cfg.get("high_risk_response", "")
     no_knowledge_response = prompts_cfg.get("no_knowledge_response", "")
     medium_system_prompt = prompts_cfg.get("medium_system_prompt", "")
     low_system_prompt = prompts_cfg.get("low_system_prompt", "")

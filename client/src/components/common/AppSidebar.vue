@@ -47,7 +47,7 @@ async function handleLogout() {
   chatStore.setConversationId(null)
   conversationStore.conversations = []
   userStore.logout()
-  router.replace('/login')
+  router.replace('/')
 }
 
 function handleSettingsCommand(command: string) {

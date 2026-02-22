@@ -18,7 +18,7 @@ const router = createRouter({
 router.beforeEach(async (to, _from, next) => {
   routeLoading.value = true
 
-  const whiteList = ['/login', '/admin/login']
+  const whiteList = ['/admin/login']
   if (whiteList.includes(to.path)) return next()
 
   // Admin routes use admin_token
@@ -30,7 +30,12 @@ router.beforeEach(async (to, _from, next) => {
 
   // User routes use token
   const token = localStorage.getItem('token')
-  if (!token) return next('/login')
+  if (!token) {
+    if (to.meta.requiresAuth && !to.path.startsWith('/chat')) {
+      return next('/')
+    }
+    return next()
+  }
 
   // Ensure user profile is loaded without blocking navigation
   const { useUserStore } = await import('@/stores/user')
@@ -38,8 +43,8 @@ router.beforeEach(async (to, _from, next) => {
   if (!userStore.userInfo) {
     void userStore.fetchProfile().catch(() => {
       userStore.logout()
-      if (router.currentRoute.value.path !== '/login') {
-        router.replace('/login')
+      if (router.currentRoute.value.path !== '/') {
+        router.replace('/')
       }
     })
   }
