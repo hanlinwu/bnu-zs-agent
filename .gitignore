@@ -43,12 +43,6 @@ htmlcov/
 .claude/
 tmp/**
 
-# Local Meilisearch data/logs (should not be tracked)
-.meili-data/
-.meili-data-local/
-.meili-data2/
-.meili.log
+# Local dev logs
 .server.log
-.search.log
-meilisearch
 dumps/

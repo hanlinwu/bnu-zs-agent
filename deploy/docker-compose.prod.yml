@@ -75,52 +75,11 @@ services:
     networks:
       - backend
 
-  meilisearch:
-    image: getmeili/meilisearch:v1.6
-    restart: unless-stopped
-    environment:
-      MEILI_MASTER_KEY: ${MEILISEARCH_MASTER_KEY:-changeme}
-      MEILI_ENV: production
-    volumes:
-      - meili_data:/meili_data
-    healthcheck:
-      test: ["CMD", "curl", "-sf", "http://localhost:7700/health"]
-      interval: 10s
-      timeout: 5s
-      retries: 10
-    networks:
-      - backend
-
-  search-service:
-    image: ${SEARCH_SERVICE_IMAGE:-bnu-search-service}:${IMAGE_TAG:-latest}
-    restart: unless-stopped
-    env_file:
-      - ./.env
-    environment:
-      MEILISEARCH_URL: http://meilisearch:7700
-      MEILISEARCH_API_KEY: ${MEILISEARCH_MASTER_KEY:-changeme}
-      API_KEY: ${SEARCH_SERVICE_API_KEY:-}
-      PLAYWRIGHT_BROWSERS_PATH: /ms-playwright
-    depends_on:
-      meilisearch:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD", "curl", "-sf", "http://localhost:8002/health"]
-      interval: 10s
-      timeout: 5s
-      retries: 10
-    volumes:
-      - search_data:/data
-    networks:
-      - backend
-
 volumes:
   pg_data:
   redis_data:
   upload_data:
   app_logs:
-  meili_data:
-  search_data:
 
 networks:
   frontend:

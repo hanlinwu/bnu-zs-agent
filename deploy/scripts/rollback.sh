@@ -46,26 +46,9 @@ compose() {
 ensure_docker_access
 
 echo "[rollback] rolling back to ${ROLLBACK_TAG}"
-IMAGE_TAG="${ROLLBACK_TAG}" compose up -d app worker nginx search-service
+IMAGE_TAG="${ROLLBACK_TAG}" compose up -d app worker nginx
 if ! curl -fsS --max-time 10 http://127.0.0.1/health > /dev/null; then
   echo "[rollback] health check failed after rollback" >&2
-  exit 1
-fi
-if ! IMAGE_TAG="${ROLLBACK_TAG}" compose exec -T app sh -lc 'python - <<'"'"'PY'"'"'
-import os
-import sys
-import urllib.request
-
-url = (os.getenv("SEARCH_SERVICE_URL") or "http://search-service:8002").rstrip("/") + "/health"
-try:
-    with urllib.request.urlopen(url, timeout=10) as resp:
-        if 200 <= resp.status < 400:
-            sys.exit(0)
-except Exception:
-    pass
-sys.exit(1)
-PY'; then
-  echo "[rollback] search-service health check failed after rollback" >&2
   exit 1
 fi
 

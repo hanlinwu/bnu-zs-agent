@@ -57,6 +57,7 @@ const menuGroups: MenuGroup[] = [
     label: '业务管理',
     items: [
       { index: '/admin/knowledge', title: '知识库管理', icon: markRaw(Collection), permission: 'knowledge:read' },
+      { index: '/admin/web-search', title: '网页搜索', icon: markRaw(Search), permission: 'web_search:read' },
       { index: '/admin/media', title: '多媒体资源', icon: markRaw(Picture), permission: 'media:read' },
       { index: '/admin/calendar', title: '招生日历', icon: markRaw(CalendarIcon), permission: 'calendar:read' },
     ],
@@ -77,7 +78,6 @@ const menuGroups: MenuGroup[] = [
       { index: '/admin/system-config', title: '智能体配置', icon: markRaw(SetUp), permission: 'system_config:read' },
       { index: '/admin/sensitive', title: '敏感词库', icon: markRaw(Warning), permission: 'sensitive:read' },
       { index: '/admin/system-settings', title: '系统设置', icon: markRaw(Setting), permission: 'system_config:read' },
-      { index: '/admin/web-search', title: '网页搜索', icon: markRaw(Search), permission: 'web_search:read' },
     ],
   },
   {

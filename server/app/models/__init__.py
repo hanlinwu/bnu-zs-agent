@@ -12,7 +12,7 @@ from app.models.calendar import AdmissionCalendar
 from app.models.model_config import ModelEndpoint, ModelGroup, ModelInstance
 from app.models.review_workflow import ReviewWorkflow, ResourceWorkflowBinding, ReviewRecord
 from app.models.system_config import SystemConfig
-from app.models.web_search import WebSearchSite
+
 
 __all__ = [
     "User",
@@ -41,5 +41,5 @@ __all__ = [
     "ResourceWorkflowBinding",
     "ReviewRecord",
     "SystemConfig",
-    "WebSearchSite",
+
 ]

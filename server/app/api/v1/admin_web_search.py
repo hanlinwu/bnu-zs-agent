@@ -1,297 +1,129 @@
-"""Web search microservice management API."""
+"""Web search (Tavily) admin API."""
 
 import logging
-from datetime import datetime, timezone
-from urllib.parse import urlparse
 
-from fastapi import APIRouter, Depends, Query
-from pydantic import BaseModel
-from sqlalchemy import select
+from fastapi import APIRouter, Depends
+from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
-from app.core.exceptions import NotFoundError, BizError
+from app.core.exceptions import BizError
 from app.core.permissions import require_permission
 from app.dependencies import get_current_admin
 from app.models.admin import AdminUser
-from app.models.web_search import WebSearchSite
-from app.services import search_client
+from app.services import tavily_service
+from app.services import web_search_config_service
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
 
-def _normalize_domain(domain_or_url: str) -> str:
-    s = (domain_or_url or "").strip().lower()
-    if "://" in s:
-        s = urlparse(s).netloc or s
-    else:
-        s = s.split("/", 1)[0]
-    return s
+# ── Request schemas ──────────────────────────────────────────────
+
+class ConfigUpdateRequest(BaseModel):
+    value: dict = Field(..., description="Tavily搜索配置")
 
 
-# ── Request schemas ──────────────────────────────────────────
-
-class SiteCreateRequest(BaseModel):
-    domain: str
-    name: str
-    start_url: str
-    max_depth: int = 3
-    max_pages: int = 100
-    same_domain_only: bool = True
-    crawl_frequency_minutes: int = 1440
-    enabled: bool = True
+class ValidateKeyRequest(BaseModel):
+    api_key: str | None = None
 
 
-class SiteUpdateRequest(BaseModel):
-    name: str | None = None
-    start_url: str | None = None
-    max_depth: int | None = None
-    max_pages: int | None = None
-    same_domain_only: bool | None = None
-    crawl_frequency_minutes: int | None = None
-    enabled: bool | None = None
-
-
-class SearchQueryRequest(BaseModel):
+class SearchRequest(BaseModel):
     query: str
-    domain: str | None = None
-    page: int = 1
-    page_size: int = 20
+    search_depth: str | None = None
+    max_results: int | None = None
+    include_domains: list[str] | None = None
+    topic: str | None = None
 
 
-# ── Site CRUD ────────────────────────────────────────────────
+# ── Config endpoints ─────────────────────────────────────────────
 
-@router.get("/sites", dependencies=[Depends(require_permission("web_search:read"))])
-async def list_sites(
+@router.get("/config", dependencies=[Depends(require_permission("web_search:read"))])
+async def get_config(
     admin: AdminUser = Depends(get_current_admin),
     db: AsyncSession = Depends(get_db),
 ):
-    """列出所有搜索站点配置"""
-    result = await db.execute(
-        select(WebSearchSite).order_by(WebSearchSite.created_at.desc())
+    """获取Tavily搜索配置"""
+    config = await web_search_config_service.get_config(db)
+    config["api_key"] = web_search_config_service._mask_key(config.get("api_key", ""))
+    return {"key": web_search_config_service.WEB_SEARCH_CONFIG_KEY, "value": config}
+
+
+@router.put("/config", dependencies=[Depends(require_permission("web_search:update"))])
+async def update_config(
+    body: ConfigUpdateRequest,
+    admin: AdminUser = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """更新Tavily搜索配置"""
+    config = await web_search_config_service.update_config(
+        body.value, str(admin.id), db
     )
-    sites = result.scalars().all()
-    return {"items": [_serialize_site(s) for s in sites]}
+    config["api_key"] = web_search_config_service._mask_key(config.get("api_key", ""))
+    return {"key": web_search_config_service.WEB_SEARCH_CONFIG_KEY, "value": config}
 
 
-@router.post("/sites", dependencies=[Depends(require_permission("web_search:create"))])
-async def create_site(
-    body: SiteCreateRequest,
+@router.post("/config/validate", dependencies=[Depends(require_permission("web_search:read"))])
+async def validate_api_key(
+    body: ValidateKeyRequest = None,
     admin: AdminUser = Depends(get_current_admin),
     db: AsyncSession = Depends(get_db),
 ):
-    """创建搜索站点"""
-    site = WebSearchSite(
-        domain=_normalize_domain(body.domain),
-        name=body.name,
-        start_url=body.start_url,
-        max_depth=body.max_depth,
-        max_pages=body.max_pages,
-        same_domain_only=body.same_domain_only,
-        crawl_frequency_minutes=body.crawl_frequency_minutes,
-        enabled=body.enabled,
-        created_by=admin.id,
-    )
-    db.add(site)
-    await db.commit()
-    await db.refresh(site)
-
-    # Sync to search microservice
-    try:
-        remote = await search_client.create_site({
-            "domain": _normalize_domain(body.domain),
-            "name": body.name,
-            "start_url": body.start_url,
-            "max_depth": body.max_depth,
-            "max_pages": body.max_pages,
-            "same_domain_only": body.same_domain_only,
-            "crawl_frequency_minutes": body.crawl_frequency_minutes,
-            "enabled": body.enabled,
-        })
-        site.remote_site_id = remote.get("id")
-        await db.commit()
-    except Exception as e:
-        logger.warning("Failed to sync site to search service: %s", e)
-
-    return _serialize_site(site)
-
-
-@router.put("/sites/{site_id}", dependencies=[Depends(require_permission("web_search:update"))])
-async def update_site(
-    site_id: str,
-    body: SiteUpdateRequest,
-    admin: AdminUser = Depends(get_current_admin),
-    db: AsyncSession = Depends(get_db),
-):
-    """更新搜索站点配置"""
-    result = await db.execute(select(WebSearchSite).where(WebSearchSite.id == site_id))
-    site = result.scalar_one_or_none()
-    if not site:
-        raise NotFoundError("站点不存在")
-
-    update_data = {}
-    for field in ["name", "start_url", "max_depth", "max_pages", "same_domain_only",
-                  "crawl_frequency_minutes", "enabled"]:
-        val = getattr(body, field, None)
-        if val is not None:
-            setattr(site, field, val)
-            update_data[field] = val
-
-    site.updated_at = datetime.now(timezone.utc)
-    await db.commit()
-    await db.refresh(site)
-
-    # Sync to search microservice
-    if site.remote_site_id and update_data:
-        try:
-            await search_client.update_site(site.remote_site_id, update_data)
-        except Exception as e:
-            logger.warning("Failed to sync site update to search service: %s", e)
-
-    return _serialize_site(site)
-
-
-@router.delete("/sites/{site_id}", dependencies=[Depends(require_permission("web_search:delete"))])
-async def delete_site(
-    site_id: str,
-    admin: AdminUser = Depends(get_current_admin),
-    db: AsyncSession = Depends(get_db),
-):
-    """删除搜索站点"""
-    result = await db.execute(select(WebSearchSite).where(WebSearchSite.id == site_id))
-    site = result.scalar_one_or_none()
-    if not site:
-        raise NotFoundError("站点不存在")
-
-    # Delete from search microservice
-    if site.remote_site_id:
-        try:
-            await search_client.delete_site(site.remote_site_id)
-        except Exception as e:
-            logger.warning("Failed to delete site from search service: %s", e)
-
-    await db.delete(site)
-    await db.commit()
-    return {"success": True, "message": "站点已删除"}
-
-
-# ── Crawl operations ────────────────────────────────────────
-
-@router.post("/sites/{site_id}/crawl", dependencies=[Depends(require_permission("web_search:create"))])
-async def trigger_site_crawl(
-    site_id: str,
-    admin: AdminUser = Depends(get_current_admin),
-    db: AsyncSession = Depends(get_db),
-):
-    """手动触发站点爬取"""
-    result = await db.execute(select(WebSearchSite).where(WebSearchSite.id == site_id))
-    site = result.scalar_one_or_none()
-    if not site:
-        raise NotFoundError("站点不存在")
-
-    if not site.remote_site_id:
-        # Try to sync the site first
-        try:
-            remote = await search_client.create_site({
-                "domain": site.domain,
-                "name": site.name,
-                "start_url": site.start_url,
-                "max_depth": site.max_depth,
-                "max_pages": site.max_pages,
-                "same_domain_only": site.same_domain_only,
-                "crawl_frequency_minutes": site.crawl_frequency_minutes,
-                "enabled": site.enabled,
-            })
-            site.remote_site_id = remote.get("id")
-            await db.commit()
-        except Exception as e:
-            raise BizError(code=503, message=f"搜索微服务不可用: {e}", status_code=503)
+    """验证Tavily API Key是否有效"""
+    api_key = (body.api_key if body and body.api_key else None) or web_search_config_service.get_api_key()
+    if not api_key:
+        raise BizError(code=400, message="未配置API Key")
 
     try:
-        resp = await search_client.trigger_crawl(site.remote_site_id)
-        site.last_crawl_at = datetime.now(timezone.utc)
-        site.last_crawl_status = "running"
-        await db.commit()
-        return resp
+        valid = await tavily_service.validate_api_key(api_key)
+        return {"valid": valid, "message": "API Key有效" if valid else "API Key无效"}
     except Exception as e:
-        raise BizError(code=503, message=f"触发爬取失败: {e}", status_code=503)
+        raise BizError(code=503, message=f"验证失败: {e}", status_code=503)
 
 
-@router.get("/crawl-tasks", dependencies=[Depends(require_permission("web_search:read"))])
-async def list_crawl_tasks(
-    page: int = Query(1, ge=1),
-    page_size: int = Query(20, ge=1, le=100),
-    admin: AdminUser = Depends(get_current_admin),
-):
-    """获取爬取任务列表"""
-    try:
-        return await search_client.list_crawl_tasks(page, page_size)
-    except Exception as e:
-        raise BizError(code=503, message=f"搜索微服务不可用: {e}", status_code=503)
-
-
-@router.get("/crawl-tasks/{task_id}", dependencies=[Depends(require_permission("web_search:read"))])
-async def get_crawl_task(
-    task_id: str,
-    admin: AdminUser = Depends(get_current_admin),
-):
-    """获取爬取任务详情"""
-    try:
-        return await search_client.get_crawl_task(task_id)
-    except Exception as e:
-        raise BizError(code=503, message=f"搜索微服务不可用: {e}", status_code=503)
-
-
-# ── Search proxy ─────────────────────────────────────────────
+# ── Search ───────────────────────────────────────────────────────
 
 @router.post("/search", dependencies=[Depends(require_permission("web_search:read"))])
-async def search_query(
-    body: SearchQueryRequest,
+async def search(
+    body: SearchRequest,
     admin: AdminUser = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db),
 ):
-    """搜索代理 — 转发到微服务"""
+    """执行Tavily搜索测试，所有参数从全局配置读取，请求中的字段仅用于覆盖。"""
+    config = await web_search_config_service.get_config(db)
+
+    if not config.get("enabled", True):
+        raise BizError(code=400, message="网页搜索功能已关闭，请先在配置中开启")
+
+    api_key = web_search_config_service.get_api_key()
+    if not api_key:
+        raise BizError(code=400, message="未配置Tavily API Key，请先在配置中设置")
+
     try:
-        return await search_client.search(
+        result = await tavily_service.search(
+            api_key=api_key,
             query=body.query,
-            domain=body.domain,
-            page=body.page,
-            page_size=body.page_size,
+            search_depth=body.search_depth or config.get("search_depth", "basic"),
+            max_results=body.max_results or config.get("max_results", 10),
+            include_domains=body.include_domains if body.include_domains is not None else config.get("include_domains"),
+            exclude_domains=config.get("exclude_domains"),
+            include_answer=config.get("include_answer", False),
+            include_raw_content=config.get("include_raw_content", False),
+            topic=body.topic or config.get("topic", "general"),
+            country=config.get("country", ""),
+            time_range=config.get("time_range", ""),
+            chunks_per_source=config.get("chunks_per_source", 3),
+            include_images=config.get("include_images", False),
         )
+        return result
     except Exception as e:
-        raise BizError(code=503, message=f"搜索微服务不可用: {e}", status_code=503)
-
-
-# ── Health check ─────────────────────────────────────────────
-
-@router.get("/health", dependencies=[Depends(require_permission("web_search:read"))])
-async def microservice_health(
-    admin: AdminUser = Depends(get_current_admin),
-):
-    """检查搜索微服务健康状态"""
-    try:
-        return await search_client.health_check()
-    except Exception as e:
-        raise BizError(code=503, message=f"搜索微服务不可用: {str(e)}", status_code=503)
-
-
-# ── Helpers ──────────────────────────────────────────────────
-
-def _serialize_site(site: WebSearchSite) -> dict:
-    return {
-        "id": str(site.id),
-        "domain": site.domain,
-        "name": site.name,
-        "start_url": site.start_url,
-        "max_depth": site.max_depth,
-        "max_pages": site.max_pages,
-        "same_domain_only": site.same_domain_only,
-        "crawl_frequency_minutes": site.crawl_frequency_minutes,
-        "enabled": site.enabled,
-        "remote_site_id": site.remote_site_id,
-        "last_crawl_at": site.last_crawl_at.isoformat() if site.last_crawl_at else None,
-        "last_crawl_status": site.last_crawl_status,
-        "created_at": site.created_at.isoformat(),
-        "updated_at": site.updated_at.isoformat(),
-    }
+        # Extract response body from httpx errors for better diagnostics
+        detail = str(e)
+        if hasattr(e, 'response') and e.response is not None:
+            try:
+                detail = e.response.text or detail
+            except Exception:
+                pass
+        logger.error("Tavily search failed: %s", detail)
+        raise BizError(code=503, message=f"搜索失败: {detail}", status_code=503)

@@ -1,138 +1,142 @@
 <script setup lang="ts">
-import { ref, onMounted, onBeforeUnmount } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
-import { Plus, Search, Refresh, Delete, Edit, ChromeFilled } from '@element-plus/icons-vue'
+import { ref, computed, watch, onMounted } from 'vue'
+import { ElMessage } from 'element-plus'
+import { Search, Setting, CircleCheck, Close, Document } from '@element-plus/icons-vue'
 import * as webSearchApi from '@/api/admin/webSearch'
-import type { WebSearchSite, CrawlTask, SearchHit } from '@/api/admin/webSearch'
+import type { TavilyConfig, TavilySearchResult } from '@/api/admin/webSearch'
 
-// ── Site management ─────────────────────────────────────────
+// ── Config ──────────────────────────────────────────────────
 
-const sites = ref<WebSearchSite[]>([])
-const siteLoading = ref(false)
-const siteDialogVisible = ref(false)
-const siteEditing = ref<WebSearchSite | null>(null)
-const siteSaving = ref(false)
-const siteForm = ref({
-  domain: '',
-  name: '',
-  start_url: '',
-  max_depth: 3,
-  max_pages: 100,
-  same_domain_only: true,
-  crawl_frequency_minutes: 1440,
+const DEFAULT_CONFIG: TavilyConfig = {
   enabled: true,
+  api_key: '',
+  search_depth: 'basic',
+  max_results: 10,
+  include_domains: [],
+  exclude_domains: [],
+  include_answer: false,
+  include_raw_content: false,
+  topic: 'general',
+  country: '',
+  time_range: '',
+  chunks_per_source: 3,
+  include_images: false,
+}
+
+const config = ref<TavilyConfig>({ ...DEFAULT_CONFIG })
+const configLoading = ref(false)
+const configSaving = ref(false)
+const apiKeyValidating = ref(false)
+const apiKeyValid = ref<boolean | null>(null)
+const drawerVisible = ref(false)
+
+const newIncludeDomain = ref('')
+const newExcludeDomain = ref('')
+
+const countryOptions = [
+  { value: '', label: '不限' },
+  { value: 'china', label: '中国' },
+  { value: 'united states', label: '美国' },
+  { value: 'united kingdom', label: '英国' },
+  { value: 'japan', label: '日本' },
+  { value: 'south korea', label: '韩国' },
+  { value: 'germany', label: '德国' },
+  { value: 'france', label: '法国' },
+  { value: 'australia', label: '澳大利亚' },
+  { value: 'canada', label: '加拿大' },
+  { value: 'singapore', label: '新加坡' },
+  { value: 'taiwan', label: '中国台湾' },
+  { value: 'russia', label: '俄罗斯' },
+]
+
+const countryDisabled = computed(() => config.value.topic !== 'general')
+const countryHint = computed(() =>
+  config.value.topic !== 'general' ? '仅搜索类型为「通用」时可用' : ''
+)
+
+watch(() => config.value.topic, (topic) => {
+  if (topic !== 'general' && config.value.country) {
+    config.value.country = ''
+  }
 })
 
-async function fetchSites() {
-  siteLoading.value = true
+async function fetchConfig() {
+  configLoading.value = true
   try {
-    const res = await webSearchApi.getSites()
-    sites.value = res.data.items
+    const res = await webSearchApi.getConfig()
+    config.value = { ...DEFAULT_CONFIG, ...res.data.value }
   } catch {
-    ElMessage.error('获取站点列表失败')
+    ElMessage.error('获取配置失败')
   } finally {
-    siteLoading.value = false
+    configLoading.value = false
   }
 }
 
-function openSiteDialog(site?: WebSearchSite) {
-  if (site) {
-    siteEditing.value = site
-    siteForm.value = {
-      domain: site.domain,
-      name: site.name,
-      start_url: site.start_url,
-      max_depth: site.max_depth,
-      max_pages: site.max_pages,
-      same_domain_only: site.same_domain_only,
-      crawl_frequency_minutes: site.crawl_frequency_minutes,
-      enabled: site.enabled,
-    }
-  } else {
-    siteEditing.value = null
-    siteForm.value = {
-      domain: '',
-      name: '',
-      start_url: '',
-      max_depth: 3,
-      max_pages: 100,
-      same_domain_only: true,
-      crawl_frequency_minutes: 1440,
-      enabled: true,
-    }
+async function saveConfig() {
+  configSaving.value = true
+  try {
+    const res = await webSearchApi.updateConfig(config.value)
+    config.value = { ...DEFAULT_CONFIG, ...res.data.value }
+    ElMessage.success('配置已保存')
+  } catch {
+    ElMessage.error('保存配置失败')
+  } finally {
+    configSaving.value = false
   }
-  siteDialogVisible.value = true
 }
 
-async function handleSiteSubmit() {
-  if (!siteForm.value.domain || !siteForm.value.name || !siteForm.value.start_url) {
-    ElMessage.warning('请填写必要字段')
+async function handleValidateKey() {
+  apiKeyValidating.value = true
+  apiKeyValid.value = null
+  try {
+    const res = await webSearchApi.validateApiKey()
+    apiKeyValid.value = res.data.valid
+    ElMessage[res.data.valid ? 'success' : 'error'](res.data.message)
+  } catch {
+    apiKeyValid.value = false
+    ElMessage.error('验证失败')
+  } finally {
+    apiKeyValidating.value = false
+  }
+}
+
+function addIncludeDomain() {
+  const domain = newIncludeDomain.value.trim().toLowerCase()
+  if (!domain) return
+  if (config.value.include_domains.includes(domain)) {
+    ElMessage.warning('域名已存在')
     return
   }
-  siteSaving.value = true
-  try {
-    if (siteEditing.value) {
-      await webSearchApi.updateSite(siteEditing.value.id, siteForm.value)
-      ElMessage.success('站点已更新')
-    } else {
-      await webSearchApi.createSite(siteForm.value)
-      ElMessage.success('站点已创建')
-    }
-    siteDialogVisible.value = false
-    await fetchSites()
-  } catch {
-    ElMessage.error('操作失败')
-  } finally {
-    siteSaving.value = false
+  config.value.include_domains.push(domain)
+  newIncludeDomain.value = ''
+}
+
+function addExcludeDomain() {
+  const domain = newExcludeDomain.value.trim().toLowerCase()
+  if (!domain) return
+  if (config.value.exclude_domains.includes(domain)) {
+    ElMessage.warning('域名已存在')
+    return
   }
+  config.value.exclude_domains.push(domain)
+  newExcludeDomain.value = ''
 }
 
-async function handleDeleteSite(site: WebSearchSite) {
-  try {
-    await ElMessageBox.confirm(`确定删除站点 "${site.name}" 吗？删除后该域名的索引数据也将被清除。`, '确认删除', {
-      type: 'warning',
-    })
-    await webSearchApi.deleteSite(site.id)
-    ElMessage.success('站点已删除')
-    await fetchSites()
-  } catch {
-    // cancelled or error
-  }
+function removeDomain(list: string[], domain: string) {
+  const idx = list.indexOf(domain)
+  if (idx !== -1) list.splice(idx, 1)
 }
 
-async function handleToggleEnabled(site: WebSearchSite) {
-  try {
-    await webSearchApi.updateSite(site.id, { enabled: site.enabled })
-  } catch {
-    site.enabled = !site.enabled
-    ElMessage.error('更新失败')
-  }
-}
-
-async function handleTriggerCrawl(site: WebSearchSite) {
-  try {
-    await webSearchApi.triggerCrawl(site.id)
-    ElMessage.success('爬取任务已触发')
-    await fetchCrawlTasks()
-  } catch {
-    ElMessage.error('触发爬取失败，请检查搜索微服务是否正常运行')
-  }
-}
-
-function formatFrequency(minutes: number): string {
-  if (minutes < 60) return `${minutes} 分钟`
-  if (minutes < 1440) return `${Math.round(minutes / 60)} 小时`
-  return `${Math.round(minutes / 1440)} 天`
-}
-
-// ── Search test ─────────────────────────────────────────────
+// ── Search ──────────────────────────────────────────────────
 
 const searchKeyword = ref('')
-const searchDomain = ref('')
-const searchResults = ref<SearchHit[]>([])
-const searchTotal = ref(0)
+const searchResults = ref<TavilySearchResult[]>([])
+const searchAnswer = ref('')
+const searchResponseTime = ref(0)
 const searchLoading = ref(false)
-const searchPage = ref(1)
+const searchExecuted = ref(false)
+const rawResponse = ref<object | null>(null)
+const rawDialogVisible = ref(false)
 
 async function handleSearch() {
   if (!searchKeyword.value.trim()) {
@@ -140,93 +144,27 @@ async function handleSearch() {
     return
   }
   searchLoading.value = true
-  searchPage.value = 1
+  searchExecuted.value = true
+  rawResponse.value = null
   try {
-    const res = await webSearchApi.searchQuery({
-      query: searchKeyword.value,
-      domain: searchDomain.value || undefined,
-      page: searchPage.value,
-      page_size: 10,
-    })
-    searchResults.value = res.data.hits
-    searchTotal.value = res.data.total
+    const res = await webSearchApi.searchQuery({ query: searchKeyword.value })
+    rawResponse.value = res.data
+    searchResults.value = res.data.results || []
+    searchAnswer.value = res.data.answer || ''
+    searchResponseTime.value = res.data.response_time || 0
   } catch {
-    ElMessage.error('搜索失败，请检查搜索微服务是否正常运行')
+    ElMessage.error('搜索失败，请检查API Key是否有效')
+    searchResults.value = []
+    searchAnswer.value = ''
   } finally {
     searchLoading.value = false
   }
 }
 
-// ── Crawl tasks ─────────────────────────────────────────────
-
-const crawlTasks = ref<CrawlTask[]>([])
-const crawlTasksLoading = ref(false)
-const crawlTasksTotal = ref(0)
-const crawlTasksPage = ref(1)
-const crawlTimer = ref<ReturnType<typeof setInterval> | null>(null)
-
-async function fetchCrawlTasks() {
-  crawlTasksLoading.value = true
-  try {
-    const res = await webSearchApi.getCrawlTasks({
-      page: crawlTasksPage.value,
-      page_size: 10,
-    })
-    crawlTasks.value = res.data.items
-    crawlTasksTotal.value = res.data.total
-
-    // Auto-poll if tasks are running
-    const hasRunning = crawlTasks.value.some(t => t.status === 'pending' || t.status === 'running')
-    if (hasRunning && !crawlTimer.value) {
-      crawlTimer.value = setInterval(fetchCrawlTasks, 5000)
-    } else if (!hasRunning && crawlTimer.value) {
-      clearInterval(crawlTimer.value)
-      crawlTimer.value = null
-    }
-  } catch {
-    // microservice may be down
-  } finally {
-    crawlTasksLoading.value = false
-  }
-}
-
-function statusType(status: string) {
-  switch (status) {
-    case 'success': return 'success'
-    case 'running': return 'primary'
-    case 'pending': return 'info'
-    case 'failed': return 'danger'
-    default: return 'info'
-  }
-}
-
-function statusLabel(status: string) {
-  switch (status) {
-    case 'success': return '完成'
-    case 'running': return '进行中'
-    case 'pending': return '等待中'
-    case 'failed': return '失败'
-    default: return status
-  }
-}
-
-function formatTime(iso: string | null | undefined) {
-  if (!iso) return '-'
-  return new Date(iso).toLocaleString('zh-CN')
-}
-
 // ── Lifecycle ───────────────────────────────────────────────
 
 onMounted(() => {
-  fetchSites()
-  fetchCrawlTasks()
-})
-
-onBeforeUnmount(() => {
-  if (crawlTimer.value) {
-    clearInterval(crawlTimer.value)
-    crawlTimer.value = null
-  }
+  fetchConfig()
 })
 </script>
 
@@ -235,200 +173,281 @@ onBeforeUnmount(() => {
     <!-- Header -->
     <div class="page-header">
       <div>
-        <h2 class="page-title">网页搜索管理</h2>
-        <p class="page-desc">配置网页爬取站点、测试搜索功能、监控爬取任务</p>
+        <h2 class="page-title">网页搜索</h2>
+        <p class="page-desc">基于Tavily API的实时网页搜索</p>
       </div>
+      <el-tag v-if="!config.enabled" type="danger" effect="dark">搜索已关闭</el-tag>
     </div>
 
-    <!-- Section 1: Site Management -->
-    <div class="section-card">
-      <div class="section-header">
-        <h3 class="section-title">站点管理</h3>
-        <el-button type="primary" :icon="Plus" @click="openSiteDialog()">添加站点</el-button>
-      </div>
-      <el-table :data="sites" v-loading="siteLoading" stripe style="width: 100%">
-        <el-table-column prop="name" label="名称" min-width="120" />
-        <el-table-column prop="domain" label="域名" min-width="180" />
-        <el-table-column prop="start_url" label="起始URL" min-width="200" show-overflow-tooltip />
-        <el-table-column label="深度" width="70" align="center">
-          <template #default="{ row }">{{ row.max_depth }}</template>
-        </el-table-column>
-        <el-table-column label="最大页数" width="90" align="center">
-          <template #default="{ row }">{{ row.max_pages }}</template>
-        </el-table-column>
-        <el-table-column label="爬取频率" width="100" align="center">
-          <template #default="{ row }">{{ formatFrequency(row.crawl_frequency_minutes) }}</template>
-        </el-table-column>
-        <el-table-column label="启用" width="80" align="center">
-          <template #default="{ row }">
-            <el-switch v-model="row.enabled" @change="handleToggleEnabled(row)" />
-          </template>
-        </el-table-column>
-        <el-table-column label="上次爬取" width="160" align="center">
-          <template #default="{ row }">
-            <span>{{ formatTime(row.last_crawl_at) }}</span>
-          </template>
-        </el-table-column>
-        <el-table-column label="操作" width="200" fixed="right">
-          <template #default="{ row }">
-            <el-button type="primary" link size="small" :icon="ChromeFilled" @click="handleTriggerCrawl(row)">
-              爬取
-            </el-button>
-            <el-button type="primary" link size="small" :icon="Edit" @click="openSiteDialog(row)">
-              编辑
-            </el-button>
-            <el-button type="danger" link size="small" :icon="Delete" @click="handleDeleteSite(row)">
-              删除
-            </el-button>
-          </template>
-        </el-table-column>
-      </el-table>
-    </div>
-
-    <!-- Section 2: Search Test -->
-    <div class="section-card">
-      <div class="section-header">
-        <h3 class="section-title">搜索测试</h3>
-      </div>
+    <!-- Search Bar -->
+    <div class="search-card">
       <div class="search-bar">
         <el-input
           v-model="searchKeyword"
-          placeholder="输入搜索关键词"
+          placeholder="输入搜索内容，如：北京师范大学2025年招生简章"
           clearable
-          style="flex: 1"
+          size="large"
+          :disabled="!config.enabled"
           @keyup.enter="handleSearch"
-        />
-        <el-select v-model="searchDomain" clearable placeholder="所有域名" style="width: 220px">
-          <el-option v-for="s in sites" :key="s.id" :label="s.domain" :value="s.domain" />
-        </el-select>
-        <el-button type="primary" :icon="Search" :loading="searchLoading" @click="handleSearch">
+        >
+          <template #prefix>
+            <el-icon><Search /></el-icon>
+          </template>
+        </el-input>
+        <el-button
+          type="primary"
+          size="large"
+          :loading="searchLoading"
+          :disabled="!config.enabled"
+          @click="handleSearch"
+        >
           搜索
         </el-button>
+        <el-button
+          size="large"
+          :icon="Setting"
+          @click="drawerVisible = true"
+        >
+          搜索配置
+        </el-button>
       </div>
+    </div>
 
-      <div v-if="searchResults.length > 0" class="search-results">
-        <p class="search-summary">共找到约 {{ searchTotal }} 条结果</p>
-        <div v-for="hit in searchResults" :key="hit.id" class="search-hit">
-          <div class="search-hit-title">
-            <a :href="hit.url" target="_blank" rel="noopener">{{ hit.title || hit.url }}</a>
-          </div>
-          <div class="search-hit-url">{{ hit.url }}</div>
-          <div class="search-hit-snippet">{{ hit.content_snippet }}</div>
-          <div class="search-hit-meta">
-            <el-tag size="small" type="info">{{ hit.domain }}</el-tag>
-            <span class="search-hit-time">{{ formatTime(hit.crawled_at) }}</span>
-          </div>
+    <!-- Answer -->
+    <el-alert
+      v-if="searchAnswer"
+      :title="searchAnswer"
+      type="info"
+      :closable="false"
+      show-icon
+      class="search-answer"
+    />
+
+    <!-- Meta bar -->
+    <div v-if="searchExecuted && !searchLoading" class="search-meta">
+      <span>找到 {{ searchResults.length }} 条结果</span>
+      <el-tag v-if="searchResponseTime" size="small" type="info">
+        {{ searchResponseTime.toFixed(2) }}s
+      </el-tag>
+      <el-button
+        v-if="rawResponse"
+        text
+        size="small"
+        :icon="Document"
+        @click="rawDialogVisible = true"
+      >
+        查看原始JSON
+      </el-button>
+    </div>
+
+    <!-- Results -->
+    <div v-if="searchResults.length > 0" class="search-results">
+      <div v-for="(hit, idx) in searchResults" :key="idx" class="search-hit">
+        <div class="search-hit-title">
+          <a :href="hit.url" target="_blank" rel="noopener">{{ hit.title || hit.url }}</a>
+        </div>
+        <div class="search-hit-url">{{ hit.url }}</div>
+        <div class="search-hit-snippet">{{ hit.content }}</div>
+        <div class="search-hit-meta">
+          <el-tag size="small" type="success">{{ hit.score.toFixed(2) }}</el-tag>
+          <el-tag v-if="hit.published_date" size="small" type="info">{{ hit.published_date }}</el-tag>
         </div>
       </div>
-      <div v-else-if="searchKeyword && !searchLoading" class="search-empty">
-        暂无搜索结果
-      </div>
+    </div>
+    <div v-else-if="searchExecuted && !searchLoading" class="search-empty">
+      暂无搜索结果
     </div>
 
-    <!-- Section 3: Crawl Tasks -->
-    <div class="section-card">
-      <div class="section-header">
-        <h3 class="section-title">爬取任务</h3>
-        <el-button :icon="Refresh" @click="fetchCrawlTasks">刷新</el-button>
-      </div>
-      <el-table :data="crawlTasks" v-loading="crawlTasksLoading" stripe style="width: 100%">
-        <el-table-column prop="start_url" label="起始URL" min-width="200" show-overflow-tooltip />
-        <el-table-column label="状态" width="100" align="center">
-          <template #default="{ row }">
-            <el-tag :type="statusType(row.status)" size="small">{{ statusLabel(row.status) }}</el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column label="进度" width="150">
-          <template #default="{ row }">
-            <el-progress
-              :percentage="row.progress"
-              :status="row.status === 'failed' ? 'exception' : row.status === 'success' ? 'success' : undefined"
-              :stroke-width="10"
-            />
-          </template>
-        </el-table-column>
-        <el-table-column label="成功/总数" width="110" align="center">
-          <template #default="{ row }">
-            <span>{{ row.success_pages }} / {{ row.total_pages }}</span>
-          </template>
-        </el-table-column>
-        <el-table-column label="失败" width="70" align="center">
-          <template #default="{ row }">
-            <span :class="{ 'text-danger': row.failed_pages > 0 }">{{ row.failed_pages }}</span>
-          </template>
-        </el-table-column>
-        <el-table-column prop="error_message" label="错误信息" min-width="150" show-overflow-tooltip />
-        <el-table-column label="开始时间" width="160" align="center">
-          <template #default="{ row }">{{ formatTime(row.started_at) }}</template>
-        </el-table-column>
-        <el-table-column label="完成时间" width="160" align="center">
-          <template #default="{ row }">{{ formatTime(row.finished_at) }}</template>
-        </el-table-column>
-      </el-table>
-
-      <div v-if="crawlTasksTotal > 10" class="pagination-wrapper">
-        <el-pagination
-          v-model:current-page="crawlTasksPage"
-          :page-size="10"
-          :total="crawlTasksTotal"
-          layout="total, prev, pager, next"
-          @current-change="fetchCrawlTasks"
-        />
-      </div>
-    </div>
-
-    <!-- Site Create/Edit Dialog -->
-    <el-dialog
-      v-model="siteDialogVisible"
-      :title="siteEditing ? '编辑站点' : '添加站点'"
-      width="560px"
-      destroy-on-close
-    >
-      <el-form :model="siteForm" label-width="100px">
-        <el-form-item label="站点名称" required>
-          <el-input v-model="siteForm.name" placeholder="例如：北师大招生网" maxlength="100" />
-        </el-form-item>
-        <el-form-item label="域名" required>
-          <el-input
-            v-model="siteForm.domain"
-            placeholder="例如：admission.bnu.edu.cn"
-            :disabled="!!siteEditing"
-            maxlength="200"
-          />
-        </el-form-item>
-        <el-form-item label="起始URL" required>
-          <el-input v-model="siteForm.start_url" placeholder="https://admission.bnu.edu.cn" maxlength="500" />
-        </el-form-item>
-        <el-form-item label="最大深度">
-          <el-input-number v-model="siteForm.max_depth" :min="1" :max="10" />
-        </el-form-item>
-        <el-form-item label="最大页数">
-          <el-input-number v-model="siteForm.max_pages" :min="1" :max="10000" :step="10" />
-        </el-form-item>
-        <el-form-item label="仅同域名">
-          <el-switch v-model="siteForm.same_domain_only" />
-        </el-form-item>
-        <el-form-item label="爬取频率">
-          <el-select v-model="siteForm.crawl_frequency_minutes" style="width: 200px">
-            <el-option :value="60" label="每小时" />
-            <el-option :value="360" label="每 6 小时" />
-            <el-option :value="720" label="每 12 小时" />
-            <el-option :value="1440" label="每天" />
-            <el-option :value="10080" label="每周" />
-            <el-option :value="43200" label="每月" />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="启用">
-          <el-switch v-model="siteForm.enabled" />
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="siteDialogVisible = false">取消</el-button>
-        <el-button type="primary" :loading="siteSaving" @click="handleSiteSubmit">
-          {{ siteEditing ? '保存' : '创建' }}
-        </el-button>
-      </template>
+    <!-- Raw JSON Dialog -->
+    <el-dialog v-model="rawDialogVisible" title="原始返回数据" width="720px" top="5vh">
+      <pre class="raw-json">{{ JSON.stringify(rawResponse, null, 2) }}</pre>
     </el-dialog>
+
+    <!-- Config Drawer -->
+    <el-drawer
+      v-model="drawerVisible"
+      title="搜索配置"
+      size="480px"
+      :close-on-click-modal="true"
+    >
+      <div v-loading="configLoading" class="drawer-body">
+        <!-- Global switch -->
+        <div class="drawer-switch">
+          <span>启用网页搜索</span>
+          <el-switch
+            v-model="config.enabled"
+            active-text="开"
+            inactive-text="关"
+            inline-prompt
+            style="--el-switch-on-color: #003DA5"
+            @change="saveConfig"
+          />
+        </div>
+
+        <el-divider />
+
+        <el-form
+          :model="config"
+          label-position="top"
+          class="drawer-form"
+          :disabled="!config.enabled"
+        >
+          <!-- API Key -->
+          <el-form-item label="API Key">
+            <div class="api-key-row">
+              <el-input
+                v-model="config.api_key"
+                type="password"
+                show-password
+                placeholder="tvly-..."
+                style="flex: 1"
+              />
+              <el-button :loading="apiKeyValidating" @click="handleValidateKey">验证</el-button>
+              <el-icon v-if="apiKeyValid === true" class="key-status key-valid"><CircleCheck /></el-icon>
+              <el-icon v-if="apiKeyValid === false" class="key-status key-invalid"><Close /></el-icon>
+            </div>
+          </el-form-item>
+
+          <!-- Search Depth -->
+          <el-form-item label="搜索深度">
+            <el-radio-group v-model="config.search_depth">
+              <el-radio value="basic">标准 (1 credit)</el-radio>
+              <el-radio value="advanced">深度 (2 credits)</el-radio>
+            </el-radio-group>
+          </el-form-item>
+
+          <!-- Max Results -->
+          <el-form-item label="最大结果数">
+            <el-input-number v-model="config.max_results" :min="1" :max="20" />
+          </el-form-item>
+
+          <!-- Topic -->
+          <el-form-item label="搜索类型">
+            <el-radio-group v-model="config.topic">
+              <el-radio value="general">通用</el-radio>
+              <el-radio value="news">新闻</el-radio>
+              <el-radio value="finance">财经</el-radio>
+            </el-radio-group>
+          </el-form-item>
+
+          <!-- Country -->
+          <el-form-item label="搜索地区">
+            <el-select
+              v-model="config.country"
+              placeholder="不限地区"
+              clearable
+              :disabled="!config.enabled || countryDisabled"
+              style="width: 100%"
+            >
+              <el-option
+                v-for="opt in countryOptions"
+                :key="opt.value"
+                :label="opt.label"
+                :value="opt.value"
+              />
+            </el-select>
+            <div v-if="countryHint" class="form-hint-block">{{ countryHint }}</div>
+          </el-form-item>
+
+          <!-- Time Range -->
+          <el-form-item label="时间范围">
+            <el-radio-group v-model="config.time_range">
+              <el-radio value="">不限</el-radio>
+              <el-radio value="day">一天</el-radio>
+              <el-radio value="week">一周</el-radio>
+              <el-radio value="month">一月</el-radio>
+              <el-radio value="year">一年</el-radio>
+            </el-radio-group>
+          </el-form-item>
+
+          <!-- Include Answer -->
+          <el-form-item label="生成摘要回答">
+            <el-radio-group v-model="config.include_answer">
+              <el-radio :value="false">关闭</el-radio>
+              <el-radio value="basic">基础</el-radio>
+              <el-radio value="advanced">详细</el-radio>
+            </el-radio-group>
+          </el-form-item>
+
+          <!-- Include Raw Content -->
+          <el-form-item label="包含原始内容">
+            <el-radio-group v-model="config.include_raw_content">
+              <el-radio :value="false">关闭</el-radio>
+              <el-radio value="markdown">Markdown</el-radio>
+              <el-radio value="text">纯文本</el-radio>
+            </el-radio-group>
+          </el-form-item>
+
+          <!-- Chunks Per Source -->
+          <el-form-item v-if="config.search_depth === 'advanced'" label="每源片段数">
+            <el-input-number v-model="config.chunks_per_source" :min="1" :max="3" />
+            <div class="form-hint-block">深度搜索模式下每个来源返回的内容片段数</div>
+          </el-form-item>
+
+          <!-- Include Images -->
+          <el-form-item label="包含图片">
+            <el-switch v-model="config.include_images" />
+          </el-form-item>
+
+          <!-- Include Domains -->
+          <el-form-item label="域名白名单">
+            <div class="domain-list">
+              <el-tag
+                v-for="domain in config.include_domains"
+                :key="domain"
+                closable
+                :disabled="!config.enabled"
+                @close="removeDomain(config.include_domains, domain)"
+              >
+                {{ domain }}
+              </el-tag>
+              <div class="domain-add">
+                <el-input
+                  v-model="newIncludeDomain"
+                  placeholder="如 bnu.edu.cn"
+                  size="small"
+                  @keyup.enter="addIncludeDomain"
+                />
+                <el-button size="small" @click="addIncludeDomain">添加</el-button>
+              </div>
+            </div>
+            <div class="form-hint-block">仅搜索这些域名，支持通配符 *.edu.cn</div>
+          </el-form-item>
+
+          <!-- Exclude Domains -->
+          <el-form-item label="域名黑名单">
+            <div class="domain-list">
+              <el-tag
+                v-for="domain in config.exclude_domains"
+                :key="domain"
+                closable
+                type="danger"
+                :disabled="!config.enabled"
+                @close="removeDomain(config.exclude_domains, domain)"
+              >
+                {{ domain }}
+              </el-tag>
+              <div class="domain-add">
+                <el-input
+                  v-model="newExcludeDomain"
+                  placeholder="如 spam.com"
+                  size="small"
+                  @keyup.enter="addExcludeDomain"
+                />
+                <el-button size="small" @click="addExcludeDomain">添加</el-button>
+              </div>
+            </div>
+          </el-form-item>
+        </el-form>
+
+        <!-- Save -->
+        <div class="drawer-footer">
+          <el-button type="primary" :loading="configSaving" @click="saveConfig">
+            保存配置
+          </el-button>
+        </div>
+      </div>
+    </el-drawer>
   </div>
 </template>
 
@@ -440,7 +459,7 @@ onBeforeUnmount(() => {
 .page-header {
   display: flex;
   justify-content: space-between;
-  align-items: flex-start;
+  align-items: center;
   margin-bottom: 20px;
 }
 
@@ -457,48 +476,44 @@ onBeforeUnmount(() => {
   margin: 0;
 }
 
-.section-card {
+// ── Search ─────────────────────────────────────
+
+.search-card {
   background: var(--bg-primary, #ffffff);
   border-radius: 12px;
   border: 1px solid var(--border-color, #e2e6ed);
-  padding: 20px;
-  margin-bottom: 20px;
-}
-
-.section-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
+  padding: 16px 20px;
   margin-bottom: 16px;
 }
-
-.section-title {
-  font-size: 1rem;
-  font-weight: 600;
-  color: var(--text-primary, #1a1a2e);
-  margin: 0;
-}
-
-// ── Search ──────────────────────────────────
 
 .search-bar {
   display: flex;
-  gap: 12px;
+  gap: 10px;
+  align-items: center;
+}
+
+.search-answer {
   margin-bottom: 16px;
 }
 
-.search-results {
-  margin-top: 8px;
-}
-
-.search-summary {
+.search-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   font-size: 0.875rem;
   color: var(--text-secondary, #6B7280);
   margin-bottom: 12px;
 }
 
+.search-results {
+  background: var(--bg-primary, #ffffff);
+  border-radius: 12px;
+  border: 1px solid var(--border-color, #e2e6ed);
+  padding: 4px 20px;
+}
+
 .search-hit {
-  padding: 12px 0;
+  padding: 14px 0;
   border-bottom: 1px solid var(--border-color, #e2e6ed);
 
   &:last-child {
@@ -538,26 +553,96 @@ onBeforeUnmount(() => {
   margin-top: 4px;
 }
 
-.search-hit-time {
+.search-empty {
+  text-align: center;
+  padding: 48px 0;
+  color: var(--text-secondary, #6B7280);
+}
+
+// ── Raw JSON Dialog ────────────────────────────
+
+.raw-json {
+  background: var(--bg-secondary, #f5f7fa);
+  border-radius: 8px;
+  padding: 16px;
+  font-size: 0.8rem;
+  line-height: 1.5;
+  max-height: 70vh;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-all;
+  margin: 0;
+}
+
+// ── Drawer ─────────────────────────────────────
+
+.drawer-body {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.drawer-switch {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.9375rem;
+  font-weight: 500;
+  color: var(--text-primary, #1a1a2e);
+}
+
+.drawer-form {
+  flex: 1;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.drawer-footer {
+  padding-top: 16px;
+  border-top: 1px solid var(--border-color, #e2e6ed);
+  flex-shrink: 0;
+}
+
+.api-key-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  width: 100%;
+}
+
+.key-status {
+  font-size: 20px;
+  flex-shrink: 0;
+}
+
+.key-valid {
+  color: var(--el-color-success);
+}
+
+.key-invalid {
+  color: var(--el-color-danger);
+}
+
+.form-hint-block {
+  width: 100%;
+  margin-top: 4px;
   font-size: 0.75rem;
   color: var(--text-tertiary, #9CA3AF);
 }
 
-.search-empty {
-  text-align: center;
-  padding: 32px 0;
-  color: var(--text-secondary, #6B7280);
-}
-
-// ── Misc ────────────────────────────────────
-
-.text-danger {
-  color: var(--el-color-danger);
-}
-
-.pagination-wrapper {
+.domain-list {
   display: flex;
-  justify-content: flex-end;
-  margin-top: 16px;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  width: 100%;
+}
+
+.domain-add {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  width: 100%;
+  margin-top: 4px;
 }
 </style>

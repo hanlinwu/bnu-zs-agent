@@ -32,7 +32,7 @@ set -a
 source "${ENV_FILE}"
 set +a
 
-required_vars=(APP_IMAGE NGINX_IMAGE SEARCH_SERVICE_IMAGE IMAGE_TAG)
+required_vars=(APP_IMAGE NGINX_IMAGE IMAGE_TAG)
 for name in "${required_vars[@]}"; do
   if [[ -z "${!name:-}" ]]; then
     echo "[deploy] missing required env: ${name}" >&2
@@ -103,7 +103,7 @@ rollback_to_previous() {
   fi
 
   echo "[deploy] rolling back to ${PREVIOUS_TAG}"
-  IMAGE_TAG="${PREVIOUS_TAG}" compose up -d app worker nginx search-service
+  IMAGE_TAG="${PREVIOUS_TAG}" compose up -d app worker nginx
   IMAGE_TAG="${PREVIOUS_TAG}" compose ps
 }
 
@@ -114,10 +114,6 @@ print_runtime_diagnostics() {
   compose logs --tail=120 nginx || true
   echo "[deploy] diagnostics: app logs"
   compose logs --tail=120 app || true
-  echo "[deploy] diagnostics: search-service logs"
-  compose logs --tail=120 search-service || true
-  echo "[deploy] diagnostics: meilisearch logs"
-  compose logs --tail=120 meilisearch || true
 }
 
 health_check_with_retry() {
@@ -164,11 +160,9 @@ persist_release_metadata() {
 ensure_docker_access
 APP_IMAGE="$(rewrite_ghcr_mirror "${APP_IMAGE}")"
 NGINX_IMAGE="$(rewrite_ghcr_mirror "${NGINX_IMAGE}")"
-SEARCH_SERVICE_IMAGE="$(rewrite_ghcr_mirror "${SEARCH_SERVICE_IMAGE}")"
 
 echo "[deploy] APP_IMAGE=${APP_IMAGE}"
 echo "[deploy] NGINX_IMAGE=${NGINX_IMAGE}"
-echo "[deploy] SEARCH_SERVICE_IMAGE=${SEARCH_SERVICE_IMAGE}"
 
 REGISTRY_HOST="$(registry_from_image "${APP_IMAGE}")"
 REGISTRY_USERNAME="${REGISTRY_USERNAME:-${GHCR_USERNAME:-}}"
@@ -182,17 +176,15 @@ else
 fi
 
 echo "[deploy] pulling target images"
-if ! compose pull app worker nginx search-service; then
+if ! compose pull app worker nginx; then
   echo "[deploy] cannot pull required images; check registry connectivity and mirror prefix settings" >&2
   exit 1
 fi
 
-echo "[deploy] ensuring db/redis/meilisearch/search-service are running"
-compose up -d db redis meilisearch search-service
+echo "[deploy] ensuring db/redis are running"
+compose up -d db redis
 wait_for_service_healthy db 180
 wait_for_service_healthy redis 120
-wait_for_service_healthy meilisearch 120
-wait_for_service_healthy search-service 120
 
 echo "[deploy] ensure pgvector extension"
 compose exec -T db bash -lc 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "CREATE EXTENSION IF NOT EXISTS vector;"'
@@ -204,8 +196,8 @@ if ! compose run --rm app sh -lc 'cd /app && PYTHONPATH=/app alembic -c /app/ale
   exit 1
 fi
 
-echo "[deploy] starting app/worker/nginx/search-service"
-if ! compose up -d app worker nginx search-service; then
+echo "[deploy] starting app/worker/nginx"
+if ! compose up -d app worker nginx; then
   echo "[deploy] failed to start services" >&2
   print_runtime_diagnostics
   rollback_to_previous || true
@@ -229,27 +221,6 @@ if ! health_check_with_retry "${HEALTH_URL}" 120 3; then
 fi
 
 persist_release_metadata "${IMAGE_TAG}"
-
-echo "[deploy] verify search-service health"
-if ! compose exec -T app sh -lc 'python - <<'"'"'PY'"'"'
-import os
-import sys
-import urllib.request
-
-url = (os.getenv("SEARCH_SERVICE_URL") or "http://search-service:8002").rstrip("/") + "/health"
-try:
-    with urllib.request.urlopen(url, timeout=10) as resp:
-        if 200 <= resp.status < 400:
-            sys.exit(0)
-except Exception:
-    pass
-sys.exit(1)
-PY'; then
-  echo "[deploy] search-service health check failed from app container" >&2
-  print_runtime_diagnostics
-  rollback_to_previous || true
-  exit 1
-fi
 
 echo "[deploy] success: ${IMAGE_TAG}"
 compose ps

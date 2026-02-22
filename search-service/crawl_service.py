@@ -10,8 +10,10 @@ from datetime import datetime, timezone
 from html import unescape
 from urllib.parse import urljoin, urlparse
 
+import ssl
+
+import aiohttp
 import aiosqlite
-import httpx
 from crawl4ai import AsyncWebCrawler, BrowserConfig, CrawlerRunConfig
 
 from config import settings
@@ -67,28 +69,63 @@ def _extract_title(html: str) -> str | None:
     return unescape(m.group(1)).strip()
 
 
-async def _fallback_fetch_page(url: str) -> tuple[str | None, str | None]:
-    """Fallback fetch via HTTP when browser crawling fails."""
+def _extract_links(html: str, base_url: str) -> list[str]:
+    """Extract absolute href links from HTML."""
+    links = []
+    for m in re.finditer(r'<a\s[^>]*href=["\']([^"\']+)["\']', html, re.IGNORECASE):
+        href = m.group(1).strip()
+        if href and not href.startswith(("javascript:", "mailto:", "tel:")):
+            abs_url = urljoin(base_url, href).split("#")[0].rstrip("/")
+            links.append(abs_url)
+    return list(dict.fromkeys(links))  # dedupe preserving order
+
+
+async def _fallback_fetch_page(url: str) -> tuple[str | None, str | None, list[str]]:
+    """Fallback fetch via HTTP when browser crawling fails.
+
+    Returns (title, text, discovered_links).
+    """
+    headers = {
+        "User-Agent": (
+            "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
+            "(KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36"
+        ),
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
+    }
     try:
-        async with httpx.AsyncClient(timeout=20.0, follow_redirects=True) as client:
-            resp = await client.get(url)
-            if resp.status_code >= 400:
-                return None, None
-            html = resp.text or ""
-            title = _extract_title(html)
-            text = _html_to_text(html)
-            if len(text) < 20:
-                return title, None
-            return title, text
+        # Use aiohttp instead of httpx for async HTTP.
+        # httpx's async mode uses anyio TLSStream.wrap() (STARTTLS-style upgrade)
+        # which some servers (e.g. www.bnu.edu.cn) reject. aiohttp uses direct
+        # SSL-on-connect via asyncio.open_connection(ssl=), which works reliably.
+        ssl_ctx = ssl.create_default_context()
+        ssl_ctx.check_hostname = False
+        ssl_ctx.verify_mode = ssl.CERT_NONE
+
+        timeout = aiohttp.ClientTimeout(total=20)
+        async with aiohttp.ClientSession(
+            timeout=timeout, headers=headers,
+        ) as session:
+            async with session.get(url, ssl=ssl_ctx, allow_redirects=True) as resp:
+                if resp.status >= 400:
+                    return None, None, []
+                html = await resp.text(errors="ignore")
+                title = _extract_title(html)
+                text = _html_to_text(html)
+                links = _extract_links(html, url)
+                if len(text) < 20:
+                    return title, None, links
+                logger.info("aiohttp fallback succeeded for %s (%d chars)", url, len(text))
+                return title, text, links
     except Exception as e:
-        logger.warning("HTTP fallback failed for %s: %s", url, e)
+        logger.warning("aiohttp fallback failed for %s: %s", url, e)
 
     # In some environments Playwright/httpx TLS stacks fail while curl still works.
     # Try curl as a final fallback to keep indexing available.
     try:
         proc = await asyncio.create_subprocess_exec(
             "curl",
-            "-fsSL",
+            "-fsSLk",
             "--max-time",
             "20",
             "-A",
@@ -108,20 +145,23 @@ async def _fallback_fetch_page(url: str) -> tuple[str | None, str | None]:
                 proc.returncode,
                 (stderr or b"").decode(errors="ignore")[:200],
             )
-            return None, None
+            return None, None, []
 
         html = (stdout or b"").decode(errors="ignore")
         title = _extract_title(html)
         text = _html_to_text(html)
+        links = _extract_links(html, url)
         if len(text) < 20:
-            return title, None
-        return title, text
+            logger.debug("Curl fetched %s but content too short (%d chars)", url, len(text))
+            return title, None, links
+        logger.info("Curl fallback succeeded for %s (%d chars)", url, len(text))
+        return title, text, links
     except FileNotFoundError:
         logger.warning("Curl is not installed; cannot run curl fallback for %s", url)
-        return None, None
+        return None, None, []
     except Exception as e:
         logger.warning("Unexpected curl fallback error for %s: %s", url, e)
-        return None, None
+        return None, None, []
 
 
 def _same_domain(url: str, domain: str) -> bool:
@@ -152,12 +192,27 @@ async def run_crawl(
         failed = 0
         batch: list[dict] = []
 
-        browser_config = BrowserConfig(headless=True, verbose=False)
+        browser_config = BrowserConfig(
+            headless=True,
+            verbose=False,
+            extra_args=[
+                "--disable-gpu",
+                "--no-sandbox",
+                "--ignore-certificate-errors",
+            ],
+        )
         crawl_config = CrawlerRunConfig(
             word_count_threshold=10,
             excluded_tags=["nav", "footer", "header"],
             exclude_external_links=same_domain_only,
+            page_timeout=30000,
         )
+
+        # Track consecutive browser failures; after a threshold, skip
+        # the browser entirely and go straight to the HTTP/curl fallback
+        # to avoid wasting time on repeated Playwright timeouts.
+        consecutive_browser_failures = 0
+        BROWSER_SKIP_THRESHOLD = 3
 
         async with AsyncWebCrawler(config=browser_config) as crawler:
             while queue and (success + failed) < max_pages:
@@ -182,59 +237,75 @@ async def run_crawl(
                     failed_pages=failed,
                 )
 
-                try:
-                    result = await crawler.arun(url=url, config=crawl_config)
-                    page_title = url
-                    page_content = ""
-                    discovered_links = []
+                # If browser keeps failing, skip it and go straight to fallback
+                use_browser = consecutive_browser_failures < BROWSER_SKIP_THRESHOLD
 
-                    if result.success and result.markdown:
-                        page_title = result.metadata.get("title", url) if result.metadata else url
-                        page_content = result.markdown
-                        discovered_links = (result.links or {}).get("internal", [])
-                    elif result.success and getattr(result, "cleaned_html", None):
-                        page_title = result.metadata.get("title", url) if result.metadata else url
-                        page_content = _html_to_text(result.cleaned_html)
-                        discovered_links = (result.links or {}).get("internal", [])
+                page_title = url
+                page_content = ""
+                discovered_links = []
+                browser_ok = False
+
+                if use_browser:
+                    try:
+                        result = await crawler.arun(url=url, config=crawl_config)
+
+                        if result.success and result.markdown:
+                            page_title = result.metadata.get("title", url) if result.metadata else url
+                            page_content = result.markdown
+                            discovered_links = (result.links or {}).get("internal", [])
+                            browser_ok = True
+                        elif result.success and getattr(result, "cleaned_html", None):
+                            page_title = result.metadata.get("title", url) if result.metadata else url
+                            page_content = _html_to_text(result.cleaned_html)
+                            discovered_links = (result.links or {}).get("internal", [])
+                            browser_ok = True
+
+                    except Exception as e:
+                        logger.warning("Browser crawl failed for %s: %s", url, e)
+
+                    if browser_ok:
+                        consecutive_browser_failures = 0
                     else:
-                        fb_title, fb_text = await _fallback_fetch_page(url)
+                        consecutive_browser_failures += 1
+                        if consecutive_browser_failures == BROWSER_SKIP_THRESHOLD:
+                            logger.info("Browser failed %d times in a row, switching to fallback only", BROWSER_SKIP_THRESHOLD)
+
+                # Use fallback if browser was skipped or failed
+                if not browser_ok:
+                    try:
+                        fb_title, fb_text, fb_links = await _fallback_fetch_page(url)
                         if fb_text:
-                            page_title = fb_title or (result.metadata.get("title", url) if result and result.metadata else url)
+                            page_title = fb_title or url
                             page_content = fb_text
-                        else:
-                            err = getattr(result, "error_message", None)
-                            logger.warning("No indexable content for %s (crawler_success=%s, error=%s)", url, result.success, err)
+                            discovered_links = [{"href": l} for l in fb_links]
+                    except Exception as fb_err:
+                        logger.warning("Fallback error for %s: %s", url, fb_err)
 
-                    if page_content:
-                        doc = {
-                            "id": url_to_doc_id(url),
-                            "url": url,
-                            "title": page_title,
-                            "content": page_content[:50000],  # Cap content length
-                            "domain": base_domain,
-                            "crawled_at": datetime.now(timezone.utc).isoformat(),
-                        }
-                        batch.append(doc)
-                        success += 1
+                if page_content:
+                    doc = {
+                        "id": url_to_doc_id(url),
+                        "url": url,
+                        "title": page_title,
+                        "content": page_content[:50000],
+                        "domain": base_domain,
+                        "crawled_at": datetime.now(timezone.utc).isoformat(),
+                    }
+                    batch.append(doc)
+                    success += 1
 
-                        # Flush batch every 10 documents
-                        if len(batch) >= 10:
-                            await meili_service.index_pages(batch)
-                            batch = []
+                    # Flush batch every 10 documents
+                    if len(batch) >= 10:
+                        await meili_service.index_pages(batch)
+                        batch = []
 
-                        # Enqueue discovered links if not at max depth
-                        if depth < max_depth and discovered_links:
-                            internal = discovered_links
-                            for link_info in internal:
-                                href = link_info.get("href", "") if isinstance(link_info, dict) else str(link_info)
-                                abs_url = urljoin(url, href).split("#")[0].rstrip("/")
-                                if abs_url not in visited:
-                                    queue.append((abs_url, depth + 1))
-                    else:
-                        failed += 1
-
-                except Exception as e:
-                    logger.warning("Failed to crawl %s: %s", url, e)
+                    # Enqueue discovered links if not at max depth
+                    if depth < max_depth and discovered_links:
+                        for link_info in discovered_links:
+                            href = link_info.get("href", "") if isinstance(link_info, dict) else str(link_info)
+                            abs_url = urljoin(url, href).split("#")[0].rstrip("/")
+                            if abs_url not in visited:
+                                queue.append((abs_url, depth + 1))
+                else:
                     failed += 1
 
                 # Polite delay
