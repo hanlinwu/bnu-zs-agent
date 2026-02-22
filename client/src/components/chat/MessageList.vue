@@ -8,6 +8,7 @@ import type { Message } from '@/types/chat'
 
 const emit = defineEmits<{
   selectQuestion: [question: string]
+  sendQuestion: [question: string]
 }>()
 
 const chatStore = useChatStore()
@@ -210,11 +211,19 @@ onUnmounted(() => {
 function handleSelectQuestion(question: string) {
   emit('selectQuestion', question)
 }
+
+function handleSendQuestion(question: string) {
+  emit('sendQuestion', question)
+}
 </script>
 
 <template>
-  <div ref="scrollContainerRef" class="message-list">
-    <SuggestQuestions v-if="isEmpty" @select="handleSelectQuestion" />
+  <div ref="scrollContainerRef" class="message-list" :class="{ 'is-empty': isEmpty }">
+    <SuggestQuestions
+      v-if="isEmpty"
+      @select="handleSelectQuestion"
+      @send="handleSendQuestion"
+    />
 
     <template v-else>
       <div class="messages-wrapper">
@@ -297,6 +306,12 @@ function handleSelectQuestion(question: string) {
   &::-webkit-scrollbar-track {
     background: transparent;
   }
+}
+
+.message-list.is-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .tool-status {

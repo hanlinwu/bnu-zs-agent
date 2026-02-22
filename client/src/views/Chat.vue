@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted, computed, onBeforeUnmount } from 'vue'
+import { useRoute } from 'vue-router'
 import { useConversationStore } from '@/stores/conversation'
 import { useChatStore } from '@/stores/chat'
 import { useUserStore } from '@/stores/user'
@@ -9,6 +10,7 @@ import ChatContainer from '@/components/chat/ChatContainer.vue'
 import LoginForm from '@/components/auth/LoginForm.vue'
 import { consumePendingChatQuestion } from '@/utils/chatNavigation'
 
+const route = useRoute()
 const conversationStore = useConversationStore()
 const chatStore = useChatStore()
 const userStore = useUserStore()
@@ -59,17 +61,25 @@ async function initializeChatPage() {
 
   await conversationStore.fetchConversations()
 
+  const routeConversationId = typeof route.params.id === 'string' ? route.params.id : ''
+  if (routeConversationId) {
+    const target = conversationStore.conversations.find((c) => c.id === routeConversationId)
+    if (target) {
+      chatStore.setConversationId(target.id)
+      await chatStore.loadMessages(target.id)
+      return
+    }
+  }
+
+  // Default entry for /chat: always start a new conversation
   if (conversationStore.conversations.length === 0) {
     chatStore.setConversationId(null)
     chatStore.clearMessages()
     return
   }
 
-  const savedId = localStorage.getItem('currentConversationId')
-  const saved = savedId ? conversationStore.conversations.find((c) => c.id === savedId) : null
-  const target = saved || conversationStore.conversations[0]!
-  chatStore.setConversationId(target.id)
-  await chatStore.loadMessages(target.id)
+  chatStore.setConversationId(null)
+  chatStore.clearMessages()
 }
 
 function handleAuthRequired() {

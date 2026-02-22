@@ -172,4 +172,10 @@ watch(content, () => {
   width: 36px;
   height: 36px;
 }
+
+@media (max-width: 768px) {
+  .input-textarea {
+    font-size: 16px;
+  }
+}
 </style>

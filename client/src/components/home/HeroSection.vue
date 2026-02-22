@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useRouter } from 'vue-router'
 import { Promotion } from '@element-plus/icons-vue'
 import { useSystemStore } from '@/stores/system'
@@ -9,6 +9,59 @@ const router = useRouter()
 const systemStore = useSystemStore()
 const inputContent = ref('')
 const systemName = computed(() => systemStore.basic.system_name || '京师小智')
+const animatedPlaceholder = ref('')
+
+const placeholderSamples = [
+  '北京师范大学今年本科录取分数线是多少？',
+  '公费师范生毕业后必须回生源地任教吗？',
+  '北师大有哪些优势专业和拔尖班？',
+  '研究生推免和统考招生政策有什么区别？',
+]
+
+let currentSampleIndex = 0
+let currentCharIndex = 0
+let typingTimer: ReturnType<typeof setTimeout> | null = null
+let isDeleting = false
+let pauseUntil = 0
+
+function clearTypingTimer() {
+  if (!typingTimer) return
+  clearTimeout(typingTimer)
+  typingTimer = null
+}
+
+function scheduleTypewriter() {
+  clearTypingTimer()
+  typingTimer = setTimeout(tickTypewriter, isDeleting ? 48 : 85)
+}
+
+function tickTypewriter() {
+  const now = Date.now()
+  if (now < pauseUntil) {
+    scheduleTypewriter()
+    return
+  }
+
+  const sample = placeholderSamples[currentSampleIndex] || ''
+  if (!isDeleting) {
+    currentCharIndex = Math.min(currentCharIndex + 1, sample.length)
+    animatedPlaceholder.value = sample.slice(0, currentCharIndex)
+    if (currentCharIndex >= sample.length) {
+      isDeleting = true
+      pauseUntil = Date.now() + 1200
+    }
+  } else {
+    currentCharIndex = Math.max(currentCharIndex - 1, 0)
+    animatedPlaceholder.value = sample.slice(0, currentCharIndex)
+    if (currentCharIndex <= 0) {
+      isDeleting = false
+      currentSampleIndex = (currentSampleIndex + 1) % placeholderSamples.length
+      pauseUntil = Date.now() + 320
+    }
+  }
+
+  scheduleTypewriter()
+}
 
 function handleSend() {
   const text = inputContent.value.trim()
@@ -23,6 +76,19 @@ function handleKeydown(e: KeyboardEvent) {
     handleSend()
   }
 }
+
+onMounted(() => {
+  animatedPlaceholder.value = ''
+  currentSampleIndex = 0
+  currentCharIndex = 0
+  isDeleting = false
+  pauseUntil = 0
+  scheduleTypewriter()
+})
+
+onBeforeUnmount(() => {
+  clearTypingTimer()
+})
 </script>
 
 <template>
@@ -62,7 +128,7 @@ function handleKeydown(e: KeyboardEvent) {
           <textarea
             v-model="inputContent"
             class="hero-textarea"
-            placeholder="输入你想了解的招生问题，如：北师大的公费师范生政策是什么？"
+            :placeholder="animatedPlaceholder || '输入你想了解的招生问题'"
             rows="1"
             @keydown="handleKeydown"
           />
@@ -286,7 +352,7 @@ function handleKeydown(e: KeyboardEvent) {
   max-height: 72px;
 
   &::placeholder {
-    color: #9e9eb3;
+    color: #7f8498;
   }
 }
 

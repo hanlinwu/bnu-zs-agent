@@ -9,6 +9,7 @@ const chatStore = useChatStore()
 
 const isStreaming = computed(() => chatStore.isStreaming)
 const isLoadingMessages = computed(() => chatStore.isLoadingMessages)
+const isEmpty = computed(() => chatStore.messages.length === 0 && !chatStore.isStreaming)
 
 async function handleSend(content: string) {
   await chatStore.sendMessage(content)
@@ -32,8 +33,16 @@ function handleStop() {
       </div>
     </div>
     <template v-else>
-      <MessageList @select-question="handleSelectQuestion" />
-      <MessageInput :disabled="isStreaming" @send="handleSend" @stop="handleStop" />
+      <MessageList
+        @select-question="handleSelectQuestion"
+        @send-question="handleSend"
+      />
+      <MessageInput
+        v-if="!isEmpty"
+        :disabled="isStreaming"
+        @send="handleSend"
+        @stop="handleStop"
+      />
     </template>
   </div>
 </template>
