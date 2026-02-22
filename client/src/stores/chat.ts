@@ -311,6 +311,8 @@ export const useChatStore = defineStore('chat', () => {
             try {
               const event = JSON.parse(payload)
               if (event.type === 'token') {
+                // Once model starts generating text, clear tool running status immediately.
+                activeToolStatus.value = null
                 getAssistantMessage().content += event.content
               } else if (event.type === 'sensitive_block' || event.type === 'high_risk') {
                 getAssistantMessage().content = event.content

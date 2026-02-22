@@ -4,6 +4,7 @@ import { useChatStore } from '@/stores/chat'
 import MessageBubble from './MessageBubble.vue'
 import StreamingText from './StreamingText.vue'
 import SuggestQuestions from './SuggestQuestions.vue'
+import AIAvatar from './AIAvatar.vue'
 import type { Message } from '@/types/chat'
 
 const emit = defineEmits<{
@@ -35,11 +36,31 @@ let thinkingTimer: ReturnType<typeof setInterval> | null = null
 
 const thinkingText = computed(() => THINKING_HINTS[thinkingIndex.value])
 const toolStatusText = computed(() => {
+  const lastMsg = chatStore.messages[chatStore.messages.length - 1]
+  if (chatStore.isStreaming && lastMsg?.role === 'assistant' && lastMsg.content) {
+    return ''
+  }
   const status = chatStore.activeToolStatus
   if (!status) return ''
   if (status.content) return status.content
   if (status.query) return `正在执行 ${status.tool}：${status.query}`
   return `正在执行 ${status.tool}`
+})
+
+const streamingAvatarMood = computed<'idle' | 'thinking' | 'searching' | 'writing' | 'happy'>(() => {
+  if (!chatStore.isStreaming) return 'idle'
+
+  const statusText = toolStatusText.value
+  if (statusText.includes('检索') || statusText.includes('查询') || statusText.includes('网页')) {
+    return 'searching'
+  }
+  if (statusText.includes('整理') || statusText.includes('生成')) {
+    return 'writing'
+  }
+  if (streamingMessage.value?.content) {
+    return 'happy'
+  }
+  return 'thinking'
 })
 
 watch(() => chatStore.isStreaming, (streaming) => {
@@ -328,14 +349,7 @@ function handleSendQuestion(question: string) {
         <div v-if="streamingMessage" class="message-bubble is-assistant">
           <div class="avatar-wrapper">
             <div class="ai-avatar">
-              <svg viewBox="0 0 32 32" width="32" height="32" fill="none">
-                <circle cx="16" cy="16" r="15" fill="var(--bnu-blue, #003DA5)" />
-                <text
-                  x="16" y="22" text-anchor="middle"
-                  fill="#fff" font-size="14" font-weight="bold"
-                  font-family="serif"
-                >智</text>
-              </svg>
+              <AIAvatar :mood="streamingAvatarMood" />
             </div>
           </div>
           <div class="bubble-body">

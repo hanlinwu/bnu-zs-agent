@@ -101,6 +101,33 @@ def _normalize_tools(raw_tools: Any) -> list[str]:
     return uniq
 
 
+def _build_decision_think_block(
+    risk_level: str,
+    tools: list[str],
+    query: str,
+    reason: str,
+) -> str:
+    del risk_level  # Hidden from user-facing think block.
+    tools_text = "、".join(tools) if tools else "不调用外部检索工具"
+    query_text = _truncate(query or "当前问题原文", 120)
+    reason_text = _truncate(reason or "规则兜底", 160)
+    # Never expose risk labels/details in user-facing think text.
+    reason_text = re.sub(r"风险等级[:：]?\s*(low|medium|high|低|中|高)?", "", reason_text, flags=re.IGNORECASE)
+    reason_text = re.sub(r"\b(low|medium|high)\b", "", reason_text, flags=re.IGNORECASE)
+    reason_text = re.sub(r"\s{2,}", " ", reason_text).strip(" ，,;；。")
+    if not reason_text:
+        reason_text = "问题语义与检索需求判断"
+    think_sentence = (
+        f"我先根据问题意图选择了{tools_text}，并围绕“{query_text}”组织检索与回答，"
+        f"主要依据是：{reason_text}。"
+    )
+    return (
+        "<think>"
+        f"{think_sentence}"
+        "</think>\n\n"
+    )
+
+
 def _tokenize_for_bm25(text: str) -> list[str]:
     raw = (text or "").lower().strip()
     if not raw:
@@ -371,17 +398,24 @@ async def process_message(
     requested_tools: list[str] = decision["tools"]
     search_query: str = decision["search_query"]
     decision_reason: str = decision["reason"]
+    think_block = _build_decision_think_block(
+        risk_level=risk_level,
+        tools=requested_tools,
+        query=search_query,
+        reason=decision_reason,
+    )
 
     if risk_level == "high":
         msg = Message(conversation_id=conversation.id, role="user", content=user_message, risk_level="high")
         db.add(msg)
+        high_risk_content = f"{think_block}{high_risk_response}"
         assistant_msg = Message(
             conversation_id=conversation.id, role="assistant",
-            content=high_risk_response, model_version="system", risk_level="high",
+            content=high_risk_content, model_version="system", risk_level="high",
         )
         db.add(assistant_msg)
         await db.commit()
-        yield {"type": "high_risk", "content": high_risk_response}
+        yield {"type": "high_risk", "content": high_risk_content}
         return
 
     # Step 3: Time/admission/system/user context injection
@@ -592,7 +626,7 @@ async def process_message(
         assistant_msg = Message(
             conversation_id=conversation.id,
             role="assistant",
-            content=no_knowledge_response,
+            content=f"{think_block}{no_knowledge_response}",
             model_version="system",
             risk_level=risk_level,
             review_passed=True,
@@ -601,9 +635,10 @@ async def process_message(
         db.add(assistant_msg)
         await db.commit()
 
-        yield {"type": "token", "content": no_knowledge_response}
+        yield {"type": "token", "content": f"{think_block}{no_knowledge_response}"}
         yield {
             "type": "done",
+            "content": f"{think_block}{no_knowledge_response}",
             "sources": [],
             "tools_used": tools_used,
             "tool_traces": tool_traces,
@@ -736,6 +771,8 @@ async def process_message(
         yield {"type": "token", "content": error_msg}
 
     response_text = "".join(full_response)
+    if think_block:
+        response_text = f"{think_block}{response_text}" if response_text else think_block
 
     response_text, media_items = await _resolve_media_slots(response_text, user_message, db)
 

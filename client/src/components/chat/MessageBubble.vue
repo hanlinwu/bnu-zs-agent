@@ -3,6 +3,7 @@ import { ref, computed } from 'vue'
 import type { Message, MediaItem } from '@/types/chat'
 import MediaPreview from '@/components/MediaPreview.vue'
 import { renderMarkdown } from '@/utils/markdown'
+import AIAvatar from './AIAvatar.vue'
 
 const props = defineProps<{
   message: Message
@@ -99,6 +100,32 @@ const toolSummaryTags = computed(() => {
 
 const mediaItems = computed(() => props.message.mediaItems || [])
 
+function extractThinkText(raw: string): string {
+  if (!raw || !raw.includes('<think>')) return ''
+  const chunks: string[] = []
+  raw.replace(/<think>([\s\S]*?)<\/think>/gi, (_full, content: string) => {
+    const text = String(content || '').replace(/\s+/g, ' ').trim()
+    if (text) chunks.push(text)
+    return ''
+  })
+  return chunks.join('\n')
+}
+
+function stripThinkBlocks(raw: string): string {
+  if (!raw || !raw.includes('<think>')) return raw || ''
+  return raw.replace(/<think>[\s\S]*?<\/think>/gi, '').trim()
+}
+
+const thinkText = computed(() => {
+  if (isUser.value) return ''
+  return extractThinkText(props.message.content || '')
+})
+
+const contentWithoutThink = computed(() => {
+  if (isUser.value) return props.message.content || ''
+  return stripThinkBlocks(props.message.content || '')
+})
+
 // Preview state
 const previewVisible = ref(false)
 const previewType = ref<'image' | 'video'>('image')
@@ -130,7 +157,7 @@ const mediaBySlotKey = computed(() => {
 
 // Render content with embedded media
 const renderedContent = computed(() => {
-  const content = props.message.content || ''
+  const content = contentWithoutThink.value || ''
   const mediaMarkerRegex = /\[\[\s*MEDIA_ITEM:([^\]]+)\s*\]\]/g
 
   // If no markers, just render markdown
@@ -222,18 +249,25 @@ function handleContentClick(e: MouseEvent) {
   <div class="message-bubble" :class="{ 'is-user': isUser, 'is-assistant': !isUser }">
     <div v-if="!isUser" class="avatar-wrapper">
       <div class="ai-avatar">
-        <svg viewBox="0 0 32 32" width="32" height="32" fill="none">
-          <circle cx="16" cy="16" r="15" fill="var(--bnu-blue, #003DA5)" />
-          <text
-            x="16" y="22" text-anchor="middle"
-            fill="#fff" font-size="14" font-weight="bold"
-            font-family="serif"
-          >智</text>
-        </svg>
+        <AIAvatar />
       </div>
     </div>
 
     <div class="bubble-body">
+      <div v-if="!isUser && thinkText" class="think-outside">
+        <details class="think-block">
+          <summary>
+            <span class="think-toggle-icon" aria-hidden="true">
+              <svg viewBox="0 0 16 16" focusable="false">
+                <path d="M5 3.5L11 8L5 12.5" />
+              </svg>
+            </span>
+            <span>思考结果</span>
+          </summary>
+          <p>{{ thinkText }}</p>
+        </details>
+      </div>
+
       <!-- Single bubble content with embedded media -->
       <div
         class="bubble-content"
@@ -468,6 +502,83 @@ function handleContentClick(e: MouseEvent) {
     border-radius: 12px;
     background: #000;
   }
+
+}
+
+.think-outside {
+  margin: 2px 0 8px 6px;
+}
+
+.think-block {
+  background: transparent;
+  color: #4d5a73;
+  font-size: 0.8125rem;
+  line-height: 1.7;
+
+  > summary {
+    cursor: pointer;
+    color: #35537f;
+    font-weight: 600;
+    outline: none;
+    list-style: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  > summary::-webkit-details-marker {
+    display: none;
+  }
+
+  > p {
+    margin: 6px 0 0;
+    white-space: pre-line;
+    text-indent: 0;
+    padding-left: 10px;
+    color: #5a6780;
+  }
+}
+
+.think-toggle-icon {
+  display: inline-flex;
+  width: 1em;
+  height: 1em;
+  align-items: center;
+  justify-content: center;
+  color: #5878a8;
+  transform: translateY(-0.5px);
+  transition: transform 0.18s ease, color 0.18s ease;
+}
+
+.think-toggle-icon svg {
+  width: 1em;
+  height: 1em;
+  stroke: currentColor;
+  stroke-width: 2;
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.think-block[open] .think-toggle-icon {
+  transform: rotate(90deg);
+  color: #35537f;
+}
+
+:global([data-theme='dark']) .think-block {
+  color: #b7c7e7;
+}
+
+:global([data-theme='dark']) .think-block > summary {
+  color: #cddcff;
+}
+
+:global([data-theme='dark']) .think-block > p {
+  color: #aab9d8;
+}
+
+:global([data-theme='dark']) .think-toggle-icon {
+  color: #9fb6de;
 }
 
 .meta-row {
@@ -486,6 +597,12 @@ function handleContentClick(e: MouseEvent) {
 
 .tool-usage-tag {
   margin: 0;
+  --el-tag-bg-color: #eef4ff;
+  --el-tag-border-color: #c8d8f6;
+  --el-tag-text-color: #234a86;
+  background-color: var(--el-tag-bg-color);
+  border-color: var(--el-tag-border-color);
+  color: var(--el-tag-text-color);
 }
 
 .tool-tag-inner {
@@ -501,6 +618,19 @@ function handleContentClick(e: MouseEvent) {
 
 .tool-usage-tag.is-clickable {
   cursor: pointer;
+}
+
+:global([data-theme='dark']) .tool-usage-tag {
+  --el-tag-bg-color: rgba(62, 83, 118, 0.42);
+  --el-tag-border-color: rgba(118, 151, 209, 0.62);
+  --el-tag-text-color: #d8e7ff;
+  background-color: var(--el-tag-bg-color);
+  border-color: var(--el-tag-border-color);
+  color: var(--el-tag-text-color);
+}
+
+:global([data-theme='dark']) .tool-usage-tag .tool-tag-icon {
+  opacity: 0.9;
 }
 
 .source-drawer {

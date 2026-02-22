@@ -15,8 +15,26 @@ renderer.link = ({ href, title, tokens }) => {
 }
 marked.use({ renderer })
 
+function normalizeThinkBlocks(text: string): string {
+  if (!text || !text.includes('<think>')) return text
+  return text.replace(/<think>([\s\S]*?)<\/think>/gi, (_raw, content: string) => {
+    const sentence = (content || '').replace(/\s+/g, ' ').trim()
+    if (!sentence) return ''
+    return [
+      '',
+      '<details class="think-block">',
+      '<summary>思考结果</summary>',
+      '',
+      sentence,
+      '',
+      '</details>',
+      '',
+    ].join('\n')
+  })
+}
+
 export function renderMarkdown(text: string): string {
-  const input = text || ''
+  const input = normalizeThinkBlocks(text || '')
   const html = marked.parse(input) as string
   return DOMPurify.sanitize(html)
 }
