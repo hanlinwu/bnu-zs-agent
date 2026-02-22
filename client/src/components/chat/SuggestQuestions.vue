@@ -337,6 +337,7 @@ onMounted(() => {
   display: flex;
   align-items: center;
   gap: 8px;
+  min-width: 0;
   padding: 11px 16px;
   background: transparent;
   border: 1px solid rgba(130, 144, 174, 0.2);
@@ -365,10 +366,16 @@ onMounted(() => {
 }
 
 .card-text {
+  display: block;
+  flex: 1;
+  min-width: 0;
   font-size: 0.8125rem;
   color: var(--text-primary, #1a1a2e);
   opacity: 0.92;
   line-height: 1.5;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 :global([data-theme='dark']) .suggest-card {

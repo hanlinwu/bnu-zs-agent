@@ -14,6 +14,7 @@ const emit = defineEmits<{
 const chatStore = useChatStore()
 const scrollContainerRef = ref<HTMLElement | null>(null)
 const isEmpty = computed(() => chatStore.messages.length === 0 && !chatStore.isStreaming)
+const wasEmpty = ref(isEmpty.value)
 
 // If user leaves bottom area manually, pause auto-scroll.
 const autoScrollLocked = ref(false)
@@ -152,17 +153,29 @@ async function handleScroll() {
 }
 
 // Auto-scroll to bottom during streaming
-function autoScrollToBottom(behavior: ScrollBehavior = 'auto') {
-  if (autoScrollLocked.value) return
+function autoScrollToBottom(behavior: ScrollBehavior = 'auto', force = false) {
+  if (!force && autoScrollLocked.value) return
 
   nextTick(() => {
     const el = scrollContainerRef.value
-    if (el) {
-      el.scrollTo({
-        top: el.scrollHeight,
-        behavior,
-      })
+    if (!el) return
+
+    if (behavior === 'auto') {
+      // Safari can ignore a single early scrollTo call while layout is still settling.
+      // Force-jump using scrollTop and retry across microtask/frame boundaries.
+      const jump = () => {
+        el.scrollTop = el.scrollHeight
+      }
+      jump()
+      requestAnimationFrame(jump)
+      setTimeout(jump, 0)
+      return
     }
+
+    el.scrollTo({
+      top: el.scrollHeight,
+      behavior,
+    })
   })
 }
 
@@ -176,12 +189,70 @@ watch(
   }
 )
 
+// Scroll so the newest message aligns to the top of the viewport.
+function scrollNewMessageToTop() {
+  autoScrollLocked.value = false
+  nextTick(() => {
+    const el = scrollContainerRef.value
+    if (!el) return
+    const items = el.querySelectorAll('.message-item')
+    const lastItem = items[items.length - 1]
+    if (lastItem) {
+      const containerRect = el.getBoundingClientRect()
+      const itemRect = (lastItem as HTMLElement).getBoundingClientRect()
+      const offset = itemRect.top - containerRect.top + el.scrollTop
+      el.scrollTop = offset
+    } else {
+      el.scrollTop = 0
+    }
+  })
+}
+
 // Auto scroll on new message append when unlocked.
 watch(
   () => chatStore.messages.length,
-  () => {
-    autoScrollToBottom('smooth')
+  (length, prevLength) => {
+    if (prevLength === 0 && length > 0) {
+      autoScrollLocked.value = false
+      nextTick(() => {
+        const el = scrollContainerRef.value
+        if (!el) return
+        el.scrollTop = 0
+      })
+      return
+    }
+
+    // During conversation history hydration, keep jump-to-bottom without animation.
+    if (chatStore.isLoadingMessages) {
+      autoScrollToBottom('auto', true)
+      return
+    }
+    // New message sent — scroll it to the top of the viewport.
+    scrollNewMessageToTop()
   }
+)
+
+// When leaving empty state (first message in a new chat), unlock scroll.
+// Do NOT call autoScrollToBottom here — the messages.length watcher already
+// positions the new message at the top of the viewport.
+watch(
+  isEmpty,
+  (empty) => {
+    if (wasEmpty.value && !empty) {
+      autoScrollLocked.value = false
+    }
+    wasEmpty.value = empty
+  }
+)
+
+// After loading a historical conversation, ensure viewport lands at bottom immediately.
+watch(
+  () => chatStore.isLoadingMessages,
+  (loading) => {
+    if (!loading && chatStore.currentConversationId) {
+      autoScrollToBottom('auto', true)
+    }
+  },
 )
 
 // Reset scroll state when conversation changes
@@ -190,7 +261,7 @@ watch(
   () => {
     autoScrollLocked.value = false
     oldScrollPosition.value = 0
-    autoScrollToBottom('auto')
+    autoScrollToBottom('auto', true)
   }
 )
 
@@ -198,6 +269,14 @@ onMounted(() => {
   const container = scrollContainerRef.value
   if (container) {
     container.addEventListener('scroll', handleScroll, { passive: true })
+  }
+
+  // MessageList is mounted after skeleton loading; history messages may already exist.
+  // Ensure initial viewport lands at bottom for restored conversations.
+  if (chatStore.currentConversationId && chatStore.messages.length > 0) {
+    autoScrollToBottom('auto', true)
+    requestAnimationFrame(() => autoScrollToBottom('auto', true))
+    setTimeout(() => autoScrollToBottom('auto', true), 60)
   }
 })
 

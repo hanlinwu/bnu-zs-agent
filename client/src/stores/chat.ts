@@ -367,7 +367,8 @@ export const useChatStore = defineStore('chat', () => {
     messages.value = []
     oldestMessageId.value = null
     newestMessageId.value = null
-    hasMoreHistory.value = true
+    // New/empty conversation should not show "load more history" hint.
+    hasMoreHistory.value = false
     totalMessageCount.value = 0
     activeToolStatus.value = null
   }

@@ -71,6 +71,17 @@ async function initializeChatPage() {
     }
   }
 
+  const savedId = localStorage.getItem('currentConversationId')
+  if (savedId) {
+    const saved = conversationStore.conversations.find((c) => c.id === savedId)
+    if (saved) {
+      chatStore.setConversationId(saved.id)
+      await chatStore.loadMessages(saved.id)
+      return
+    }
+    localStorage.removeItem('currentConversationId')
+  }
+
   // Default entry for /chat: always start a new conversation
   if (conversationStore.conversations.length === 0) {
     chatStore.setConversationId(null)
