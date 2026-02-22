@@ -71,7 +71,7 @@ const providerOptions = [
 const groupTypeOptions = [
   { label: 'LLM 对话', value: 'llm' },
   { label: 'Embedding 向量', value: 'embedding' },
-  { label: '审核模型', value: 'review' },
+  { label: '决策模型', value: 'review' },
 ]
 
 const strategyOptions = [

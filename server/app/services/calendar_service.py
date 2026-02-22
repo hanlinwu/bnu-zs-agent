@@ -42,6 +42,13 @@ DEFAULT_TONES = {
     },
 }
 
+DEFAULT_PERIOD_NAMES = {
+    "preparation": "备考期",
+    "application": "报名期",
+    "admission": "录取期",
+    "normal": "常态期",
+}
+
 
 def _get_default_period(month: int) -> str:
     if 1 <= month <= 5:
@@ -105,3 +112,52 @@ async def get_current_tone(db: AsyncSession | None = None) -> dict:
         pass
 
     return tone_config
+
+
+async def get_current_admission_context(db: AsyncSession | None = None) -> dict:
+    """Return current admission stage metadata for prompt injection."""
+    now = datetime.now(timezone.utc)
+    today = now.date()
+    month = now.month
+
+    tone_config = None
+    stage_key = _get_default_period(month)
+    stage_name = DEFAULT_PERIOD_NAMES.get(stage_key, "常态期")
+    year = now.year
+    start_date = None
+    end_date = None
+    additional_prompt = ""
+
+    if db:
+        try:
+            stmt = select(AdmissionCalendar).where(
+                and_(
+                    AdmissionCalendar.start_date <= today,
+                    AdmissionCalendar.end_date >= today,
+                    AdmissionCalendar.is_active == True,
+                )
+            )
+            result = await db.execute(stmt)
+            calendar = result.scalar_one_or_none()
+            if calendar:
+                tone_config = calendar.tone_config
+                stage_name = calendar.period_name or stage_name
+                year = int(calendar.year or year)
+                start_date = calendar.start_date.isoformat() if calendar.start_date else None
+                end_date = calendar.end_date.isoformat() if calendar.end_date else None
+                additional_prompt = (calendar.additional_prompt or "").strip()
+        except Exception as e:
+            logger.warning("Failed to load admission context from DB: %s", e)
+
+    if not tone_config:
+        tone_config = await get_current_tone(db)
+
+    return {
+        "year": year,
+        "stage_name": stage_name,
+        "stage_key": stage_key,
+        "start_date": start_date,
+        "end_date": end_date,
+        "tone_config": tone_config,
+        "additional_prompt": additional_prompt,
+    }

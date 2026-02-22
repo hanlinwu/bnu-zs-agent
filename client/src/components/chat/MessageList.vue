@@ -32,6 +32,13 @@ const thinkingIndex = ref(0)
 let thinkingTimer: ReturnType<typeof setInterval> | null = null
 
 const thinkingText = computed(() => THINKING_HINTS[thinkingIndex.value])
+const toolStatusText = computed(() => {
+  const status = chatStore.activeToolStatus
+  if (!status) return ''
+  if (status.content) return status.content
+  if (status.query) return `正在执行 ${status.tool}：${status.query}`
+  return `正在执行 ${status.tool}`
+})
 
 watch(() => chatStore.isStreaming, (streaming) => {
   if (streaming) {
@@ -65,12 +72,18 @@ const displayMessages = computed<Message[]>(() => {
         }
         return {
           documentId: s.document_id || s.documentId || '',
+          document_id: s.document_id || '',
           title: s.title || '',
-          snippet: s.snippet || '',
+          snippet: s.snippet || s.chunk || '',
+          source_type: s.source_type || '',
+          url: s.url || '',
+          score: typeof s.score === 'number' ? s.score : undefined,
         }
       })
       : undefined,
     mediaItems: msg.mediaItems,
+    toolsUsed: msg.toolsUsed,
+    toolTraces: msg.toolTraces,
     createdAt: new Date(msg.timestamp).toISOString(),
   }))
 })
@@ -247,8 +260,9 @@ function handleSelectQuestion(question: string) {
                 </span>
                 <span class="thinking-text">{{ thinkingText }}</span>
               </div>
+              <div v-if="toolStatusText" class="tool-status">{{ toolStatusText }}</div>
               <StreamingText
-                v-else
+                v-if="streamingMessage.content"
                 :text="streamingMessage.content"
                 :is-streaming="chatStore.isStreaming"
               />
@@ -283,6 +297,12 @@ function handleSelectQuestion(question: string) {
   &::-webkit-scrollbar-track {
     background: transparent;
   }
+}
+
+.tool-status {
+  margin-top: 8px;
+  font-size: 0.8125rem;
+  color: var(--text-secondary, #6b7280);
 }
 
 .messages-wrapper {

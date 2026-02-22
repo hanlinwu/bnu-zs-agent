@@ -37,6 +37,8 @@ class MessageResponse(BaseModel):
     review_passed: bool | None = None
     sources: list | None = None
     media_items: list | None = None
+    tools_used: list | None = None
+    tool_traces: list | None = None
     created_at: str
 
 

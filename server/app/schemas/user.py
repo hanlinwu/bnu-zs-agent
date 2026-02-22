@@ -25,6 +25,7 @@ class LoginResponse(BaseModel):
     token: str | None = None
     message: str | None = None
     user: dict | None = None
+    is_first_login: bool = False
 
 
 class UserInfoResponse(BaseModel):
@@ -34,6 +35,9 @@ class UserInfoResponse(BaseModel):
     avatar_url: str
     gender: str | None
     province: str | None
+    admission_stages: list[str] = []
+    identity_type: str | None
+    source_group: str | None
     birth_year: int | None
     school: str | None
     status: str
@@ -44,5 +48,8 @@ class UserUpdateRequest(BaseModel):
     avatar_url: str | None = Field(None, max_length=500)
     gender: str | None = Field(None, pattern=r"^(male|female|unknown)$")
     province: str | None = Field(None, max_length=20)
+    admission_stages: list[str] | None = None  # undergraduate/master/doctor
+    identity_type: str | None = Field(None, pattern=r"^(student|parent)$")
+    source_group: str | None = Field(None, pattern=r"^(mainland_general|hkmo_tw|international)$")
     birth_year: int | None = None
     school: str | None = Field(None, max_length=100)

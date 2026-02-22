@@ -112,6 +112,10 @@ class LLMRouter:
     def add_review_provider(self, provider: LLMProvider):
         self.review_providers.append(provider)
 
+    def add_decision_provider(self, provider: LLMProvider):
+        """Alias of review provider for decision/routing stage."""
+        self.add_review_provider(provider)
+
     def _get_provider(self) -> LLMProvider:
         if not self.providers:
             raise RuntimeError("No LLM providers configured")
@@ -187,6 +191,10 @@ class LLMRouter:
 
         provider = self._get_provider()
         return await provider.chat(messages, stream=False)
+
+    async def decision_chat(self, messages: list[dict]) -> str:
+        """Use decision model for risk/tool routing. Reuses review provider pool."""
+        return await self.review_chat(messages)
 
     async def embed(self, texts: list[str]) -> list[list[float]]:
         provider = self._get_provider()

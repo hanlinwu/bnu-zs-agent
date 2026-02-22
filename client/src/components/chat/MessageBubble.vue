@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
 import type { Message, MediaItem } from '@/types/chat'
-import SourceCitation from './SourceCitation.vue'
 import MediaPreview from '@/components/MediaPreview.vue'
 import { renderMarkdown } from '@/utils/markdown'
 
@@ -18,8 +17,84 @@ const formattedTime = computed(() => {
   return `${hours}:${minutes}`
 })
 
-const hasSources = computed(() => {
-  return props.message.sources && props.message.sources.length > 0
+const toolsUsed = computed(() => {
+  const toolSet = new Set<string>()
+  ;(props.message.toolsUsed || []).forEach((tool) => toolSet.add(tool))
+  ;(props.message.toolTraces || []).forEach((trace) => {
+    if (trace.tool) toolSet.add(trace.tool)
+  })
+  return Array.from(toolSet)
+})
+
+function toolLabel(tool: string) {
+  const labels: Record<string, string> = {
+    knowledge_search: '知识库检索',
+    web_search: '网页检索',
+    media_search: '媒体库检索',
+  }
+  return labels[tool] || tool
+}
+
+const knowledgeDocs = computed(() => {
+  const docs = props.message.sources || []
+  const map = new Map<string, { title: string; snippet: string }>()
+  docs.forEach((item) => {
+    const sourceType = String(item.source_type || '').toLowerCase()
+    const hasDocId = Boolean(item.document_id || item.documentId)
+    if (sourceType !== 'knowledge' && !hasDocId) return
+    const key = String(item.document_id || item.documentId || item.title || '')
+    if (!key) return
+    if (!map.has(key)) {
+      map.set(key, {
+        title: item.title || '未命名文档',
+        snippet: item.snippet || '',
+      })
+    }
+  })
+  return Array.from(map.values())
+})
+
+const webPages = computed(() => {
+  const pages = props.message.sources || []
+  const map = new Map<string, { title: string; snippet: string; url: string }>()
+  pages.forEach((item) => {
+    const sourceType = String(item.source_type || '').toLowerCase()
+    const url = String(item.url || '').trim()
+    if (sourceType !== 'web' && !url) return
+    const key = url || `${item.title || ''}-${item.snippet || ''}`
+    if (!key) return
+    if (!map.has(key)) {
+      map.set(key, {
+        title: item.title || '网页来源',
+        snippet: item.snippet || '',
+        url,
+      })
+    }
+  })
+  return Array.from(map.values())
+})
+
+const sourceDrawerVisible = ref(false)
+
+function openSourceDrawer() {
+  sourceDrawerVisible.value = true
+}
+
+const toolSummaryTags = computed(() => {
+  const tags: Array<{ key: string; text: string; icon: string; clickable: boolean }> = []
+  if (webPages.value.length) {
+    tags.push({ key: 'web_search', text: `浏览了${webPages.value.length}个网页`, icon: '🌐', clickable: true })
+  }
+  if (knowledgeDocs.value.length) {
+    tags.push({ key: 'knowledge_search', text: `查询了知识库中的${knowledgeDocs.value.length}个文档`, icon: '📚', clickable: true })
+  }
+  // Fallback: keep other tool tags if present but no structured count text.
+  toolsUsed.value
+    .filter((tool) => tool !== 'web_search' && tool !== 'knowledge_search')
+    .forEach((tool) => {
+      tags.push({ key: tool, text: toolLabel(tool), icon: '🧰', clickable: false })
+    })
+  return tags
 })
 
 const mediaItems = computed(() => props.message.mediaItems || [])
@@ -166,13 +241,22 @@ function handleContentClick(e: MouseEvent) {
         v-html="renderedContent"
       ></div>
 
-      <div class="bubble-time">{{ formattedTime }}</div>
-
-      <SourceCitation
-        v-if="hasSources && message.sources"
-        :sources="message.sources"
-        class="bubble-sources"
-      />
+      <div v-if="!isUser && toolSummaryTags.length" class="meta-row">
+        <div class="bubble-time">{{ formattedTime }}</div>
+        <el-tag
+          v-for="tag in toolSummaryTags"
+          :key="tag.key"
+          size="small"
+          class="tool-usage-tag"
+          :class="{ 'is-clickable': tag.clickable }"
+          @click="tag.clickable && openSourceDrawer()"
+        >
+          <span class="tool-tag-inner">
+            <span class="tool-tag-icon">{{ tag.icon }}</span>
+            <span>{{ tag.text }}</span>
+          </span>
+        </el-tag>
+      </div>
     </div>
 
     <MediaPreview
@@ -182,6 +266,42 @@ function handleContentClick(e: MouseEvent) {
       :title="previewTitle"
       @close="closePreview"
     />
+
+    <el-drawer
+      v-model="sourceDrawerVisible"
+      direction="rtl"
+      :size="420"
+      title="检索详情"
+    >
+      <div class="source-drawer">
+        <div v-if="knowledgeDocs.length" class="source-section">
+          <div class="source-section-title">知识库文档（{{ knowledgeDocs.length }}）</div>
+          <div v-for="(doc, idx) in knowledgeDocs" :key="`doc-${idx}`" class="source-item">
+            <div class="source-item-title">{{ doc.title }}</div>
+            <div v-if="doc.snippet" class="source-item-snippet">{{ doc.snippet }}</div>
+          </div>
+        </div>
+
+        <div v-if="webPages.length" class="source-section">
+          <div class="source-section-title">网页来源（{{ webPages.length }}）</div>
+          <div v-for="(page, idx) in webPages" :key="`web-${idx}`" class="source-item">
+            <div class="source-item-title">{{ page.title }}</div>
+            <a
+              v-if="page.url"
+              class="source-item-link"
+              :href="page.url"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              {{ page.url }}
+            </a>
+            <div v-if="page.snippet" class="source-item-snippet">{{ page.snippet }}</div>
+          </div>
+        </div>
+
+        <el-empty v-if="!knowledgeDocs.length && !webPages.length" description="暂无检索详情" />
+      </div>
+    </el-drawer>
   </div>
 </template>
 
@@ -350,24 +470,89 @@ function handleContentClick(e: MouseEvent) {
   }
 }
 
+.meta-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
 .bubble-time {
   font-size: 0.6875rem;
   color: var(--text-secondary, #5a5a72);
-  margin-top: 4px;
-  opacity: 0;
-  transition: opacity 0.2s;
-  padding: 0 4px;
-
-  .is-user & {
-    text-align: right;
-  }
-
-  .message-bubble:hover & {
-    opacity: 1;
-  }
+  padding: 0 2px;
 }
 
-.bubble-sources {
-  margin-top: 6px;
+.tool-usage-tag {
+  margin: 0;
+}
+
+.tool-tag-inner {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.tool-tag-icon {
+  font-size: 12px;
+  line-height: 1;
+}
+
+.tool-usage-tag.is-clickable {
+  cursor: pointer;
+}
+
+.source-drawer {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.source-section {
+  border: 1px solid var(--border-color, #e5e7eb);
+  border-radius: 10px;
+  padding: 10px 12px;
+  background: var(--bg-secondary, #f9fafb);
+}
+
+.source-section-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary, #111827);
+  margin-bottom: 8px;
+}
+
+.source-item {
+  border-top: 1px dashed var(--border-color, #e5e7eb);
+  padding-top: 8px;
+  margin-top: 8px;
+}
+
+.source-item:first-of-type {
+  border-top: none;
+  padding-top: 0;
+  margin-top: 0;
+}
+
+.source-item-title {
+  font-size: 13px;
+  color: var(--text-primary, #111827);
+}
+
+.source-item-link {
+  display: inline-block;
+  margin-top: 4px;
+  color: #1d4ed8;
+  font-size: 12px;
+  word-break: break-all;
+  text-decoration: underline;
+}
+
+.source-item-snippet {
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--text-secondary, #4b5563);
+  line-height: 1.5;
 }
 </style>

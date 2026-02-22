@@ -19,6 +19,29 @@ from app.services.auth_service import login_or_register
 from app.services.request_ip_service import get_client_ip
 
 router = APIRouter()
+ALLOWED_STAGES = {"undergraduate", "master", "doctor"}
+
+
+def _parse_stages(raw: str | None) -> list[str]:
+    if not raw:
+        return []
+    items = [part.strip() for part in str(raw).split(",") if part.strip()]
+    result: list[str] = []
+    for item in items:
+        if item in ALLOWED_STAGES and item not in result:
+            result.append(item)
+    return result
+
+
+def _serialize_stages(items: list[str] | None) -> str | None:
+    if not isinstance(items, list):
+        return None
+    result: list[str] = []
+    for item in items:
+        val = str(item).strip()
+        if val in ALLOWED_STAGES and val not in result:
+            result.append(val)
+    return ",".join(result) if result else ""
 
 
 @router.post("/sms/send", response_model=SmsSendResponse)
@@ -60,6 +83,9 @@ async def api_get_me(current_user: User = Depends(get_current_user)):
         avatar_url=current_user.avatar_url or "",
         gender=current_user.gender,
         province=current_user.province,
+        admission_stages=_parse_stages(current_user.admission_stages),
+        identity_type=current_user.identity_type,
+        source_group=current_user.source_group,
         birth_year=current_user.birth_year,
         school=current_user.school,
         status=current_user.status,
@@ -74,6 +100,8 @@ async def api_update_me(
 ):
     """更新当前用户信息"""
     update_data = body.model_dump(exclude_unset=True)
+    if "admission_stages" in update_data:
+        update_data["admission_stages"] = _serialize_stages(update_data.get("admission_stages"))
     for key, value in update_data.items():
         setattr(current_user, key, value)
     current_user.updated_at = datetime.now(timezone.utc)
@@ -87,6 +115,9 @@ async def api_update_me(
         avatar_url=current_user.avatar_url or "",
         gender=current_user.gender,
         province=current_user.province,
+        admission_stages=_parse_stages(current_user.admission_stages),
+        identity_type=current_user.identity_type,
+        source_group=current_user.source_group,
         birth_year=current_user.birth_year,
         school=current_user.school,
         status=current_user.status,

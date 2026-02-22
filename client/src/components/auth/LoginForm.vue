@@ -64,25 +64,51 @@
       </template>
     </div>
 
-    <!-- Step 2: Role Selection (for new users) -->
-    <div v-else-if="step === 'role'" class="login-form__step">
-      <RoleSelector v-model="selectedRole" />
-
-      <el-button
-        type="primary"
-        size="large"
-        class="login-form__submit login-form__submit--role"
-        :loading="roleLoading"
-        :disabled="!selectedRole"
-        @click="handleRoleSubmit"
-      >
-        开始使用
-      </el-button>
-
-      <button class="login-form__skip" @click="handleSkipRole">
-        稍后再选
-      </button>
-    </div>
+    <el-dialog
+      v-model="profileDialogVisible"
+      title="完善基本信息"
+      width="520px"
+      :close-on-click-modal="false"
+      :close-on-press-escape="false"
+      :show-close="false"
+    >
+      <div class="profile-dialog__body">
+        <div class="profile-dialog__row">
+          <label>省份/地区</label>
+          <el-select v-model="profileProvince" placeholder="请选择省份/地区" filterable>
+            <el-option v-for="item in PROVINCE_OPTIONS" :key="item" :label="item" :value="item" />
+          </el-select>
+        </div>
+        <div class="profile-dialog__row">
+          <label>身份</label>
+          <el-radio-group v-model="profileIdentity" size="small">
+            <el-radio-button value="student">学生本人</el-radio-button>
+            <el-radio-button value="parent">家长</el-radio-button>
+          </el-radio-group>
+        </div>
+        <div class="profile-dialog__row">
+          <label>生源类型</label>
+          <el-radio-group v-model="profileSourceGroup" size="small">
+            <el-radio-button value="mainland_general">内地生</el-radio-button>
+            <el-radio-button value="hkmo_tw">港澳台生</el-radio-button>
+            <el-radio-button value="international">国际生</el-radio-button>
+          </el-radio-group>
+        </div>
+        <div class="profile-dialog__row">
+          <label>关心招生阶段</label>
+          <el-radio-group v-model="profileAdmissionStage" size="small">
+            <el-radio-button value="undergraduate">本科</el-radio-button>
+            <el-radio-button value="master">硕士研究生</el-radio-button>
+            <el-radio-button value="doctor">博士研究生</el-radio-button>
+          </el-radio-group>
+        </div>
+      </div>
+      <template #footer>
+        <el-button type="primary" :loading="profileSaving" @click="saveProfileAndEnter">
+          保存并进入
+        </el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -93,10 +119,9 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { Loading } from '@element-plus/icons-vue'
 import { useUserStore } from '@/stores/user'
 import { sendSmsCode } from '@/api/auth'
+import { PROVINCE_OPTIONS } from '@/constants/profile'
 import SmsCodeInput from './SmsCodeInput.vue'
-import RoleSelector from './RoleSelector.vue'
-
-type Step = 'login' | 'role'
+type Step = 'login'
 
 const router = useRouter()
 const userStore = useUserStore()
@@ -105,18 +130,23 @@ const userStore = useUserStore()
 const phone = ref('')
 const smsCode = ref('')
 const phoneError = ref('')
-const selectedRole = ref('')
 const step = ref<Step>('login')
 
 // Loading states
 const smsSending = ref(false)
 const loginLoading = ref(false)
-const roleLoading = ref(false)
 
 // SMS countdown
 const countdown = ref(0)
 const codeSent = ref(false)
 let countdownTimer: ReturnType<typeof setInterval> | null = null
+
+const profileDialogVisible = ref(false)
+const profileSaving = ref(false)
+const profileProvince = ref('')
+const profileIdentity = ref<'student' | 'parent' | ''>('')
+const profileSourceGroup = ref<'mainland_general' | 'hkmo_tw' | 'international' | ''>('')
+const profileAdmissionStage = ref<'undergraduate' | 'master' | 'doctor' | ''>('')
 
 // Refs
 const smsCodeRef = ref<InstanceType<typeof SmsCodeInput> | null>(null)
@@ -206,16 +236,14 @@ async function handleLogin() {
 
   loginLoading.value = true
   try {
-    const result = await userStore.login(phone.value, smsCode.value)
-
-    // If API indicates new user, show role selection
-    if (result.isNewUser) {
-      step.value = 'role'
-      ElMessage.success('验证成功，请选择您的身份')
-    } else {
-      ElMessage.success('登录成功')
-      router.push('/')
+    const loginResult = await userStore.login(phone.value, smsCode.value)
+    ElMessage.success('登录成功')
+    if (loginResult?.is_first_login) {
+      initProfileDialog()
+      profileDialogVisible.value = true
+      return
     }
+    router.push('/')
   } catch (error: any) {
     // 403 表示账号被禁用，直接显示后端返回的消息
     if (error?.response?.status === 403) {
@@ -231,24 +259,37 @@ async function handleLogin() {
   }
 }
 
-async function handleRoleSubmit() {
-  if (!selectedRole.value) return
-
-  roleLoading.value = true
-  try {
-    await userStore.updateProfile({ role: selectedRole.value })
-    ElMessage.success('欢迎使用京师小智！')
-    router.push('/')
-  } catch (error: any) {
-    const msg = error?.response?.data?.message || '设置失败，请稍后重试'
-    ElMessage.error(msg)
-  } finally {
-    roleLoading.value = false
-  }
+function initProfileDialog() {
+  const info = userStore.userInfo
+  profileProvince.value = (info?.province as string) || ''
+  profileIdentity.value = (info?.identity_type as 'student' | 'parent' | '') || ''
+  profileSourceGroup.value = (info?.source_group as 'mainland_general' | 'hkmo_tw' | 'international' | '') || ''
+  const stages = Array.isArray(info?.admission_stages)
+    ? (info?.admission_stages as Array<'undergraduate' | 'master' | 'doctor'>)
+    : []
+  profileAdmissionStage.value = stages[0] || ''
 }
 
-function handleSkipRole() {
-  router.push('/')
+async function saveProfileAndEnter() {
+  if (!profileProvince.value) {
+    ElMessage.warning('请选择省份/地区')
+    return
+  }
+  profileSaving.value = true
+  try {
+    await userStore.updateProfile({
+      province: profileProvince.value,
+      identity_type: profileIdentity.value || undefined,
+      source_group: profileSourceGroup.value || undefined,
+      admission_stages: profileAdmissionStage.value ? [profileAdmissionStage.value] : [],
+    })
+    profileDialogVisible.value = false
+    router.push('/')
+  } catch {
+    ElMessage.error('保存失败，请重试')
+  } finally {
+    profileSaving.value = false
+  }
 }
 
 function showAgreement(title: string) {
@@ -431,5 +472,23 @@ function showAgreement(title: string) {
 
 :deep(.el-input.is-error .el-input__wrapper) {
   box-shadow: 0 0 0 1px var(--color-danger) inset;
+}
+
+.profile-dialog__body {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.profile-dialog__row {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+
+  label {
+    font-size: 0.875rem;
+    color: var(--color-text-primary);
+    font-weight: 500;
+  }
 }
 </style>

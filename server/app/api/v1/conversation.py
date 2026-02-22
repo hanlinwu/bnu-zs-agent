@@ -24,16 +24,22 @@ def _split_sources_payload(raw_sources):
     if isinstance(raw_sources, dict):
         citations = raw_sources.get("citations")
         media_items = raw_sources.get("media_items")
+        tools_used = raw_sources.get("tools_used")
+        tool_traces = raw_sources.get("tool_traces")
         if citations is None:
             citations = []
         if media_items is None:
             media_items = []
-        return citations or None, media_items or None
+        if tools_used is None:
+            tools_used = []
+        if tool_traces is None:
+            tool_traces = []
+        return citations or None, media_items or None, tools_used or None, tool_traces or None
 
     if isinstance(raw_sources, list):
-        return raw_sources or None, None
+        return raw_sources or None, None, None, None
 
-    return None, None
+    return None, None, None, None
 
 
 @router.get("", response_model=ConversationListResponse)
@@ -288,7 +294,7 @@ async def list_messages(
 
     items = []
     for m in sorted_messages:
-        citations, media_items = _split_sources_payload(m.sources)
+        citations, media_items, tools_used, tool_traces = _split_sources_payload(m.sources)
         items.append(
             MessageResponse(
                 id=str(m.id),
@@ -299,6 +305,8 @@ async def list_messages(
                 review_passed=m.review_passed,
                 sources=citations,
                 media_items=media_items,
+                tools_used=tools_used,
+                tool_traces=tool_traces,
                 created_at=m.created_at.isoformat(),
             )
         )

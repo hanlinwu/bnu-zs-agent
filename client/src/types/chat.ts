@@ -3,9 +3,13 @@ export type MessageRole = 'user' | 'assistant' | 'system'
 
 /** 消息来源标注 */
 export interface SourceReference {
-  documentId: string
+  documentId?: string
+  document_id?: string
   title: string
   snippet: string
+  source_type?: 'knowledge' | 'web' | string
+  url?: string
+  score?: number
 }
 
 export interface MediaItem {
@@ -19,6 +23,14 @@ export interface MediaItem {
   slot_tags?: string[]
 }
 
+export interface ToolTrace {
+  tool: 'knowledge_search' | 'web_search' | 'media_search' | string
+  query?: string
+  count?: number
+  note?: string
+  items?: Array<Record<string, unknown>>
+}
+
 /** 聊天消息 */
 export interface Message {
   id: string
@@ -27,6 +39,8 @@ export interface Message {
   content: string
   sources?: SourceReference[]
   mediaItems?: MediaItem[]
+  toolsUsed?: string[]
+  toolTraces?: ToolTrace[]
   riskLevel?: 'low' | 'medium' | 'high'
   createdAt: string
 }

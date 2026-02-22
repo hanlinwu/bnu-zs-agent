@@ -45,7 +45,7 @@ async def _ensure_single_enabled_group_per_type(
         elif group_type == "embedding":
             type_label = "Embedding"
         else:
-            type_label = "审核"
+            type_label = "决策"
         raise BizError(code=400, message=f"{type_label} 仅允许一个启用组，请先停用「{existing.name}」")
 
 
@@ -135,7 +135,7 @@ async def create_group(
     db: AsyncSession = Depends(get_db),
 ):
     if body.type not in ("llm", "embedding", "review"):
-        raise BizError(code=400, message="模型组类型必须为 llm / embedding / review")
+        raise BizError(code=400, message="模型组类型必须为 llm / embedding / review（review 即决策模型）")
     if body.enabled:
         await _ensure_single_enabled_group_per_type(body.type, db)
 

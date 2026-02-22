@@ -1,6 +1,3 @@
-/** 用户角色 */
-export type UserRole = 'gaokao' | 'kaoyan' | 'international' | 'parent'
-
 /** 管理员角色 */
 export type AdminRole = 'super_admin' | 'content_reviewer' | 'admin' | 'teacher'
 
@@ -10,7 +7,10 @@ export interface User {
   phone: string
   nickname: string
   avatar?: string
-  role: UserRole
+  province?: string
+  admissionStages?: Array<'undergraduate' | 'master' | 'doctor'>
+  identityType?: 'student' | 'parent'
+  sourceGroup?: 'mainland_general' | 'hkmo_tw' | 'international'
   createdAt: string
   updatedAt: string
 }
@@ -35,7 +35,10 @@ export interface AdminUser {
 export interface UpdateProfileParams {
   nickname?: string
   avatar?: string
-  role?: UserRole
+  province?: string
+  admission_stages?: Array<'undergraduate' | 'master' | 'doctor'>
+  identity_type?: 'student' | 'parent'
+  source_group?: 'mainland_general' | 'hkmo_tw' | 'international'
 }
 
 /** 登录参数 */
@@ -43,11 +46,12 @@ export interface LoginParams {
   phone: string
   code: string
   nickname?: string
-  userRole?: UserRole
+  userRole?: string
 }
 
 /** 登录响应 */
 export interface LoginResult {
   token: string
   user: User
+  is_first_login?: boolean
 }

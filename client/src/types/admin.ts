@@ -209,6 +209,9 @@ export interface AdminMessage {
   risk_level: string | null
   review_passed: boolean | null
   sources: Record<string, unknown> | null
+  citations?: Array<Record<string, unknown>>
+  tools_used?: string[]
+  tool_traces?: Array<Record<string, unknown>>
   sensitive_words: string[] | null
   sensitive_level: string | null
   created_at: string

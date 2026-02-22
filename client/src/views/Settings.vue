@@ -5,6 +5,7 @@ import { ArrowLeft, Edit } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { useThemeStore } from '@/stores/theme'
 import { useUserStore } from '@/stores/user'
+import { PROVINCE_OPTIONS } from '@/constants/profile'
 
 const router = useRouter()
 const themeStore = useThemeStore()
@@ -24,6 +25,17 @@ const themeModeOptions = [
 
 const isEditingNickname = ref(false)
 const nicknameInput = ref('')
+const province = ref('')
+const identityType = ref<'student' | 'parent' | ''>('')
+const sourceGroup = ref<'mainland_general' | 'hkmo_tw' | 'international' | ''>('')
+const admissionStage = ref<'undergraduate' | 'master' | 'doctor' | ''>('')
+const profileSaving = ref(false)
+
+const stageOptions = [
+  { label: '本科', value: 'undergraduate' as const },
+  { label: '硕士研究生', value: 'master' as const },
+  { label: '博士研究生', value: 'doctor' as const },
+]
 
 function startEditNickname() {
   nicknameInput.value = userStore.userInfo?.nickname || ''
@@ -48,9 +60,39 @@ function cancelEditNickname() {
 
 onMounted(() => {
   if (!userStore.userInfo) {
-    userStore.fetchProfile()
+    userStore.fetchProfile().then(syncProfileForm)
+  } else {
+    syncProfileForm()
   }
 })
+
+function syncProfileForm() {
+  const info = userStore.userInfo
+  province.value = (info?.province as string) || ''
+  identityType.value = (info?.identity_type as 'student' | 'parent' | '') || ''
+  sourceGroup.value = (info?.source_group as 'mainland_general' | 'hkmo_tw' | 'international' | '') || ''
+  const stages = Array.isArray(info?.admission_stages)
+    ? (info?.admission_stages as Array<'undergraduate' | 'master' | 'doctor'>)
+    : []
+  admissionStage.value = stages[0] || ''
+}
+
+async function savePersonaConfig() {
+  profileSaving.value = true
+  try {
+    await userStore.updateProfile({
+      province: province.value || undefined,
+      identity_type: identityType.value || undefined,
+      source_group: sourceGroup.value || undefined,
+      admission_stages: admissionStage.value ? [admissionStage.value] : [],
+    })
+    ElMessage.success('画像信息已保存')
+  } catch {
+    ElMessage.error('保存失败')
+  } finally {
+    profileSaving.value = false
+  }
+}
 </script>
 
 <template>
@@ -135,6 +177,57 @@ onMounted(() => {
           <el-button size="small" @click="cancelEditNickname">取消</el-button>
         </div>
       </div>
+
+      <div class="setting-item">
+        <div class="setting-label">
+          <span>省份</span>
+          <span class="setting-desc">默认来自IP识别，可手动修改（含港澳台/国际）</span>
+        </div>
+        <el-select v-model="province" placeholder="请选择省份/地区" size="small" style="width: 220px" filterable>
+          <el-option v-for="item in PROVINCE_OPTIONS" :key="item" :label="item" :value="item" />
+        </el-select>
+      </div>
+
+      <div class="setting-item setting-item--column">
+        <div class="setting-label">
+          <span>身份</span>
+          <span class="setting-desc">学生本人或家长</span>
+        </div>
+        <el-radio-group v-model="identityType" size="small">
+          <el-radio-button value="student">学生本人</el-radio-button>
+          <el-radio-button value="parent">家长</el-radio-button>
+        </el-radio-group>
+      </div>
+
+      <div class="setting-item setting-item--column">
+        <div class="setting-label">
+          <span>生源类型</span>
+          <span class="setting-desc">用于匹配更准确的招生政策说明</span>
+        </div>
+        <el-radio-group v-model="sourceGroup" size="small">
+          <el-radio-button value="mainland_general">内地生</el-radio-button>
+          <el-radio-button value="hkmo_tw">港澳台生</el-radio-button>
+          <el-radio-button value="international">国际生</el-radio-button>
+        </el-radio-group>
+      </div>
+
+      <div class="setting-item setting-item--column">
+        <div class="setting-label">
+          <span>关心的招生阶段</span>
+          <span class="setting-desc">单选，优先注入对话提示词</span>
+        </div>
+        <el-radio-group v-model="admissionStage" size="small">
+          <el-radio-button v-for="opt in stageOptions" :key="opt.value" :value="opt.value">
+            {{ opt.label }}
+          </el-radio-button>
+        </el-radio-group>
+      </div>
+
+      <div class="setting-item setting-item--actions">
+        <el-button type="primary" size="small" :loading="profileSaving" @click="savePersonaConfig">
+          保存
+        </el-button>
+      </div>
     </div>
 
     <div class="settings-card">
@@ -200,6 +293,16 @@ onMounted(() => {
   &:first-of-type {
     padding-top: 0;
   }
+}
+
+.setting-item--column {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.setting-item--actions {
+  justify-content: flex-end;
 }
 
 .setting-label {

@@ -43,6 +43,40 @@ def extract_media_items(sources: dict | None) -> list[dict]:
     return []
 
 
+def extract_citations(sources: dict | list | None) -> list[dict]:
+    """从 sources 字段中提取引用列表"""
+    if not sources:
+        return []
+    if isinstance(sources, dict):
+        citations = sources.get("citations")
+        if isinstance(citations, list):
+            return citations
+        return []
+    if isinstance(sources, list):
+        return [item for item in sources if isinstance(item, dict)]
+    return []
+
+
+def extract_tools_used(sources: dict | None) -> list[str]:
+    """从 sources 字段中提取工具调用列表"""
+    if not isinstance(sources, dict):
+        return []
+    tools = sources.get("tools_used")
+    if isinstance(tools, list):
+        return [str(t) for t in tools if str(t).strip()]
+    return []
+
+
+def extract_tool_traces(sources: dict | None) -> list[dict]:
+    """从 sources 字段中提取工具检索详情"""
+    if not isinstance(sources, dict):
+        return []
+    traces = sources.get("tool_traces")
+    if isinstance(traces, list):
+        return [t for t in traces if isinstance(t, dict)]
+    return []
+
+
 SENSITIVE_ORDER = case(
     (Message.sensitive_level == "block", 3),
     (Message.sensitive_level == "review", 2),
@@ -236,6 +270,9 @@ async def get_conversation_messages(
                 "risk_level": msg.risk_level,
                 "review_passed": msg.review_passed,
                 "sources": msg.sources,
+                "citations": extract_citations(msg.sources),
+                "tools_used": extract_tools_used(msg.sources),
+                "tool_traces": extract_tool_traces(msg.sources),
                 "sensitive_words": msg.sensitive_words,
                 "sensitive_level": msg.sensitive_level,
                 "created_at": msg.created_at.isoformat() if msg.created_at else None,

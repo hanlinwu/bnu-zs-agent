@@ -14,7 +14,6 @@ from app.core.security import verify_token
 from app.models.user import User
 from app.models.conversation import Conversation
 from app.models.message import Message
-from app.models.role import UserRole, Role
 from app.schemas.chat import ChatSendRequest, MessageResponse
 from app.dependencies import get_current_user
 from app.services.chat_service import process_message
@@ -113,17 +112,8 @@ async def ws_chat(websocket: WebSocket, conversation_id: str):
                     await websocket.send_json({"type": "error", "content": "对话不存在"})
                     continue
 
-                # Get user role
-                role_result = await db.execute(
-                    select(Role.code)
-                    .join(UserRole, UserRole.role_id == Role.id)
-                    .where(UserRole.user_id == user.id)
-                    .limit(1)
-                )
-                user_role = role_result.scalar_one_or_none()
-
                 # Process through pipeline
-                async for event in process_message(user, conversation, content, user_role, db):
+                async for event in process_message(user, conversation, content, None, db):
                     await websocket.send_json(event)
 
     except WebSocketDisconnect:
@@ -169,15 +159,6 @@ async def send_message(
             from app.core.exceptions import NotFoundError
             raise NotFoundError("对话不存在")
 
-    # Get user role
-    role_result = await db.execute(
-        select(Role.code)
-        .join(UserRole, UserRole.role_id == Role.id)
-        .where(UserRole.user_id == current_user.id)
-        .limit(1)
-    )
-    user_role = role_result.scalar_one_or_none()
-
     cancel_event = asyncio.Event()
     conv_id_str = str(conv.id)
     _active_streams[conv_id_str] = cancel_event
@@ -188,7 +169,7 @@ async def send_message(
     async def event_generator():
         try:
             async for event in process_message(
-                current_user, conv, body.content, user_role, db,
+                current_user, conv, body.content, None, db,
                 cancel_event=cancel_event,
             ):
                 if event.get("type") == "token":

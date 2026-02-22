@@ -65,6 +65,48 @@ function roleTag(role: string): { type: 'success' | 'info'; label: string } {
   }
 }
 
+function toolLabel(tool: string): string {
+  const labels: Record<string, string> = {
+    knowledge_search: '知识库检索',
+    web_search: '网页检索',
+    media_search: '媒体库检索',
+  }
+  return labels[tool] || tool
+}
+
+function normalizeTools(msg: AdminMessage): string[] {
+  const fromField = Array.isArray(msg.tools_used) ? msg.tools_used : []
+  if (fromField.length) return fromField
+  const raw = msg.sources as any
+  if (raw && Array.isArray(raw.tools_used)) {
+    return raw.tools_used.map((t: any) => String(t)).filter(Boolean)
+  }
+  return []
+}
+
+function normalizeToolTraces(msg: AdminMessage): Array<Record<string, any>> {
+  const fromField = Array.isArray(msg.tool_traces) ? msg.tool_traces : []
+  if (fromField.length) return fromField as Array<Record<string, any>>
+  const raw = msg.sources as any
+  if (raw && Array.isArray(raw.tool_traces)) {
+    return raw.tool_traces.filter((t: any) => t && typeof t === 'object')
+  }
+  return []
+}
+
+function normalizeCitations(msg: AdminMessage): Array<Record<string, any>> {
+  const fromField = Array.isArray(msg.citations) ? msg.citations : []
+  if (fromField.length) return fromField as Array<Record<string, any>>
+  if (Array.isArray(msg.sources)) {
+    return msg.sources as Array<Record<string, any>>
+  }
+  const raw = msg.sources as any
+  if (raw && Array.isArray(raw.citations)) {
+    return raw.citations.filter((t: any) => t && typeof t === 'object')
+  }
+  return []
+}
+
 function formatDate(date?: string | null) {
   if (!date) return '-'
   return new Date(date).toLocaleString('zh-CN', {
@@ -394,6 +436,77 @@ function handleMessageClick(e: MouseEvent, _msg: AdminMessage) {
             v-html="renderMessageContent(msg)"
             @click="(e) => handleMessageClick(e, msg)"
           ></div>
+
+          <details v-if="msg.role === 'assistant' && normalizeTools(msg).length" class="audit-collapse">
+            <summary class="audit-collapse-summary">工具调用</summary>
+            <div class="audit-tools">
+              <el-tag
+                v-for="tool in normalizeTools(msg)"
+                :key="tool"
+                size="small"
+                type="info"
+                class="audit-tool-tag"
+              >
+                {{ toolLabel(tool) }}
+              </el-tag>
+            </div>
+          </details>
+
+          <details
+            v-if="msg.role === 'assistant' && (normalizeToolTraces(msg).length || normalizeCitations(msg).length)"
+            class="audit-collapse"
+          >
+            <summary class="audit-collapse-summary">检索信息</summary>
+            <div class="audit-retrieval">
+              <div v-for="(trace, tIdx) in normalizeToolTraces(msg)" :key="`trace-${msg.id}-${tIdx}`" class="trace-card">
+                <div class="trace-head">
+                  <strong>{{ toolLabel(String(trace.tool || '-')) }}</strong>
+                  <span class="sub-text">命中 {{ Number(trace.count || 0) }}</span>
+                </div>
+                <div v-if="trace.query" class="sub-text">关键词：{{ String(trace.query) }}</div>
+                <div v-if="trace.note" class="sub-text">备注：{{ String(trace.note) }}</div>
+                <div v-if="Array.isArray(trace.items) && trace.items.length" class="trace-items">
+                  <div v-for="(item, iIdx) in trace.items" :key="iIdx" class="trace-item">
+                    <div class="trace-item-title">{{ String((item as any).title || (item as any).id || '-') }}</div>
+                    <a
+                      v-if="(item as any).url"
+                      class="trace-item-link"
+                      :href="String((item as any).url)"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      {{ String((item as any).url) }}
+                    </a>
+                    <div v-if="(item as any).snippet" class="trace-item-snippet">
+                      {{ String((item as any).snippet) }}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div v-if="normalizeCitations(msg).length" class="trace-card">
+                <div class="trace-head">
+                  <strong>引用来源</strong>
+                  <span class="sub-text">{{ normalizeCitations(msg).length }} 条</span>
+                </div>
+                <div v-for="(item, cIdx) in normalizeCitations(msg)" :key="`cite-${msg.id}-${cIdx}`" class="trace-item">
+                  <div class="trace-item-title">{{ String(item.title || '-') }}</div>
+                  <a
+                    v-if="item.url"
+                    class="trace-item-link"
+                    :href="String(item.url)"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    {{ String(item.url) }}
+                  </a>
+                  <div v-if="item.snippet || item.chunk" class="trace-item-snippet">
+                    {{ String(item.snippet || item.chunk) }}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </details>
         </div>
       </div>
     </el-drawer>
@@ -591,6 +704,91 @@ function handleMessageClick(e: MouseEvent, _msg: AdminMessage) {
     text-decoration: underline;
     margin-left: 4px;
   }
+}
+
+.audit-tools {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.audit-tool-tag {
+  margin: 0;
+}
+
+.audit-collapse {
+  margin-top: 8px;
+  border: 1px solid var(--border-color, #E2E6ED);
+  border-radius: 8px;
+  background: #fff;
+  padding: 6px 10px;
+}
+
+.audit-collapse-summary {
+  cursor: pointer;
+  font-size: 0.8125rem;
+  color: var(--text-secondary, #5A5A72);
+  user-select: none;
+}
+
+.audit-retrieval {
+  margin-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.trace-card {
+  border: 1px solid var(--border-color, #E2E6ED);
+  border-radius: 8px;
+  padding: 8px 10px;
+  background: #fff;
+}
+
+.trace-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 4px;
+}
+
+.trace-items {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.trace-item {
+  border-top: 1px dashed #e5e7eb;
+  padding-top: 6px;
+}
+
+.trace-item:first-child {
+  border-top: none;
+  padding-top: 0;
+}
+
+.trace-item-title {
+  font-size: 0.8125rem;
+  color: var(--text-primary, #1A1A2E);
+}
+
+.trace-item-link {
+  display: inline-block;
+  margin-top: 2px;
+  font-size: 0.75rem;
+  color: #1d4ed8;
+  text-decoration: underline;
+  word-break: break-all;
+}
+
+.trace-item-snippet {
+  margin-top: 2px;
+  font-size: 0.75rem;
+  color: var(--text-secondary, #5A5A72);
+  line-height: 1.4;
 }
 
 :deep(.conversation-detail-drawer .el-drawer__body) {

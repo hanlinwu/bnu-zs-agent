@@ -9,7 +9,6 @@ from app.config import settings
 from app.core.exceptions import ForbiddenError
 from app.core.security import create_access_token
 from app.models.user import User
-from app.models.role import UserRole, Role
 from app.services.ip_location_service import detect_province_by_ip
 from app.services.sms_service import verify_sms_code
 
@@ -34,6 +33,7 @@ async def login_or_register(
     if user:
         if user.status != "active":
             raise ForbiddenError("账号已被禁用，请联系客服")
+        is_first_login = user.last_login_at is None
     else:
         # Register new user
         if not nickname:
@@ -45,15 +45,9 @@ async def login_or_register(
         )
         db.add(user)
         await db.flush()
+        is_first_login = True
 
-        # Assign user role if provided
-        if user_role:
-            role_result = await db.execute(
-                select(Role).where(Role.code == user_role, Role.role_type == "user")
-            )
-            role = role_result.scalar_one_or_none()
-            if role:
-                db.add(UserRole(user_id=user.id, role_id=role.id))
+        # User role selection is deprecated; keep a unified user role model.
 
     # Generate token
     expire_delta = timedelta(days=settings.USER_TOKEN_EXPIRE_DAYS)
@@ -77,11 +71,16 @@ async def login_or_register(
     return {
         "success": True,
         "token": token,
+        "is_first_login": is_first_login,
         "user": {
             "id": str(user.id),
             "phone": user.phone,
             "nickname": user.nickname,
             "avatar_url": user.avatar_url,
+            "province": user.province,
+            "admission_stages": [s for s in (user.admission_stages or "").split(",") if s],
+            "identity_type": user.identity_type,
+            "source_group": user.source_group,
             "status": user.status,
         },
     }

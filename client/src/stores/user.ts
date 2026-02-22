@@ -8,8 +8,19 @@ export interface UserInfo {
   phone: string
   nickname: string
   avatar_url: string
-  role: string
+  province?: string | null
+  admission_stages?: string[]
+  identity_type?: 'student' | 'parent' | null
+  source_group?: 'mainland_general' | 'hkmo_tw' | 'international' | null
   status: string
+}
+
+export interface UserLoginResponse {
+  success: boolean
+  token: string
+  user: UserInfo
+  message?: string
+  is_first_login?: boolean
 }
 
 export const useUserStore = defineStore('user', () => {
@@ -20,7 +31,7 @@ export const useUserStore = defineStore('user', () => {
   const isLoggedIn = computed(() => !!token.value)
 
   async function login(phone: string, code: string, nickname?: string, role?: string) {
-    const res = await axios.post('/api/v1/auth/login', { phone, code, nickname, user_role: role })
+    const res = await axios.post<UserLoginResponse>('/api/v1/auth/login', { phone, code, nickname, user_role: role })
     const data = res.data
     if (!data?.success || !data?.token) {
       const error = new Error(data?.message || '登录失败，请检查验证码') as Error & {
@@ -32,7 +43,7 @@ export const useUserStore = defineStore('user', () => {
     token.value = data.token
     userInfo.value = data.user
     localStorage.setItem('token', data.token)
-    return data
+    return data as UserLoginResponse
   }
 
   function logout() {
@@ -64,7 +75,9 @@ export const useUserStore = defineStore('user', () => {
     return profilePromise
   }
 
-  async function updateProfile(updates: Partial<Pick<UserInfo, 'nickname' | 'avatar_url' | 'role'>>) {
+  async function updateProfile(
+    updates: Partial<Pick<UserInfo, 'nickname' | 'avatar_url' | 'province' | 'admission_stages' | 'identity_type' | 'source_group'>>
+  ) {
     const res = await request.put('/auth/me', updates)
     userInfo.value = { ...userInfo.value!, ...res.data }
     return res.data

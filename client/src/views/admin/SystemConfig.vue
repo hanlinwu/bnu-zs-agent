@@ -35,46 +35,46 @@ type GraphEdge = {
 const flowNodeMap: Record<string, FlowNodeMeta> = {
   input: { id: 'input', label: '用户问题', short: '输入消息' },
   sensitive: { id: 'sensitive', label: '敏感词检测', short: 'block/warn/pass' },
-  risk: { id: 'risk', label: '风险判定', short: 'high/medium/low', module: 'risk' },
+  risk: { id: 'risk', label: '决策模型', short: 'risk + tools', module: 'risk' },
   risk_high_keyword: {
     id: 'risk_high_keyword',
-    label: '高风险关键词命中',
-    short: '直接 high',
+    label: '高风险规则兜底',
+    short: 'high fallback',
     module: 'risk',
     configPath: 'risk.high_keywords',
   },
   risk_medium_keyword: {
     id: 'risk_medium_keyword',
-    label: '中风险关键词命中',
-    short: '直接 medium',
+    label: '中风险规则兜底',
+    short: 'medium fallback',
     module: 'risk',
     configPath: 'risk.medium_keywords',
   },
   risk_medium_topic_specific: {
     id: 'risk_medium_topic_specific',
-    label: '主题 + 具体性线索',
-    short: 'topic ∧ hint/数字 => medium',
+    label: '主题 + 具体性兜底',
+    short: 'topic + hint fallback',
     module: 'risk',
     configPath: 'risk.medium_topics + risk.medium_specific_hints',
   },
   high_strategy: {
     id: 'high_strategy',
     label: '高风险处理',
-    short: '固定回复 + 引导招生办',
+    short: '固定回复',
     module: 'prompts',
     configPath: 'prompts.high_risk_response',
   },
   medium_strategy: {
     id: 'medium_strategy',
-    label: '中风险处理',
-    short: '强制知识库回答',
+    label: '工具链执行',
+    short: '知识库/网页/媒体 检索',
     module: 'prompts',
     configPath: 'prompts.medium_* / no_knowledge_response',
   },
   low_strategy: {
     id: 'low_strategy',
-    label: '低风险处理',
-    short: '直接大模型回答',
+    label: '生成回答',
+    short: '注入上下文后流式回复',
     module: 'prompts',
     configPath: 'prompts.low_system_prompt',
   },
@@ -260,43 +260,43 @@ const activeFlowDetail = computed(() => {
     case 'risk_high_keyword':
       return {
         ...flowNodeMap.risk_high_keyword,
-        description: '命中任一高风险关键词后，风险等级直接判定为 high。',
+        description: '当决策模型不可用或结果异常时，命中高风险关键词会直接判定为 high。',
         items: ['高风险关键词'],
       }
     case 'risk_medium_keyword':
       return {
         ...flowNodeMap.risk_medium_keyword,
-        description: '命中任一中风险关键词后，风险等级直接判定为 medium。',
+        description: '当决策模型不可用或结果异常时，命中中风险关键词会判定为 medium。',
         items: ['中风险关键词'],
       }
     case 'risk_medium_topic_specific':
       return {
         ...flowNodeMap.risk_medium_topic_specific,
-        description: '需要同时满足“主题词命中”和“具体性线索/数字命中”才会判定为 medium。',
+        description: '当决策模型不可用或结果异常时，同时命中主题词+具体性线索会判定为 medium。',
         items: ['中风险主题词', '中风险具体性线索'],
       }
     case 'high_strategy':
       return {
         ...flowNodeMap.high_strategy,
-        description: '高风险问题不进入自由生成，直接返回固定回复。',
+        description: '高风险问题不进入工具检索和自由生成，直接返回固定回复。',
         items: ['高风险固定回复'],
       }
     case 'medium_strategy':
       return {
         ...flowNodeMap.medium_strategy,
-        description: '中风险问题强制知识库检索回答；无命中时走兜底回复。',
+        description: '决策模型返回工具列表后，按顺序执行知识库/网页/媒体检索，重排筛选后注入上下文。',
         items: [
           '中风险系统 Prompt',
           '中风险引用提示',
-          '中风险知识库约束',
-          '中风险无知识库兜底回复',
+          '中风险检索约束',
+          '无有效证据时兜底回复',
         ],
       }
     case 'low_strategy':
       return {
         ...flowNodeMap.low_strategy,
-        description: '低风险问题直接进入大模型回答流程。',
-        items: ['低风险系统 Prompt'],
+        description: '最终由对话模型基于注入上下文流式生成回答，并返回工具链与来源明细。',
+        items: ['低风险系统 Prompt', '工具链追踪信息'],
       }
     case 'sensitive':
       return {
@@ -307,13 +307,13 @@ const activeFlowDetail = computed(() => {
     case 'risk':
       return {
         ...flowNodeMap.risk,
-        description: '风险判定按顺序执行：高风险关键词 -> 中风险关键词 -> 主题+具体性线索。',
+        description: '先由决策模型判定风险并输出工具列表；若失败则回退到规则判定（高风险关键词 -> 中风险关键词 -> 主题+具体性线索）。',
         items: [],
       }
     default:
       return {
         ...flowNodeMap.input,
-        description: '用户输入消息后，进入敏感词和风险管控流程。',
+        description: '用户输入后，系统依次执行敏感词检测、决策模型路由、工具检索、上下文注入和流式生成。',
         items: [],
       }
   }
@@ -385,7 +385,7 @@ onMounted(() => {
     <div class="page-header">
       <div>
         <h2 class="page-title">智能体配置</h2>
-        <p class="page-desc">配置风险判定关键词与低/中/高风险回复模板</p>
+        <p class="page-desc">配置决策模型兜底规则与分级提示词（流程：风险判定 + 工具链路由 + 上下文注入）</p>
       </div>
       <el-button type="primary" :loading="saving" @click="saveConfig">保存配置</el-button>
     </div>
@@ -393,6 +393,10 @@ onMounted(() => {
     <div class="config-form">
       <div class="section-card process-card">
         <h3 class="section-title">处理流程可视化（点击节点查看详情）</h3>
+        <p class="process-desc">
+          当前线上流程：先由决策模型输出风险等级与工具列表（知识库/网页/媒体），再执行检索并将证据注入上下文生成回答。
+          下方风险关键词配置用于决策异常时的兜底判定。
+        </p>
 
         <div class="graph-wrap">
           <svg class="process-graph" viewBox="0 0 1140 340" role="img" aria-label="风险管控流程图">
@@ -574,6 +578,13 @@ onMounted(() => {
   display: flex;
   flex-direction: column;
   gap: 12px;
+}
+
+.process-desc {
+  margin: -2px 0 0;
+  font-size: 0.8125rem;
+  color: #475569;
+  line-height: 1.5;
 }
 
 .graph-wrap {

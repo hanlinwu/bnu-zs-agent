@@ -23,6 +23,14 @@ export interface ChatMessage {
     description?: string
     tags?: string[]
   }>
+  toolsUsed?: string[]
+  toolTraces?: Array<{
+    tool: string
+    query?: string
+    count?: number
+    note?: string
+    items?: Array<Record<string, unknown>>
+  }>
   loading?: boolean
 }
 
@@ -53,6 +61,11 @@ export const useChatStore = defineStore('chat', () => {
   const isLoadingMessages = ref(false)
   const isLoadingHistory = ref(false) // 加载历史消息中
   const currentConversationId = ref<string | null>(null)
+  const activeToolStatus = ref<{
+    tool: string
+    query?: string
+    content?: string
+  } | null>(null)
 
   // 分页状态
   const hasMoreHistory = ref(true) // 是否还有更多历史消息
@@ -107,6 +120,8 @@ export const useChatStore = defineStore('chat', () => {
           timestamp: new Date(m.created_at).getTime(),
           sources: m.sources || undefined,
           mediaItems: m.media_items || undefined,
+          toolsUsed: m.tools_used || undefined,
+          toolTraces: m.tool_traces || undefined,
         })
       })
       rebuildSortedMessages()
@@ -182,6 +197,8 @@ export const useChatStore = defineStore('chat', () => {
             timestamp: new Date(m.created_at).getTime(),
             sources: m.sources || undefined,
             mediaItems: m.media_items || undefined,
+            toolsUsed: m.tools_used || undefined,
+            toolTraces: m.tool_traces || undefined,
           })
         }
       })
@@ -230,6 +247,8 @@ export const useChatStore = defineStore('chat', () => {
       content: '',
       timestamp: now + 1,
       loading: true,
+      toolsUsed: [],
+      toolTraces: [],
     }
     messageMap.value.set(assistantMsg.id, assistantMsg)
     rebuildSortedMessages()
@@ -295,6 +314,12 @@ export const useChatStore = defineStore('chat', () => {
                 getAssistantMessage().content += event.content
               } else if (event.type === 'sensitive_block' || event.type === 'high_risk') {
                 getAssistantMessage().content = event.content
+              } else if (event.type === 'tool_status') {
+                activeToolStatus.value = {
+                  tool: event.tool || '',
+                  query: event.query || '',
+                  content: event.content || '',
+                }
               } else if (event.type === 'done') {
                 if (typeof event.content === 'string') {
                   getAssistantMessage().content = event.content
@@ -305,6 +330,13 @@ export const useChatStore = defineStore('chat', () => {
                 if (event.media_items?.length) {
                   getAssistantMessage().mediaItems = event.media_items
                 }
+                if (event.tools_used?.length) {
+                  getAssistantMessage().toolsUsed = event.tools_used
+                }
+                if (event.tool_traces?.length) {
+                  getAssistantMessage().toolTraces = event.tool_traces
+                }
+                activeToolStatus.value = null
               }
             } catch {
               // skip malformed JSON
@@ -322,9 +354,11 @@ export const useChatStore = defineStore('chat', () => {
         getAssistantMessage().content = '抱歉，请求出现异常，请稍后重试。'
         getAssistantMessage().loading = false
       }
+      activeToolStatus.value = null
     } finally {
       abortController = null
       isStreaming.value = false
+      activeToolStatus.value = null
     }
   }
 
@@ -335,6 +369,7 @@ export const useChatStore = defineStore('chat', () => {
     newestMessageId.value = null
     hasMoreHistory.value = true
     totalMessageCount.value = 0
+    activeToolStatus.value = null
   }
 
   async function stopGeneration() {
@@ -369,6 +404,7 @@ export const useChatStore = defineStore('chat', () => {
     }
     // 重置分页状态，等待 loadMessages 设置正确值
     hasMoreHistory.value = false
+    activeToolStatus.value = null
   }
 
   return {
@@ -383,6 +419,7 @@ export const useChatStore = defineStore('chat', () => {
     oldestMessageId,
     newestMessageId,
     totalMessageCount,
+    activeToolStatus,
 
     // Actions
     sendMessage,
